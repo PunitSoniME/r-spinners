@@ -1,7 +1,18 @@
 {
-  "version": "0.1.0",
+  "name": "r-spinners",
+  "version": "0.2.0",
+  "description": "Custom React Spinners",
+  "author": "Punit Soni <punit.soni33@gmail.com> (http://punit-soni.web.app)",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PunitSoniME/r-spinners.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PunitSoniME/r-spinners/issues"
+  },
   "main": "dist/index.js",
+  "module": "dist/r-spinners.esm.js",
   "typings": "dist/index.d.ts",
   "files": [
     "dist",
@@ -10,6 +21,17 @@
   "engines": {
     "node": ">=10"
   },
+  "keywords": [
+    "react",
+    "reactjs",
+    "loaders",
+    "spinner",
+    "spinners",
+    "react spinner",
+    "react spinners",
+    "r spinners",
+    "progress"
+  ],
   "scripts": {
     "start": "tsdx watch",
     "build": "tsdx build",
@@ -33,9 +55,6 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "name": "r-spinners",
-  "author": "Punit Soni",
-  "module": "dist/r-spinners.esm.js",
   "size-limit": [
     {
       "path": "dist/r-spinners.cjs.production.min.js",
