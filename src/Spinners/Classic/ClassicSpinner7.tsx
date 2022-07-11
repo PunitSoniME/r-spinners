@@ -1,53 +1,57 @@
 import React from 'react'
 import styled, { keyframes } from 'styled-components';
 
-const animation = keyframes`
+const animation = () => keyframes`
   to {
-    clip-path: inset(0 -1ch 0 0);
+    background-position: left;
   }
 `;
 
-const ClassicSpinner4Wrapper = styled.div.attrs(
+const ClassicSpinner7Wrapper = styled.div.attrs(
   props => ({
     text: props["text"],
     color: props["color"] || "#000",
+    animationColor: props["animationColor"],
   }))`
   &:before {
     content: "${props => props.text}";
   }
+  color: #0000;
   font-weight: bold;
   font-family: monospace;
+  background: linear-gradient(90deg, ${props => props.animationColor} calc(50% + 0.5ch), ${props => props.color} 0) right/calc(200% + 1ch) 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
   animation-name: ${animation};
   animation-iteration-count: infinite;
-  color: ${props => props.color};
 `
 
 interface IProps {
   text: string;
-  noOfCharactersToBlinkAtLast: number;
+  animationColor: string;
   color?: string;
   size?: number | string;
   style?: object;
   animationTime?: string;
 }
 
-export default function ClassicSpinner4({
+export default function ClassicSpinner7({
   text,
   color,
+  animationColor,
   size = "1rem",
   style = {},
   animationTime = "1s",
-  noOfCharactersToBlinkAtLast = 3
 }: IProps) {
   return (
-    <ClassicSpinner4Wrapper
+    <ClassicSpinner7Wrapper
       text={text}
       color={color}
+      animationColor={animationColor}
       style={{
         fontSize: size,
         animationDuration: animationTime,
-        animationTimingFunction: `steps(${noOfCharactersToBlinkAtLast + 1})`,
-        clipPath: `inset(0 ${noOfCharactersToBlinkAtLast}ch 0 0)`,
+        animationTimingFunction: `steps(${text.length + 1})`,
         ...style
       }} />
   )
