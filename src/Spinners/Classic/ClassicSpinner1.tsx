@@ -18,7 +18,7 @@ const ClassicSpinner1Wrapper = styled.div.attrs(
   font-weight: bold;
   font-family: monospace;
   animation-name: ${animation};
-  animation-delay: linear;
+  animation-timing-function: linear;
   animation-iteration-count: infinite;
   animation-direction: alternate;
   color: ${props => props.color};
@@ -40,7 +40,7 @@ export default function ClassicSpinner1({
   speed = 1
 }: IProps) {
 
-  const updatedSpeed = speed === 0 ? 2 : 2 / speed;
+  const updatedSpeed = speed === 0 ? 1 : 1 / speed;
   
   return (
     <ClassicSpinner1Wrapper

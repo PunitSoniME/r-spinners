@@ -20,7 +20,7 @@ const ClassicSpinner2Wrapper = styled.div.attrs(
   background: linear-gradient(currentColor 0 0) bottom left/0% 3px no-repeat;
   padding-bottom: 8px;
   animation-name: ${animation};
-  animation-delay: linear;
+  animation-timing-function: linear;
   animation-iteration-count: infinite;
   color: ${props => props.color};
 `

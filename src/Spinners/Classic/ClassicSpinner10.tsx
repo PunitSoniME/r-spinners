@@ -45,7 +45,7 @@ export default function ClassicSpinner10({
   speed = 1
 }: IProps) {
 
-  const updatedSpeed = speed === 0 ? 4 : 4 / speed;
+  const updatedSpeed = speed === 0 ? 5 : 5 / speed;
 
   return (
     <ClassicSpinner10Wrapper

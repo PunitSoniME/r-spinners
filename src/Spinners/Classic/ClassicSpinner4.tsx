@@ -40,7 +40,7 @@ export default function ClassicSpinner4({
   noOfCharactersToBlinkAtLast = 3
 }: IProps) {
 
-  const updatedSpeed = speed === 0 ? 2 : 2 / speed;
+  const updatedSpeed = speed === 0 ? 1 : 1 / speed;
 
   return (
     <ClassicSpinner4Wrapper
