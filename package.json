@@ -1,6 +1,6 @@
 {
   "name": "r-spinners",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Custom React Spinners",
   "author": "Punit Soni <punit.soni33@gmail.com> (http://punit-soni.web.app)",
   "license": "MIT",
@@ -66,6 +66,7 @@
     }
   ],
   "devDependencies": {
+    "@rollup/plugin-replace": "^4.0.0",
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/react": "^18.0.14",
     "@types/react-dom": "^18.0.5",

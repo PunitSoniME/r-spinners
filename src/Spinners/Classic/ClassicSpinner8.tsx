@@ -32,7 +32,7 @@ interface IProps {
   color?: string;
   size?: number | string;
   style?: object;
-  animationTime?: string;
+  speed?: number;
 }
 
 export default function ClassicSpinner8({
@@ -41,16 +41,19 @@ export default function ClassicSpinner8({
   animationColor,
   size = "1rem",
   style = {},
-  animationTime = "1s",
+  speed = 1
 }: IProps) {
+
+  const updatedSpeed = speed === 0 ? 2 : 2 / speed;
+
   return (
     <ClassicSpinner8Wrapper
       text={text}
       color={color}
       animationColor={animationColor}
       style={{
+        animationDuration: `${updatedSpeed}s`,
         fontSize: size,
-        animationDuration: animationTime,
         animationTimingFunction: `steps(${text.length + 1})`,
         ...style
       }} />

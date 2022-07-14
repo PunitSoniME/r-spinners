@@ -28,7 +28,7 @@ interface IProps {
   color?: string;
   size?: number | string;
   style?: object;
-  animationTime?: string;
+  speed?: number;
 }
 
 export default function ClassicSpinner4({
@@ -36,16 +36,19 @@ export default function ClassicSpinner4({
   color,
   size = "1rem",
   style = {},
-  animationTime = "1s",
+  speed = 1,
   noOfCharactersToBlinkAtLast = 3
 }: IProps) {
+
+  const updatedSpeed = speed === 0 ? 2 : 2 / speed;
+
   return (
     <ClassicSpinner4Wrapper
       text={text}
       color={color}
       style={{
+        animationDuration: `${updatedSpeed}s`,
         fontSize: size,
-        animationDuration: animationTime,
         animationTimingFunction: `steps(${noOfCharactersToBlinkAtLast + 1})`,
         clipPath: `inset(0 ${noOfCharactersToBlinkAtLast}ch 0 0)`,
         ...style

@@ -30,7 +30,7 @@ interface IProps {
   width?: number | string;
   color?: string;
   style?: object;
-  animationTime?: string;
+  speed?: number;
 }
 
 export default function InfinitySpinner9({
@@ -38,15 +38,18 @@ export default function InfinitySpinner9({
   width,
   color,
   style = {},
-  animationTime = "2s"
+  speed = 1
 }: IProps) {
+
+  const updatedSpeed = speed === 0 ? 2 : 2 / speed;
+  
   return (
     <InfinitySpinner9Wrapper
       height={height}
       width={width}
       color={color}
       style={{
-        animationDuration: animationTime,
+        animationDuration: `${updatedSpeed}s`,
         ...style
       }} />
   )

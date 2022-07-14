@@ -30,7 +30,7 @@ interface IProps {
   color?: string;
   size?: number | string;
   style?: object;
-  animationTime?: string;
+  speed?: number;
 }
 
 export default function ClassicSpinner6({
@@ -38,15 +38,18 @@ export default function ClassicSpinner6({
   color,
   size = "1rem",
   style = {},
-  animationTime = "1s"
+  speed = 1
 }: IProps) {
+
+  const updatedSpeed = speed === 0 ? 2 : 2 / speed;
+
   return (
     <ClassicSpinner6Wrapper
       text={text}
       color={color}
       style={{
+        animationDuration: `${updatedSpeed}s`,
         fontSize: size,
-        animationDuration: animationTime,
         textShadow: `0 0 var(--c), ${text.length + 1}ch 0 var(--c)`,
         ...style
       }} />

@@ -27,7 +27,7 @@ interface IProps {
   width?: number | string;
   color?: string;
   style?: object;
-  animationTime?: string;
+  speed?: number;
 }
 
 export default function InfinitySpinner4({
@@ -35,15 +35,18 @@ export default function InfinitySpinner4({
   width,
   color,
   style = {},
-  animationTime = "2s"
+  speed = 1
 }: IProps) {
+
+  const updatedSpeed = speed === 0 ? 2 : 2 / speed;
+  
   return (
     <InfinitySpinner4Wrapper
       height={height}
       width={width}
       color={color}
       style={{
-        animationDuration: animationTime,
+        animationDuration: `${updatedSpeed}s`,
         ...style
       }} />
   )
