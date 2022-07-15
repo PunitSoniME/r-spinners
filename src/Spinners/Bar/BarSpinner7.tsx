@@ -1,5 +1,6 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
+import ICommonProps from '../../Model/Common';
 
 const animation = keyframes`
   0%  { background-size: 20% 50% , 20% 50% , 20% 50% }
@@ -28,18 +29,16 @@ const BarSpinner7Wrapper = styled.div.attrs(
   animation-direction: alternate;
 `;
 
-interface IProps {
+interface IProps extends ICommonProps {
   size?: number | string;
-  color?: string;
-  style?: object;
-  speed?: number;
 }
 
 export default function BarSpinner7({
   size,
   color,
   style = {},
-  speed = 1
+  speed = 1,
+  stop = false
 }: IProps) {
 
   const updatedSpeed = speed === 0 ? 1 : 1 / speed;
@@ -50,6 +49,7 @@ export default function BarSpinner7({
       color={color}
       style={{
         animationDuration: `${updatedSpeed}s`,
+        animationPlayState: stop ? "paused" : "running",
         ...style
       }} />
   )

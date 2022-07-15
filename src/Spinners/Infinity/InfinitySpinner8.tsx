@@ -1,5 +1,6 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
+import ICommonProps from '../../Model/Common';
 
 const animation = keyframes`
   100% { background-position: -8px 0%,-8px 50%,-8px 100% };
@@ -23,12 +24,9 @@ const InfinitySpinner8Wrapper = styled.div.attrs(
   animation-iteration-count: infinite;
 `;
 
-interface IProps {
+interface IProps extends ICommonProps {
   height?: number | string;
   width?: number | string;
-  color?: string;
-  style?: object;
-  speed?: number;
 }
 
 export default function InfinitySpinner8({
@@ -36,7 +34,8 @@ export default function InfinitySpinner8({
   width,
   color,
   style = {},
-  speed = 1
+  speed = 1,
+  stop = false
 }: IProps) {
 
   const updatedSpeed = speed === 0 ? 0.5 : 0.5 / speed;
@@ -48,6 +47,7 @@ export default function InfinitySpinner8({
       color={color}
       style={{
         animationDuration: `${updatedSpeed}s`,
+        animationPlayState: stop ? "paused" : "running",
         ...style
       }} />
   )
