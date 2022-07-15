@@ -53,3 +53,9 @@ Each loader has their own default properties. You can overwrite the defaults by 
 - ### [`Usage`](./src/Spinners/Bar/README.md) 
 
 <br />
+
+## Rounded Spinners 
+- ### [`Demo`](https://codesandbox.io/s/rounded-spinners-ctkq3w)
+- ### [`Usage`](./src/Spinners/Rounded/README.md) 
+
+<br />

@@ -1,5 +1,6 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
+import ICommonProps from '../../Model/Common';
 
 const animation = (color) => keyframes`
   0%  { box-shadow: 15px 0 ${color}, -25px 0 ${color} }
@@ -22,18 +23,16 @@ const DotSpinner6Wrapper = styled.div.attrs(
   animation-direction: alternate;
 `;
 
-interface IProps {
+interface IProps extends ICommonProps {
   size?: number | string;
-  color?: string;
-  style?: object;
-  speed?: number;
 }
 
 export default function DotSpinner6({
   size,
   color,
   style = {},
-  speed = 1
+  speed = 1,
+  stop = false,
 }: IProps) {
 
   const updatedSpeed = speed === 0 ? 1 : 1 / speed;
@@ -44,6 +43,7 @@ export default function DotSpinner6({
       color={color}
       style={{
         animationDuration: `${updatedSpeed}s`,
+        animationPlayState: stop ? "paused" : "running",
         ...style
       }} />
   )

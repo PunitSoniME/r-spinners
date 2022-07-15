@@ -18,6 +18,11 @@ import {
     BarSpinner6, BarSpinner7, BarSpinner8, BarSpinner9, BarSpinner10
 } from './Spinners/Bar';
 
+import {
+    RoundedSpinner1, RoundedSpinner2, RoundedSpinner3, RoundedSpinner4, RoundedSpinner5,
+    RoundedSpinner6, RoundedSpinner7, RoundedSpinner8, RoundedSpinner9, RoundedSpinner10
+} from './Spinners/Rounded';
+
 export {
     ClassicSpinner1, ClassicSpinner2, ClassicSpinner3, ClassicSpinner4, ClassicSpinner5,
     ClassicSpinner6, ClassicSpinner7, ClassicSpinner8, ClassicSpinner9, ClassicSpinner10,
@@ -29,5 +34,8 @@ export {
     DotSpinner6, DotSpinner7, DotSpinner8, DotSpinner9, DotSpinner10,
 
     BarSpinner1, BarSpinner2, BarSpinner3, BarSpinner4, BarSpinner5,
-    BarSpinner6, BarSpinner7, BarSpinner8, BarSpinner9, BarSpinner10
+    BarSpinner6, BarSpinner7, BarSpinner8, BarSpinner9, BarSpinner10,
+
+    RoundedSpinner1, RoundedSpinner2, RoundedSpinner3, RoundedSpinner4, RoundedSpinner5,
+    RoundedSpinner6, RoundedSpinner7, RoundedSpinner8, RoundedSpinner9, RoundedSpinner10
 };

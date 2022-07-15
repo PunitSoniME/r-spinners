@@ -1,5 +1,6 @@
 import React from 'react'
 import styled, { keyframes } from 'styled-components';
+import ICommonProps from '../../Model/Common';
 
 const animation = keyframes`
   to {
@@ -23,12 +24,9 @@ const ClassicSpinner5Wrapper = styled.div.attrs(
   color: ${props => props.color};
 `
 
-interface IProps {
+interface IProps extends ICommonProps {
   text: string;
-  color?: string;
   size?: number | string;
-  style?: object;
-  speed?: number;
 }
 
 export default function ClassicSpinner5({
@@ -36,7 +34,8 @@ export default function ClassicSpinner5({
   color,
   size = "1rem",
   style = {},
-  speed = 1
+  speed = 1,
+  stop = false
 }: IProps) {
 
   const updatedSpeed = speed === 0 ? 2 : 2 / speed;
@@ -46,9 +45,10 @@ export default function ClassicSpinner5({
       text={text}
       color={color}
       style={{
-        animationDuration: `${updatedSpeed}s`,
         fontSize: size,
+        animationDuration: `${updatedSpeed}s`,
         animationTimingFunction: `steps(${text.length + 1})`,
+        animationPlayState: stop ? "paused" : "running",
         ...style
       }} />
   )

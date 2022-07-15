@@ -1,5 +1,6 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
+import ICommonProps from '../../Model/Common';
 
 const animation1 = keyframes`
   0% , 49.9% { transform: scale(1) }
@@ -18,13 +19,15 @@ const DotSpinner9Wrapper = styled.div.attrs(
   props => ({
     color: props["color"] || "currentColor",
     size: (props["size"] ? (typeof props["size"] === "number" ? `${props["size"]}px` : props["size"]) : "15px") as number | string,
-    speed: props["speed"] / 2
+    speed: props["speed"] / 2,
+    animationPlayState: props["animationPlayState"],
   }))`
   width: ${props => props.size};
   aspect-ratio: 1;
   position: relative;
   animation-name: ${animation1};
   animation-iteration-count: infinite;
+  animation-play-state: ${props => props.animationPlayState};
 
   &:before,
   &:after {
@@ -37,6 +40,7 @@ const DotSpinner9Wrapper = styled.div.attrs(
     animation-timing-function: linear;
     animation-direction: alternate;
     animation-duration: ${props => props.speed}s;
+    animation-play-state: ${props => props.animationPlayState};
   }
   &:before {
     box-shadow: 26px 0 ${props => props.color};
@@ -49,18 +53,16 @@ const DotSpinner9Wrapper = styled.div.attrs(
   }
 `;
 
-interface IProps {
+interface IProps extends ICommonProps {
   size?: number | string;
-  color?: string;
-  style?: object;
-  speed?: number;
 }
 
 export default function DotSpinner9({
   size,
   color,
   style = {},
-  speed = 1
+  speed = 1,
+  stop = false,
 }: IProps) {
 
   const updatedSpeed = speed === 0 ? (1 * 1.5) : (1 * 1.5) / speed;
@@ -70,6 +72,7 @@ export default function DotSpinner9({
       size={size}
       color={color}
       speed={updatedSpeed}
+      animationPlayState={stop ? "paused" : "running"}
       style={{
         animationDuration: `${updatedSpeed}s`,
         animationTimingFunction: `steps(3)`,
