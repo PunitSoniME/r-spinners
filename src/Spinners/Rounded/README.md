@@ -28,5 +28,3 @@ Common Props
 | ```<RoundedSpinner8 />```  | ```<RoundedSpinner8 speed={1} color="#86198f" />```  |
 | ```<RoundedSpinner9 />```  | ```<RoundedSpinner9 speed={1} color="#86198f" />```  |
 | ```<RoundedSpinner10 />```  | ```<RoundedSpinner10 speed={1} color="#86198f" />```  |
-
-----------------------

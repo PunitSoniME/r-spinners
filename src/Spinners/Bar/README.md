@@ -28,5 +28,3 @@ Common Props
 | ```<BarSpinner8 />```  | ```<BarSpinner8 speed={1} color="#991b1b" stop={false} />```  |
 | ```<BarSpinner9 />```  | ```<BarSpinner9 speed={1} color="#991b1b" stop={false} />```  |
 | ```<BarSpinner10 />```  | ```<BarSpinner10 speed={1} color="#991b1b" stop={false} />```  |
-
-----------------------

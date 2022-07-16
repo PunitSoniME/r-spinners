@@ -28,4 +28,3 @@ Common Props
 | ```<ClassicSpinner9 />```  | text: string;<br />colors: string[];<br /><br />`Note: colors must contains 4 different colors.`<br /><br />`Default Colors - ["#000", "#b91c1c", "#0369a1", "#15803d"]` | -  | ```<ClassicSpinner9 text="Loading 9..." speed={1} size="1.5rem" stop={false} colors={["#000", "#b91c1c", "#0369a1", "#15803d"]} />```  |
 | ```<ClassicSpinner10 />```  | text: string;<br />colors: string[];<br /><br />`Note: colors must contains 4 different colors.`<br /><br />`Default Colors - ["#000", "#b91c1c", "#0369a1", "#15803d"]` | -  | ```<ClassicSpinner10 text="Loading 10..." speed={1} size="1.5rem" stop={false} colors={["#000", "#b91c1c", "#0369a1", "#15803d"]} />```  |
 
-----------------------
