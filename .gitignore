@@ -3,7 +3,6 @@
 node_modules
 .cache
 dist
-example/*
-!example/dist
+example
 .github
 yarn.lock
