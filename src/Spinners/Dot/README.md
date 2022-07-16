@@ -28,5 +28,3 @@ Common Props
 | ```<DotSpinner8 />```  | ```<DotSpinner8 speed={1} color="#ea580c" stop={false} />```  |
 | ```<DotSpinner9 />```  | ```<DotSpinner9 speed={1} color="#ea580c" stop={false} />```  |
 | ```<DotSpinner10 />```  | ```<DotSpinner10 speed={1} color="#ea580c" stop={false} />```  |
-
-----------------------

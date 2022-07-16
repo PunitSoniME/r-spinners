@@ -31,4 +31,3 @@ Common Props
 | ```<InfinitySpinner9 />```  | ```<InfinitySpinner9 speed={1} color="#0369a1" />```  |
 | ```<InfinitySpinner10 />```  | ```<InfinitySpinner10 speed={1} color="#0369a1" />```  |
 
-----------------------

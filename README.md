@@ -26,36 +26,20 @@ npm install --save r-spinners
 
 ## Usage
 
-Each loader has their own default properties. You can overwrite the defaults by passing props into the loaders.
+### Each loader has their own default properties. You can overwrite the defaults by passing props into the loaders.
 
 <br />
 
-## Classic Spinners 
-- ### [`Demo`](https://codesandbox.io/s/classic-spinners-jg8qb0)
-- ### [`Usage`](./src/Spinners/Classic/README.md) 
+### Rounded Spinners - [`Demo`](https://codesandbox.io/s/rounded-spinners-ctkq3w) - [`Usage`](./src/Spinners/Rounded/README.md)
 
-<br />
+### Classic Spinners - [`Demo`](https://codesandbox.io/s/classic-spinners-jg8qb0) - [`Usage`](./src/Spinners/Classic/README.md) 
 
-## Infinity Spinners 
-- ### [`Demo`](https://codesandbox.io/s/infinity-spinners-qq6ij6)
-- ### [`Usage`](./src/Spinners/Infinity/README.md) 
+### Infinity Spinners - [`Demo`](https://codesandbox.io/s/infinity-spinners-qq6ij6) - [`Usage`](./src/Spinners/Infinity/README.md) 
 
-<br />
+### Dot Spinners - [`Demo`](https://codesandbox.io/s/dot-spinners-ronmuc) - [`Usage`](./src/Spinners/Dot/README.md) 
 
-## Dot Spinners 
-- ### [`Demo`](https://codesandbox.io/s/dot-spinners-ronmuc)
-- ### [`Usage`](./src/Spinners/Dot/README.md) 
+### Bar Spinners - [`Demo`](https://codesandbox.io/s/bar-spinners-z3b8u9) - [`Usage`](./src/Spinners/Bar/README.md) 
 
-<br />
-
-## Bar Spinners 
-- ### [`Demo`](https://codesandbox.io/s/bar-spinners-z3b8u9)
-- ### [`Usage`](./src/Spinners/Bar/README.md) 
-
-<br />
-
-## Rounded Spinners 
-- ### [`Demo`](https://codesandbox.io/s/rounded-spinners-ctkq3w)
-- ### [`Usage`](./src/Spinners/Rounded/README.md) 
+### Continuous Spinners - [`Demo`](https://codesandbox.io/s/continuous-spinners-cvziqr) - [`Usage`](./src/Spinners/Continuous/README.md) 
 
 <br />
