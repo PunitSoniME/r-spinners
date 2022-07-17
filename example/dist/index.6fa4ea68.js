@@ -553,7 +553,7 @@ const App = ()=>{
         speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 24,
+            lineNumber: 25,
             columnNumber: 7
         },
         __self: undefined
@@ -562,7 +562,7 @@ const App = ()=>{
         speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 26,
+            lineNumber: 27,
             columnNumber: 7
         },
         __self: undefined
@@ -571,7 +571,7 @@ const App = ()=>{
         speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 28,
+            lineNumber: 29,
             columnNumber: 7
         },
         __self: undefined
@@ -580,7 +580,7 @@ const App = ()=>{
         speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 30,
+            lineNumber: 31,
             columnNumber: 7
         },
         __self: undefined
@@ -589,7 +589,7 @@ const App = ()=>{
         speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 32,
+            lineNumber: 33,
             columnNumber: 7
         },
         __self: undefined
@@ -598,7 +598,16 @@ const App = ()=>{
         speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 34,
+            lineNumber: 35,
+            columnNumber: 7
+        },
+        __self: undefined
+    }), /*#__PURE__*/ _react.createElement((0, _spinners.WobblingSpinners), {
+        stop: stop,
+        speed: speed,
+        __source: {
+            fileName: "index.tsx",
+            lineNumber: 37,
             columnNumber: 7
         },
         __self: undefined
@@ -611,21 +620,21 @@ const App = ()=>{
         },
         __source: {
             fileName: "index.tsx",
-            lineNumber: 36,
+            lineNumber: 39,
             columnNumber: 7
         },
         __self: undefined
     }, stop ? /*#__PURE__*/ _react.createElement((0, _icons.Play), {
         __source: {
             fileName: "index.tsx",
-            lineNumber: 44,
+            lineNumber: 47,
             columnNumber: 17
         },
         __self: undefined
     }) : /*#__PURE__*/ _react.createElement((0, _icons.Pause), {
         __source: {
             fileName: "index.tsx",
-            lineNumber: 44,
+            lineNumber: 47,
             columnNumber: 28
         },
         __self: undefined
@@ -637,7 +646,7 @@ root.render(// <React.StrictMode>
 /*#__PURE__*/ _react.createElement(App, {
     __source: {
         fileName: "index.tsx",
-        lineNumber: 55,
+        lineNumber: 58,
         columnNumber: 3
     },
     __self: undefined
@@ -30446,6 +30455,7 @@ parcelHelpers.export(exports, "ClassicSpinners", ()=>(0, _classicSpinnersDefault
 parcelHelpers.export(exports, "InfinitySpinners", ()=>(0, _infinitySpinnersDefault.default));
 parcelHelpers.export(exports, "ProgressSpinners", ()=>(0, _progressSpinnersDefault.default));
 parcelHelpers.export(exports, "RoundedSpinners", ()=>(0, _roundedSpinnersDefault.default));
+parcelHelpers.export(exports, "WobblingSpinners", ()=>(0, _wobblingSpinnersDefault.default));
 var _barSpinners = require("./BarSpinners");
 var _barSpinnersDefault = parcelHelpers.interopDefault(_barSpinners);
 var _classicSpinners = require("./ClassicSpinners");
@@ -30460,8 +30470,10 @@ var _progressSpinners = require("./ProgressSpinners");
 var _progressSpinnersDefault = parcelHelpers.interopDefault(_progressSpinners);
 var _roundedSpinners = require("./RoundedSpinners");
 var _roundedSpinnersDefault = parcelHelpers.interopDefault(_roundedSpinners);
+var _wobblingSpinners = require("./WobblingSpinners");
+var _wobblingSpinnersDefault = parcelHelpers.interopDefault(_wobblingSpinners);
 
-},{"./BarSpinners":"8hISV","./ClassicSpinners":"4qsJa","./ContinuousSpinners":"bkf0B","./DotSpinners":"iE2H4","./InfinitySpinners":"btwOU","./ProgressSpinners":"egIBH","./RoundedSpinners":"hU59A","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"8hISV":[function(require,module,exports) {
+},{"./BarSpinners":"8hISV","./ClassicSpinners":"4qsJa","./ContinuousSpinners":"bkf0B","./DotSpinners":"iE2H4","./InfinitySpinners":"btwOU","./ProgressSpinners":"egIBH","./RoundedSpinners":"hU59A","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./WobblingSpinners":"TUWv2"}],"8hISV":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$f1fe = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -33582,6 +33594,468 @@ function ProgressSpinner10(_ref) {
     });
 }
 _c139 = ProgressSpinner10;
+var _templateObject$16, _templateObject2$16;
+var animation$13 = /*#__PURE__*/ styled.keyframes(_templateObject$16 || (_templateObject$16 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  50% { background-position: right }\n"
+])));
+var WobblingSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        bgColor: props["bgColor"] || "#eee",
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
+    };
+})(_templateObject2$16 || (_templateObject2$16 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  background:\n   linear-gradient(",
+    " 0 0) left/20px 20px no-repeat\n   ",
+    ";\n  animation-name: ",
+    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.color;
+}, function(props) {
+    return props.bgColor;
+}, animation$13);
+_c140 = WobblingSpinner1Wrapper;
+function WobblingSpinner1(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 1 : 1 / speed;
+    return React.createElement(WobblingSpinner1Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        bgColor: bgColor,
+        style: _extends({
+            animationDuration: updatedSpeed + "s",
+            animationPlayState: stop ? "paused" : "running"
+        }, style)
+    });
+}
+_c141 = WobblingSpinner1;
+var _templateObject$17, _templateObject2$17;
+var animation$14 = /*#__PURE__*/ styled.keyframes(_templateObject$17 || (_templateObject$17 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  50% { background-position: right }\n"
+])));
+var WobblingSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        bgColor: props["bgColor"] || "#eee",
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
+    };
+})(_templateObject2$17 || (_templateObject2$17 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  border-radius: 20px;\n  background:\n   radial-gradient(farthest-side, ",
+    " 94%, #0000) left/20px 20px no-repeat\n   ",
+    ";\n  animation-name: ",
+    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.color;
+}, function(props1) {
+    return function(props) {
+        return props.bgColor;
+    };
+}, animation$14);
+_c142 = WobblingSpinner2Wrapper;
+function WobblingSpinner2(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 1 : 1 / speed;
+    return React.createElement(WobblingSpinner2Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        bgColor: bgColor,
+        style: _extends({
+            animationDuration: updatedSpeed + "s",
+            animationPlayState: stop ? "paused" : "running"
+        }, style)
+    });
+}
+_c143 = WobblingSpinner2;
+var _templateObject$18, _templateObject2$18;
+var animation$15 = /*#__PURE__*/ styled.keyframes(_templateObject$18 || (_templateObject$18 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  50% { \n    left: 100%;\n    transform: translateX(calc(-100% - 4px))\n  }\n"
+])));
+var WobblingSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        speed: props["speed"],
+        animationPlayState: props["animationPlayState"],
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "22px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
+    };
+})(_templateObject2$18 || (_templateObject2$18 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  border-radius: 40px;\n  color: ",
+    ';\n  border: 2px solid;\n  position: relative;\n\n  &:before {\n    content: "";\n    position: absolute;\n    margin: 2px;\n    width: 25%;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    border-radius: inherit;\n    background: currentColor;\n    animation-name: ',
+    ";\n    animation-duration: ",
+    "s;\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n    animation-play-state: ",
+    ";\n  }\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.color;
+}, animation$15, function(props) {
+    return props.speed;
+}, function(props) {
+    return props.animationPlayState;
+});
+_c144 = WobblingSpinner3Wrapper;
+function WobblingSpinner3(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 1 : 1 / speed;
+    return React.createElement(WobblingSpinner3Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        speed: updatedSpeed,
+        animationPlayState: stop ? "paused" : "running",
+        style: _extends({}, style)
+    });
+}
+_c145 = WobblingSpinner3;
+var _templateObject$19, _templateObject2$19, _templateObject3$3;
+var animation1$3 = /*#__PURE__*/ styled.keyframes(_templateObject$19 || (_templateObject$19 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  100% { transform:translateX(80px) }\n"
+])));
+var animation2$3 = /*#__PURE__*/ styled.keyframes(_templateObject2$19 || (_templateObject2$19 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  33% { clip-path: inset(0 0 0 -100px) }\n  50% { clip-path: inset(0 0 0 0)      }\n  83% { clip-path: inset(0 -100px 0 0) }\n"
+])));
+var WobblingSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "20px"
+    };
+})(_templateObject3$3 || (_templateObject3$3 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  background: ",
+    ";\n  box-shadow: 0 0 60px 15px ",
+    ";\n  transform: translate(-80px);\n  clip-path: inset(0);\n  animation-name: ",
+    ", ",
+    ";\n  animation-iteration-count: infinite, infinite;\n  animation-direction: alternate, normal;\n  animation-timing-function: ease-in-out, ease-in-out;\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.color;
+}, function(props) {
+    return props.color;
+}, animation1$3, animation2$3);
+_c146 = WobblingSpinner4Wrapper;
+function WobblingSpinner4(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 0.5 : speed / 2;
+    return React.createElement(WobblingSpinner4Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        style: _extends({
+            animationDuration: updatedSpeed + "s, " + speed + "s",
+            animationPlayState: stop ? "paused, paused" : "running, running"
+        }, style)
+    });
+}
+_c147 = WobblingSpinner4;
+var _templateObject$1a, _templateObject2$1a;
+var animation$16 = /*#__PURE__*/ styled.keyframes(_templateObject$1a || (_templateObject$1a = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  50% { background-position: top right, bottom right }\n"
+])));
+var WobblingSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        bgColor: props["bgColor"] || "#eee",
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
+    };
+})(_templateObject2$1a || (_templateObject2$1a = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  clip-path: polygon(10px 0, calc(100% - 10px) 0,100% 50%, calc(100% - 10px) 100%, 10px 100%,0 50%);\n  background:\n   conic-gradient(from 135deg at top   , ",
+    " 90deg,#0000 0) top    left,\n   conic-gradient(from -45deg at bottom, ",
+    " 90deg,#0000 0) bottom left,\n   ",
+    ";\n  background-size: 20px 50%;\n  background-repeat: no-repeat;\n  animation-name: ",
+    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.color;
+}, function(props) {
+    return props.color;
+}, function(props) {
+    return props.bgColor;
+}, animation$16);
+_c148 = WobblingSpinner5Wrapper;
+function WobblingSpinner5(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 1 : 1 / speed;
+    return React.createElement(WobblingSpinner5Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        bgColor: bgColor,
+        style: _extends({
+            animationDuration: updatedSpeed + "s",
+            animationPlayState: stop ? "paused" : "running"
+        }, style)
+    });
+}
+_c149 = WobblingSpinner5;
+var _templateObject$1b, _templateObject2$1b;
+var animation$17 = /*#__PURE__*/ styled.keyframes(_templateObject$1b || (_templateObject$1b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  50% {background-position: right }\n"
+])));
+var WobblingSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        bgColor: props["bgColor"] || "#eee",
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "21px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
+    };
+})(_templateObject2$1b || (_templateObject2$1b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  background:\n   linear-gradient(",
+    " 0 0) left/10px 100% no-repeat\n    ",
+    ";\n   position: relative;\n   animation-name: ",
+    ';\n   animation-iteration-count: infinite;\n   animation-timing-function: cubic-bezier(0, 0.2, 1, 1);\n\n   &:before,\n   &:after {\n     content: "";\n     position: absolute;\n     left: 0;\n     right: 0;\n     height: 7px;\n     background:\n        linear-gradient(',
+    " 0 0) left/10px 100% no-repeat\n        ",
+    ";\n     animation: inherit;\n   }\n    &:before {\n      top:0;\n      animation-timing-function: cubic-bezier(0, 0, 1, 1);\n    }\n    &:after {\n    bottom:0;\n    animation-timing-function: cubic-bezier(0, 0.4, 1, 1);\n    }\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.color;
+}, function(props) {
+    return props.bgColor;
+}, animation$17, function(props) {
+    return props.color;
+}, function(props) {
+    return props.bgColor;
+});
+_c150 = WobblingSpinner6Wrapper;
+function WobblingSpinner6(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 1 : 1 / speed;
+    return React.createElement(WobblingSpinner6Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        bgColor: bgColor,
+        style: _extends({
+            animationDuration: updatedSpeed + "s",
+            animationPlayState: stop ? "paused" : "running"
+        }, style)
+    });
+}
+_c151 = WobblingSpinner6;
+var _templateObject$1c, _templateObject2$1c, _templateObject3$4;
+var animation1$4 = /*#__PURE__*/ styled.keyframes(_templateObject$1c || (_templateObject$1c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  100% { left: 1px; } \n"
+])));
+var animation2$4 = /*#__PURE__*/ styled.keyframes(_templateObject2$1c || (_templateObject2$1c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  100% { top: 0.3px; } \n"
+])));
+var WobblingSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "20px"
+    };
+})(_templateObject3$4 || (_templateObject3$4 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  border-radius: 50%;\n  background: radial-gradient(at 30% 30%, #0000, #000a) ",
+    ";\n  position: relative;\n  left: 0px;\n  top: 0px;\n  animation-name: ",
+    ", ",
+    ";\n  animation-timing-function: cubic-bezier(.5,-200,.5,200);\n  animation-iteration-count: infinite;\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.color;
+}, animation1$4, animation2$4);
+_c152 = WobblingSpinner7Wrapper;
+function WobblingSpinner7(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 0.5 : speed / 2;
+    return React.createElement(WobblingSpinner7Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        style: _extends({
+            animationDuration: speed + "s, " + updatedSpeed + "s",
+            animationPlayState: stop ? "paused, paused" : "running, running"
+        }, style)
+    });
+}
+_c153 = WobblingSpinner7;
+var _templateObject$1d, _templateObject2$1d;
+var animation$18 = /*#__PURE__*/ styled.keyframes(_templateObject$1d || (_templateObject$1d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  100% { transform: rotate(1deg) }\n"
+])));
+var WobblingSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        stickColor: props["stickColor"] || "#eee",
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "20px"
+    };
+})(_templateObject2$1d || (_templateObject2$1d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  border-radius: 50%;\n  position: relative;\n  transform-origin: 50% -200%;\n  background: radial-gradient(at 30% 30%, #0000, #000a) ",
+    ";\n  animation-name: ",
+    ';\n  animation-iteration-count: infinite;\n  animation-timing-function: cubic-bezier(0.5, -200, 0.5, 200);\n\n  &:before {\n    content: "";\n    position: absolute;\n    inset: -200% 8px 100%;\n    background: ',
+    "; \n  }\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.color;
+}, animation$18, function(props) {
+    return props.stickColor;
+});
+_c154 = WobblingSpinner8Wrapper;
+function WobblingSpinner8(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, stickColor = _ref.stickColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 1 : 1 / speed;
+    return React.createElement(WobblingSpinner8Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        stickColor: stickColor,
+        style: _extends({
+            animationDuration: updatedSpeed + "s",
+            animationPlayState: stop ? "paused" : "running"
+        }, style)
+    });
+}
+_c155 = WobblingSpinner8;
+var _templateObject$1e, _templateObject2$1e;
+var animation$19 = /*#__PURE__*/ styled.keyframes(_templateObject$1e || (_templateObject$1e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  100% { transform: rotate(1deg) } \n"
+])));
+var WobblingSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "80px"
+    };
+})(_templateObject2$1e || (_templateObject2$1e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  color:#514b82;\n  background:\n    radial-gradient(farthest-side, ",
+    " 98%, #0000) left  /20px 20px,\n    radial-gradient(farthest-side, ",
+    " 98%, #0000) right /20px 20px,\n    radial-gradient(farthest-side, #000 98%, #0000) center/5px 5px,\n    linear-gradient(",
+    " 0 0) center/100% 2px;\n  background-repeat: no-repeat;\n  animation-name: ",
+    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: cubic-bezier(0.5, -150, 0.5, 150);\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.color;
+}, function(props) {
+    return props.color;
+}, function(props) {
+    return props.color;
+}, animation$19);
+_c156 = WobblingSpinner9Wrapper;
+function WobblingSpinner9(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 1 : 1 / speed;
+    return React.createElement(WobblingSpinner9Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        style: _extends({
+            animationDuration: updatedSpeed + "s",
+            animationPlayState: stop ? "paused" : "running"
+        }, style)
+    });
+}
+_c157 = WobblingSpinner9;
+var _templateObject$1f, _templateObject2$1f, _templateObject3$5;
+var animation1$5 = /*#__PURE__*/ styled.keyframes(_templateObject$1f || (_templateObject$1f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  0%,49.99% { transform: scaleX(1) }\n  50%,100% { transform: scaleX(-1) } \n"
+])));
+var animation2$5 = /*#__PURE__*/ styled.keyframes(_templateObject2$1f || (_templateObject2$1f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  100% { transform: rotate(1turn) }\n"
+])));
+var WobblingSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        bgColor: props["bgColor"] || "#eee",
+        animationDuration: props["animationDuration"],
+        animationPlayState: props["animationPlayState"],
+        height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
+        width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
+    };
+})(_templateObject3$5 || (_templateObject3$5 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  height: ",
+    ";\n  width: ",
+    ";\n  width: calc(100px - 14px);\n    height: 50px;\n    border-radius: 50px;\n    background: \n      radial-gradient(farthest-side, #0000 calc(100% - 15px), ",
+    " calc(100% - 14px) 99%,#0000) left,\n      radial-gradient(farthest-side, #0000 calc(100% - 15px), ",
+    " calc(100% - 14px) 99%,#0000) right;\n    background-size: calc(50% + 7px) 100%;\n    background-repeat: no-repeat;\n    position: relative;\n    animation-name: ",
+    ';\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n\n  &:before {\n    content: "";\n    position: absolute;\n    inset: 0;\n    margin: auto; \n    width: 10px;\n    height: 10px;\n    border-radius: 50%;\n    background: ',
+    ";\n    transform-origin: -14px 50%;\n\n    animation-name: ",
+    ";\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n    animation-duration: ",
+    ";\n    animation-play-state: ",
+    ";\n  }\n"
+])), function(props) {
+    return props.height;
+}, function(props) {
+    return props.width;
+}, function(props) {
+    return props.bgColor;
+}, function(props) {
+    return props.bgColor;
+}, animation1$5, function(props) {
+    return props.color;
+}, animation2$5, function(props) {
+    return props.animationDuration;
+}, function(props) {
+    return props.animationPlayState;
+});
+_c158 = WobblingSpinner10Wrapper;
+function WobblingSpinner10(_ref) {
+    var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 0.5 : speed / 2;
+    return React.createElement(WobblingSpinner10Wrapper, {
+        height: height,
+        width: width,
+        color: color,
+        bgColor: bgColor,
+        animationDuration: updatedSpeed + "s",
+        animationPlayState: stop ? "paused" : "running",
+        style: _extends({
+            animationDuration: speed + "s",
+            animationPlayState: stop ? "paused" : "running"
+        }, style)
+    });
+}
+_c159 = WobblingSpinner10;
 exports.BarSpinner1 = BarSpinner1;
 exports.BarSpinner10 = BarSpinner10;
 exports.BarSpinner2 = BarSpinner2;
@@ -33652,7 +34126,17 @@ exports.RoundedSpinner6 = RoundedSpinner6;
 exports.RoundedSpinner7 = RoundedSpinner7;
 exports.RoundedSpinner8 = RoundedSpinner8;
 exports.RoundedSpinner9 = RoundedSpinner9;
-var _c, _c1, _c2, _c3, _c4, _c5, _c6, _c7, _c8, _c9, _c10, _c11, _c12, _c13, _c14, _c15, _c16, _c17, _c18, _c19, _c20, _c21, _c22, _c23, _c24, _c25, _c26, _c27, _c28, _c29, _c30, _c31, _c32, _c33, _c34, _c35, _c36, _c37, _c38, _c39, _c40, _c41, _c42, _c43, _c44, _c45, _c46, _c47, _c48, _c49, _c50, _c51, _c52, _c53, _c54, _c55, _c56, _c57, _c58, _c59, _c60, _c61, _c62, _c63, _c64, _c65, _c66, _c67, _c68, _c69, _c70, _c71, _c72, _c73, _c74, _c75, _c76, _c77, _c78, _c79, _c80, _c81, _c82, _c83, _c84, _c85, _c86, _c87, _c88, _c89, _c90, _c91, _c92, _c93, _c94, _c95, _c96, _c97, _c98, _c99, _c100, _c101, _c102, _c103, _c104, _c105, _c106, _c107, _c108, _c109, _c110, _c111, _c112, _c113, _c114, _c115, _c116, _c117, _c118, _c119, _c120, _c121, _c122, _c123, _c124, _c125, _c126, _c127, _c128, _c129, _c130, _c131, _c132, _c133, _c134, _c135, _c136, _c137, _c138, _c139;
+exports.WobblingSpinner1 = WobblingSpinner1;
+exports.WobblingSpinner10 = WobblingSpinner10;
+exports.WobblingSpinner2 = WobblingSpinner2;
+exports.WobblingSpinner3 = WobblingSpinner3;
+exports.WobblingSpinner4 = WobblingSpinner4;
+exports.WobblingSpinner5 = WobblingSpinner5;
+exports.WobblingSpinner6 = WobblingSpinner6;
+exports.WobblingSpinner7 = WobblingSpinner7;
+exports.WobblingSpinner8 = WobblingSpinner8;
+exports.WobblingSpinner9 = WobblingSpinner9;
+var _c, _c1, _c2, _c3, _c4, _c5, _c6, _c7, _c8, _c9, _c10, _c11, _c12, _c13, _c14, _c15, _c16, _c17, _c18, _c19, _c20, _c21, _c22, _c23, _c24, _c25, _c26, _c27, _c28, _c29, _c30, _c31, _c32, _c33, _c34, _c35, _c36, _c37, _c38, _c39, _c40, _c41, _c42, _c43, _c44, _c45, _c46, _c47, _c48, _c49, _c50, _c51, _c52, _c53, _c54, _c55, _c56, _c57, _c58, _c59, _c60, _c61, _c62, _c63, _c64, _c65, _c66, _c67, _c68, _c69, _c70, _c71, _c72, _c73, _c74, _c75, _c76, _c77, _c78, _c79, _c80, _c81, _c82, _c83, _c84, _c85, _c86, _c87, _c88, _c89, _c90, _c91, _c92, _c93, _c94, _c95, _c96, _c97, _c98, _c99, _c100, _c101, _c102, _c103, _c104, _c105, _c106, _c107, _c108, _c109, _c110, _c111, _c112, _c113, _c114, _c115, _c116, _c117, _c118, _c119, _c120, _c121, _c122, _c123, _c124, _c125, _c126, _c127, _c128, _c129, _c130, _c131, _c132, _c133, _c134, _c135, _c136, _c137, _c138, _c139, _c140, _c141, _c142, _c143, _c144, _c145, _c146, _c147, _c148, _c149, _c150, _c151, _c152, _c153, _c154, _c155, _c156, _c157, _c158, _c159;
 $RefreshReg$(_c, "ClassicSpinner1Wrapper");
 $RefreshReg$(_c1, "ClassicSpinner1");
 $RefreshReg$(_c2, "ClassicSpinner2Wrapper");
@@ -33793,6 +34277,26 @@ $RefreshReg$(_c136, "ProgressSpinner9Wrapper");
 $RefreshReg$(_c137, "ProgressSpinner9");
 $RefreshReg$(_c138, "ProgressSpinner10Wrapper");
 $RefreshReg$(_c139, "ProgressSpinner10");
+$RefreshReg$(_c140, "WobblingSpinner1Wrapper");
+$RefreshReg$(_c141, "WobblingSpinner1");
+$RefreshReg$(_c142, "WobblingSpinner2Wrapper");
+$RefreshReg$(_c143, "WobblingSpinner2");
+$RefreshReg$(_c144, "WobblingSpinner3Wrapper");
+$RefreshReg$(_c145, "WobblingSpinner3");
+$RefreshReg$(_c146, "WobblingSpinner4Wrapper");
+$RefreshReg$(_c147, "WobblingSpinner4");
+$RefreshReg$(_c148, "WobblingSpinner5Wrapper");
+$RefreshReg$(_c149, "WobblingSpinner5");
+$RefreshReg$(_c150, "WobblingSpinner6Wrapper");
+$RefreshReg$(_c151, "WobblingSpinner6");
+$RefreshReg$(_c152, "WobblingSpinner7Wrapper");
+$RefreshReg$(_c153, "WobblingSpinner7");
+$RefreshReg$(_c154, "WobblingSpinner8Wrapper");
+$RefreshReg$(_c155, "WobblingSpinner8");
+$RefreshReg$(_c156, "WobblingSpinner9Wrapper");
+$RefreshReg$(_c157, "WobblingSpinner9");
+$RefreshReg$(_c158, "WobblingSpinner10Wrapper");
+$RefreshReg$(_c159, "WobblingSpinner10");
 
   $parcel$ReactRefreshHelpers$c9f1.postlude(module);
 } finally {
@@ -36772,6 +37276,217 @@ function RoundedSpinners({ stop , speed  }) {
 exports.default = RoundedSpinners;
 
   $parcel$ReactRefreshHelpers$9e22.postlude(module);
+} finally {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"TUWv2":[function(require,module,exports) {
+var $parcel$ReactRefreshHelpers$c7ee = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
+var prevRefreshReg = window.$RefreshReg$;
+var prevRefreshSig = window.$RefreshSig$;
+$parcel$ReactRefreshHelpers$c7ee.prelude(module);
+
+try {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+var _react = require("react");
+var _dist = require("../../../dist");
+const wobblingSpinnerColor = "#dc2626";
+function WobblingSpinners({ stop , speed  }) {
+    const wobblingSpinners = [
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner1), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            bgColor: "#cbd5e1",
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 12,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner2), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            bgColor: "#cbd5e1",
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 13,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner3), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 14,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner4), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 15,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner5), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            bgColor: "#cbd5e1",
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 16,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner6), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            bgColor: "#cbd5e1",
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 17,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner7), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 18,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner8), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            stickColor: "#cbd5e1",
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 19,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner9), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 20,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner10), {
+            color: wobblingSpinnerColor,
+            stop: stop,
+            speed: speed,
+            bgColor: "#cbd5e1",
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 21,
+                columnNumber: 9
+            },
+            __self: this
+        })
+    ];
+    return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement("h1", {
+        className: "spinner_header",
+        style: {
+            backgroundColor: wobblingSpinnerColor,
+            color: "#fff"
+        },
+        __source: {
+            fileName: "components/Spinners/WobblingSpinners.tsx",
+            lineNumber: 26,
+            columnNumber: 13
+        },
+        __self: this
+    }, /*#__PURE__*/ _react.createElement("span", {
+        __source: {
+            fileName: "components/Spinners/WobblingSpinners.tsx",
+            lineNumber: 27,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Wobbling Spinners - "), /*#__PURE__*/ _react.createElement("a", {
+        href: "https://codesandbox.io/s/infinity-spinners-forked-btq55g",
+        target: "_blank",
+        className: "spinner_header_link",
+        __source: {
+            fileName: "components/Spinners/WobblingSpinners.tsx",
+            lineNumber: 28,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Code")), /*#__PURE__*/ _react.createElement("div", {
+        className: "example",
+        __source: {
+            fileName: "components/Spinners/WobblingSpinners.tsx",
+            lineNumber: 33,
+            columnNumber: 13
+        },
+        __self: this
+    }, wobblingSpinners.map((m, index)=>/*#__PURE__*/ _react.createElement("div", {
+            className: "main",
+            key: index,
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 36,
+                columnNumber: 25
+            },
+            __self: this
+        }, /*#__PURE__*/ _react.createElement("div", {
+            className: "loader",
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 37,
+                columnNumber: 29
+            },
+            __self: this
+        }, m), /*#__PURE__*/ _react.createElement("div", {
+            className: "code",
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 40,
+                columnNumber: 29
+            },
+            __self: this
+        }, /*#__PURE__*/ _react.createElement("button", {
+            type: "button",
+            className: "showcode-button",
+            __source: {
+                fileName: "components/Spinners/WobblingSpinners.tsx",
+                lineNumber: 41,
+                columnNumber: 33
+            },
+            __self: this
+        }, "Show Code"))))));
+}
+exports.default = WobblingSpinners;
+
+  $parcel$ReactRefreshHelpers$c7ee.postlude(module);
 } finally {
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;

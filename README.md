@@ -46,6 +46,6 @@ npm install --save r-spinners
 
 ### Continuous Spinners - [`Demo`](https://codesandbox.io/s/continuous-spinners-cvziqr) - [`Usage`](./src/Spinners/Continuous/README.md) 
 
-
 ### Progress Spinners - [`Demo`](https://codesandbox.io/s/progress-spinners-btq55g) - [`Usage`](./src/Spinners/Progress/README.md) 
 
+### Wobbling Spinners - [`Demo`](https://codesandbox.io/s/wobbling-spinners-yfqkp2) - [`Usage`](./src/Spinners/Wobbling/README.md) 
