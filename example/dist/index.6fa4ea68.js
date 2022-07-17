@@ -37431,7 +37431,7 @@ function WobblingSpinners({ stop , speed  }) {
         },
         __self: this
     }, "Wobbling Spinners - "), /*#__PURE__*/ _react.createElement("a", {
-        href: "https://codesandbox.io/s/infinity-spinners-forked-btq55g",
+        href: "https://codesandbox.io/s/wobbling-spinners-yfqkp2",
         target: "_blank",
         className: "spinner_header_link",
         __source: {
