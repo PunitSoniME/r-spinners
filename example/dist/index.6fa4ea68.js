@@ -546,52 +546,59 @@ var _icons = require("./Icons");
 var _spinners = require("./components/Spinners");
 var _stylesCss = require("./styles.css");
 const App = ()=>{
+    const [speed, setSpeed] = _react.useState(1);
     const [stop, setStop] = _react.useState(false);
     return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement((0, _spinners.RoundedSpinners), {
         stop: stop,
+        speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 23,
+            lineNumber: 24,
             columnNumber: 7
         },
         __self: undefined
     }), /*#__PURE__*/ _react.createElement((0, _spinners.ClassicSpinners), {
         stop: stop,
+        speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 25,
+            lineNumber: 26,
             columnNumber: 7
         },
         __self: undefined
     }), /*#__PURE__*/ _react.createElement((0, _spinners.ProgressSpinners), {
         stop: stop,
+        speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 27,
+            lineNumber: 28,
             columnNumber: 7
         },
         __self: undefined
     }), /*#__PURE__*/ _react.createElement((0, _spinners.DotSpinners), {
         stop: stop,
+        speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 29,
+            lineNumber: 30,
             columnNumber: 7
         },
         __self: undefined
     }), /*#__PURE__*/ _react.createElement((0, _spinners.BarSpinners), {
         stop: stop,
+        speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 31,
+            lineNumber: 32,
             columnNumber: 7
         },
         __self: undefined
     }), /*#__PURE__*/ _react.createElement((0, _spinners.ContinuousSpinners), {
         stop: stop,
+        speed: speed,
         __source: {
             fileName: "index.tsx",
-            lineNumber: 33,
+            lineNumber: 34,
             columnNumber: 7
         },
         __self: undefined
@@ -604,21 +611,21 @@ const App = ()=>{
         },
         __source: {
             fileName: "index.tsx",
-            lineNumber: 35,
+            lineNumber: 36,
             columnNumber: 7
         },
         __self: undefined
     }, stop ? /*#__PURE__*/ _react.createElement((0, _icons.Play), {
         __source: {
             fileName: "index.tsx",
-            lineNumber: 43,
+            lineNumber: 44,
             columnNumber: 17
         },
         __self: undefined
     }) : /*#__PURE__*/ _react.createElement((0, _icons.Pause), {
         __source: {
             fileName: "index.tsx",
-            lineNumber: 43,
+            lineNumber: 44,
             columnNumber: 28
         },
         __self: undefined
@@ -630,7 +637,7 @@ root.render(// <React.StrictMode>
 /*#__PURE__*/ _react.createElement(App, {
     __source: {
         fileName: "index.tsx",
-        lineNumber: 54,
+        lineNumber: 55,
         columnNumber: 3
     },
     __self: undefined
@@ -30465,52 +30472,15 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
+var _helper = require("../Common/Helper");
 const barSpinnerColor = "#991b1b";
-function BarSpinners({ stop  }) {
+function BarSpinners({ stop , speed  }) {
+    const [sampleCode, setSampleCode] = _react.useState("&lt;BarSpinner /&gt;");
     const barSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner1), {
             color: barSpinnerColor,
             stop: stop,
-            __source: {
-                fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 12,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner2), {
-            color: barSpinnerColor,
-            stop: stop,
-            __source: {
-                fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 13,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner3), {
-            color: barSpinnerColor,
-            stop: stop,
-            __source: {
-                fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 14,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner4), {
-            color: barSpinnerColor,
-            stop: stop,
-            __source: {
-                fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 15,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner5), {
-            color: barSpinnerColor,
-            stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
                 lineNumber: 16,
@@ -30518,9 +30488,10 @@ function BarSpinners({ stop  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner6), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner2), {
             color: barSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
                 lineNumber: 17,
@@ -30528,9 +30499,10 @@ function BarSpinners({ stop  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner7), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner3), {
             color: barSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
                 lineNumber: 18,
@@ -30538,9 +30510,10 @@ function BarSpinners({ stop  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner8), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner4), {
             color: barSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
                 lineNumber: 19,
@@ -30548,9 +30521,10 @@ function BarSpinners({ stop  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner9), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner5), {
             color: barSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
                 lineNumber: 20,
@@ -30558,34 +30532,95 @@ function BarSpinners({ stop  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner10), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner6), {
             color: barSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
                 lineNumber: 21,
                 columnNumber: 9
             },
             __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner7), {
+            color: barSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/BarSpinners.tsx",
+                lineNumber: 22,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner8), {
+            color: barSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/BarSpinners.tsx",
+                lineNumber: 23,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner9), {
+            color: barSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/BarSpinners.tsx",
+                lineNumber: 24,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner10), {
+            color: barSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/BarSpinners.tsx",
+                lineNumber: 25,
+                columnNumber: 9
+            },
+            __self: this
         })
     ];
     return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement("h1", {
-        className: "header",
+        className: "spinner_header",
         style: {
-            backgroundColor: barSpinnerColor,
-            color: "#fff"
+            backgroundColor: barSpinnerColor
         },
-        __source: {
-            fileName: "components/Spinners/BarSpinners.tsx",
-            lineNumber: 26,
-            columnNumber: 13
-        },
-        __self: this
-    }, "Bar Spinners"), /*#__PURE__*/ _react.createElement("div", {
-        className: "example",
         __source: {
             fileName: "components/Spinners/BarSpinners.tsx",
             lineNumber: 30,
+            columnNumber: 13
+        },
+        __self: this
+    }, /*#__PURE__*/ _react.createElement("span", {
+        __source: {
+            fileName: "components/Spinners/BarSpinners.tsx",
+            lineNumber: 31,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Bar Spinners - "), /*#__PURE__*/ _react.createElement("a", {
+        href: "https://codesandbox.io/s/bar-spinners-z3b8u9",
+        target: "_blank",
+        className: "spinner_header_link",
+        __source: {
+            fileName: "components/Spinners/BarSpinners.tsx",
+            lineNumber: 32,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Code")), /*#__PURE__*/ _react.createElement("div", {
+        className: "example",
+        __source: {
+            fileName: "components/Spinners/BarSpinners.tsx",
+            lineNumber: 37,
             columnNumber: 13
         },
         __self: this
@@ -30594,7 +30629,7 @@ function BarSpinners({ stop  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 33,
+                lineNumber: 40,
                 columnNumber: 25
             },
             __self: this
@@ -30602,7 +30637,7 @@ function BarSpinners({ stop  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 34,
+                lineNumber: 41,
                 columnNumber: 29
             },
             __self: this
@@ -30610,16 +30645,19 @@ function BarSpinners({ stop  }) {
             className: "code",
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 37,
+                lineNumber: 44,
                 columnNumber: 29
             },
             __self: this
         }, /*#__PURE__*/ _react.createElement("button", {
             type: "button",
             className: "showcode-button",
+            onClick: ()=>{
+                setSampleCode(`&lt;BarSpinner ${(0, _helper.prepareString)(m.props)} /&gt;`);
+            },
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 45,
                 columnNumber: 33
             },
             __self: this
@@ -30632,7 +30670,7 @@ exports.default = BarSpinners;
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"2jjMk":[function(require,module,exports) {
+},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","../Common/Helper":"9C5Db"}],"2jjMk":[function(require,module,exports) {
 "use strict";
 module.exports = require("./r-spinners.cjs.development.js");
 
@@ -35438,7 +35476,28 @@ function hoistNonReactStatics(targetComponent, sourceComponent, blacklist) {
 }
 module.exports = hoistNonReactStatics;
 
-},{"react-is":"1UDhh"}],"4qsJa":[function(require,module,exports) {
+},{"react-is":"1UDhh"}],"9C5Db":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "prepareString", ()=>prepareString);
+const prepareString = (obj)=>{
+    let array = [];
+    Object.keys(obj).forEach((key)=>{
+        console.log(key, typeof obj[key]);
+        switch(typeof obj[key]){
+            case "number":
+            case "boolean":
+                array.push(`${key}=&lcub;${obj[key]}&rcub;`);
+                break;
+            case "string":
+                array.push(`${key}=\"${obj[key]}\"`);
+                break;
+        }
+    });
+    return array.join(" ");
+};
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"4qsJa":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$d7a3 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -35451,13 +35510,14 @@ var _react = require("react");
 var _dist = require("../../../dist");
 const size = "1.5rem";
 const classicSpinnerColor = "#1e293b";
-function ClassicSpinners({ stop  }) {
+function ClassicSpinners({ stop , speed  }) {
     const classicSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.ClassicSpinner1), {
             text: "Loading 1...",
             color: classicSpinnerColor,
             stop: stop,
             size: size,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
                 lineNumber: 13,
@@ -35470,6 +35530,7 @@ function ClassicSpinners({ stop  }) {
             color: classicSpinnerColor,
             stop: stop,
             size: size,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
                 lineNumber: 14,
@@ -35482,6 +35543,7 @@ function ClassicSpinners({ stop  }) {
             color: classicSpinnerColor,
             stop: stop,
             size: size,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
                 lineNumber: 15,
@@ -35494,6 +35556,7 @@ function ClassicSpinners({ stop  }) {
             color: classicSpinnerColor,
             stop: stop,
             size: size,
+            speed: speed,
             noOfCharactersToBlinkAtLast: 3,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
@@ -35507,6 +35570,7 @@ function ClassicSpinners({ stop  }) {
             color: classicSpinnerColor,
             stop: stop,
             size: size,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
                 lineNumber: 17,
@@ -35519,6 +35583,7 @@ function ClassicSpinners({ stop  }) {
             color: classicSpinnerColor,
             stop: stop,
             size: size,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
                 lineNumber: 18,
@@ -35531,6 +35596,7 @@ function ClassicSpinners({ stop  }) {
             color: classicSpinnerColor,
             stop: stop,
             size: size,
+            speed: speed,
             animationColor: "#be123c",
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
@@ -35544,6 +35610,7 @@ function ClassicSpinners({ stop  }) {
             color: classicSpinnerColor,
             stop: stop,
             size: size,
+            speed: speed,
             animationColor: "#be123c",
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
@@ -35556,6 +35623,7 @@ function ClassicSpinners({ stop  }) {
             text: "Loading 9...",
             size: size,
             stop: stop,
+            speed: speed,
             colors: [
                 classicSpinnerColor,
                 "#b91c1c",
@@ -35573,6 +35641,7 @@ function ClassicSpinners({ stop  }) {
             text: "Loading 10...",
             size: size,
             stop: stop,
+            speed: speed,
             colors: [
                 classicSpinnerColor,
                 "#b91c1c",
@@ -35588,7 +35657,7 @@ function ClassicSpinners({ stop  }) {
         })
     ];
     return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement("h1", {
-        className: "header",
+        className: "spinner_header",
         style: {
             backgroundColor: classicSpinnerColor,
             color: "#fff"
@@ -35599,11 +35668,28 @@ function ClassicSpinners({ stop  }) {
             columnNumber: 13
         },
         __self: this
-    }, "Classic Spinners"), /*#__PURE__*/ _react.createElement("div", {
+    }, /*#__PURE__*/ _react.createElement("span", {
+        __source: {
+            fileName: "components/Spinners/ClassicSpinners.tsx",
+            lineNumber: 28,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Classic Spinners - "), /*#__PURE__*/ _react.createElement("a", {
+        href: "https://codesandbox.io/s/classic-spinners-jg8qb0",
+        target: "_blank",
+        className: "spinner_header_link",
+        __source: {
+            fileName: "components/Spinners/ClassicSpinners.tsx",
+            lineNumber: 29,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Code")), /*#__PURE__*/ _react.createElement("div", {
         className: "example",
         __source: {
             fileName: "components/Spinners/ClassicSpinners.tsx",
-            lineNumber: 31,
+            lineNumber: 34,
             columnNumber: 13
         },
         __self: this
@@ -35612,7 +35698,7 @@ function ClassicSpinners({ stop  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 34,
+                lineNumber: 37,
                 columnNumber: 25
             },
             __self: this
@@ -35620,7 +35706,7 @@ function ClassicSpinners({ stop  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 35,
+                lineNumber: 38,
                 columnNumber: 29
             },
             __self: this
@@ -35628,7 +35714,7 @@ function ClassicSpinners({ stop  }) {
             className: "code",
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 41,
                 columnNumber: 29
             },
             __self: this
@@ -35637,7 +35723,7 @@ function ClassicSpinners({ stop  }) {
             className: "showcode-button",
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 39,
+                lineNumber: 42,
                 columnNumber: 33
             },
             __self: this
@@ -35662,11 +35748,12 @@ parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
 const continuousSpinnerColor = "#514b82";
-function ContinuousSpinners({ stop  }) {
+function ContinuousSpinners({ stop , speed  }) {
     const continuousSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner1), {
             color: continuousSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
                 lineNumber: 12,
@@ -35677,6 +35764,7 @@ function ContinuousSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner2), {
             color: continuousSpinnerColor,
             stop: stop,
+            speed: speed,
             bgColor: "lightgrey",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
@@ -35688,6 +35776,7 @@ function ContinuousSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner3), {
             color: continuousSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
                 lineNumber: 14,
@@ -35698,6 +35787,7 @@ function ContinuousSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner4), {
             color: continuousSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
                 lineNumber: 15,
@@ -35708,6 +35798,7 @@ function ContinuousSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner5), {
             color: continuousSpinnerColor,
             stop: stop,
+            speed: speed,
             secondaryColor: "lightgrey",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
@@ -35719,6 +35810,7 @@ function ContinuousSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner6), {
             color: continuousSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
                 lineNumber: 17,
@@ -35729,6 +35821,7 @@ function ContinuousSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner7), {
             color: continuousSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
                 lineNumber: 18,
@@ -35739,6 +35832,7 @@ function ContinuousSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner8), {
             color: continuousSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
                 lineNumber: 19,
@@ -35750,6 +35844,7 @@ function ContinuousSpinners({ stop  }) {
             color: "#ccc",
             stop: stop,
             dotColor: continuousSpinnerColor,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
                 lineNumber: 20,
@@ -35760,6 +35855,7 @@ function ContinuousSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner10), {
             color: continuousSpinnerColor,
             stop: stop,
+            speed: speed,
             bgColor: "lightgrey",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
@@ -35770,7 +35866,7 @@ function ContinuousSpinners({ stop  }) {
         })
     ];
     return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement("h1", {
-        className: "header",
+        className: "spinner_header",
         style: {
             backgroundColor: continuousSpinnerColor,
             color: "#fff"
@@ -35781,11 +35877,28 @@ function ContinuousSpinners({ stop  }) {
             columnNumber: 13
         },
         __self: this
-    }, "Continuous Spinners"), /*#__PURE__*/ _react.createElement("div", {
+    }, /*#__PURE__*/ _react.createElement("span", {
+        __source: {
+            fileName: "components/Spinners/ContinuousSpinners.tsx",
+            lineNumber: 27,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Continuous Spinners - "), /*#__PURE__*/ _react.createElement("a", {
+        href: "https://codesandbox.io/s/continuous-spinners-cvziqr",
+        target: "_blank",
+        className: "spinner_header_link",
+        __source: {
+            fileName: "components/Spinners/ContinuousSpinners.tsx",
+            lineNumber: 28,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Code")), /*#__PURE__*/ _react.createElement("div", {
         className: "example",
         __source: {
             fileName: "components/Spinners/ContinuousSpinners.tsx",
-            lineNumber: 30,
+            lineNumber: 33,
             columnNumber: 13
         },
         __self: this
@@ -35794,7 +35907,7 @@ function ContinuousSpinners({ stop  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 33,
+                lineNumber: 36,
                 columnNumber: 25
             },
             __self: this
@@ -35802,7 +35915,7 @@ function ContinuousSpinners({ stop  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 34,
+                lineNumber: 37,
                 columnNumber: 29
             },
             __self: this
@@ -35810,7 +35923,7 @@ function ContinuousSpinners({ stop  }) {
             className: "code",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 37,
+                lineNumber: 40,
                 columnNumber: 29
             },
             __self: this
@@ -35819,7 +35932,7 @@ function ContinuousSpinners({ stop  }) {
             className: "showcode-button",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 41,
                 columnNumber: 33
             },
             __self: this
@@ -35844,11 +35957,12 @@ parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
 const dotSpinnerColor = "#ea580c";
-function DotSpinners({ stop  }) {
+function DotSpinners({ stop , speed  }) {
     const dotSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner1), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 12,
@@ -35859,6 +35973,7 @@ function DotSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner2), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 13,
@@ -35869,6 +35984,7 @@ function DotSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner3), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 14,
@@ -35879,6 +35995,7 @@ function DotSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner4), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 15,
@@ -35889,6 +36006,7 @@ function DotSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner5), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 16,
@@ -35899,6 +36017,7 @@ function DotSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner6), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 17,
@@ -35909,6 +36028,7 @@ function DotSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner7), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 18,
@@ -35919,6 +36039,7 @@ function DotSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner8), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 19,
@@ -35929,6 +36050,7 @@ function DotSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner9), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 20,
@@ -35939,6 +36061,7 @@ function DotSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner10), {
             color: dotSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 21,
@@ -35948,7 +36071,7 @@ function DotSpinners({ stop  }) {
         })
     ];
     return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement("h1", {
-        className: "header",
+        className: "spinner_header",
         style: {
             backgroundColor: dotSpinnerColor,
             color: "#fff"
@@ -35959,11 +36082,28 @@ function DotSpinners({ stop  }) {
             columnNumber: 13
         },
         __self: this
-    }, "Dot Spinners"), /*#__PURE__*/ _react.createElement("div", {
+    }, /*#__PURE__*/ _react.createElement("span", {
+        __source: {
+            fileName: "components/Spinners/DotSpinners.tsx",
+            lineNumber: 27,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Dot Spinners - "), /*#__PURE__*/ _react.createElement("a", {
+        href: "https://codesandbox.io/s/dot-spinners-ronmuc",
+        target: "_blank",
+        className: "spinner_header_link",
+        __source: {
+            fileName: "components/Spinners/DotSpinners.tsx",
+            lineNumber: 28,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Code")), /*#__PURE__*/ _react.createElement("div", {
         className: "example",
         __source: {
             fileName: "components/Spinners/DotSpinners.tsx",
-            lineNumber: 30,
+            lineNumber: 33,
             columnNumber: 13
         },
         __self: this
@@ -35972,7 +36112,7 @@ function DotSpinners({ stop  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 33,
+                lineNumber: 36,
                 columnNumber: 25
             },
             __self: this
@@ -35980,7 +36120,7 @@ function DotSpinners({ stop  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 34,
+                lineNumber: 37,
                 columnNumber: 29
             },
             __self: this
@@ -35988,7 +36128,7 @@ function DotSpinners({ stop  }) {
             className: "code",
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 37,
+                lineNumber: 40,
                 columnNumber: 29
             },
             __self: this
@@ -35997,7 +36137,7 @@ function DotSpinners({ stop  }) {
             className: "showcode-button",
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 41,
                 columnNumber: 33
             },
             __self: this
@@ -36022,11 +36162,12 @@ parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
 const infinitySpinnerColor = "#0369a1";
-function InfinitySpinners({ stop  }) {
+function InfinitySpinners({ stop , speed  }) {
     const infinitySpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner1), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 12,
@@ -36037,6 +36178,7 @@ function InfinitySpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner2), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 13,
@@ -36047,6 +36189,7 @@ function InfinitySpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner3), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 14,
@@ -36057,6 +36200,7 @@ function InfinitySpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner4), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 15,
@@ -36067,6 +36211,7 @@ function InfinitySpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner5), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 16,
@@ -36077,6 +36222,7 @@ function InfinitySpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner6), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 17,
@@ -36087,6 +36233,7 @@ function InfinitySpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner7), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 18,
@@ -36097,6 +36244,7 @@ function InfinitySpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner8), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 19,
@@ -36107,6 +36255,7 @@ function InfinitySpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner9), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 20,
@@ -36117,6 +36266,7 @@ function InfinitySpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner10), {
             color: infinitySpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 21,
@@ -36126,7 +36276,7 @@ function InfinitySpinners({ stop  }) {
         })
     ];
     return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement("h1", {
-        className: "header",
+        className: "spinner_header",
         style: {
             backgroundColor: infinitySpinnerColor,
             color: "#fff"
@@ -36137,11 +36287,28 @@ function InfinitySpinners({ stop  }) {
             columnNumber: 13
         },
         __self: this
-    }, "Infinity Spinners"), /*#__PURE__*/ _react.createElement("div", {
+    }, /*#__PURE__*/ _react.createElement("span", {
+        __source: {
+            fileName: "components/Spinners/InfinitySpinners.tsx",
+            lineNumber: 28,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Infinity Spinners - "), /*#__PURE__*/ _react.createElement("a", {
+        href: "https://codesandbox.io/s/infinity-spinners-qq6ij6",
+        target: "_blank",
+        className: "spinner_header_link",
+        __source: {
+            fileName: "components/Spinners/InfinitySpinners.tsx",
+            lineNumber: 29,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Code")), /*#__PURE__*/ _react.createElement("div", {
         className: "example",
         __source: {
             fileName: "components/Spinners/InfinitySpinners.tsx",
-            lineNumber: 31,
+            lineNumber: 34,
             columnNumber: 13
         },
         __self: this
@@ -36150,7 +36317,7 @@ function InfinitySpinners({ stop  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 34,
+                lineNumber: 37,
                 columnNumber: 25
             },
             __self: this
@@ -36158,7 +36325,7 @@ function InfinitySpinners({ stop  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 35,
+                lineNumber: 38,
                 columnNumber: 29
             },
             __self: this
@@ -36166,7 +36333,7 @@ function InfinitySpinners({ stop  }) {
             className: "code",
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 41,
                 columnNumber: 29
             },
             __self: this
@@ -36175,7 +36342,7 @@ function InfinitySpinners({ stop  }) {
             className: "showcode-button",
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 39,
+                lineNumber: 42,
                 columnNumber: 33
             },
             __self: this
@@ -36201,11 +36368,12 @@ var _react = require("react");
 var _dist = require("../../../dist");
 const progressSpinnerColor = "#dc2626";
 const color2 = "#0369a1";
-function ProgressSpinners({ stop  }) {
+function ProgressSpinners({ stop , speed  }) {
     const progressSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner1), {
             color: progressSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
                 lineNumber: 13,
@@ -36216,6 +36384,7 @@ function ProgressSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner2), {
             color: progressSpinnerColor,
             stop: stop,
+            speed: speed,
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
@@ -36228,6 +36397,7 @@ function ProgressSpinners({ stop  }) {
             color1: progressSpinnerColor,
             color2: color2,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
                 lineNumber: 15,
@@ -36238,6 +36408,7 @@ function ProgressSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner4), {
             color: progressSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
                 lineNumber: 16,
@@ -36248,6 +36419,7 @@ function ProgressSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner5), {
             color: progressSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
                 lineNumber: 17,
@@ -36258,6 +36430,7 @@ function ProgressSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner6), {
             color: progressSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
                 lineNumber: 18,
@@ -36268,6 +36441,7 @@ function ProgressSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner7), {
             color: progressSpinnerColor,
             stop: stop,
+            speed: speed,
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
@@ -36279,6 +36453,7 @@ function ProgressSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner8), {
             color: progressSpinnerColor,
             stop: stop,
+            speed: speed,
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
@@ -36290,6 +36465,7 @@ function ProgressSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner9), {
             color: progressSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
                 lineNumber: 21,
@@ -36300,6 +36476,7 @@ function ProgressSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner10), {
             color: progressSpinnerColor,
             stop: stop,
+            speed: speed,
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
@@ -36310,7 +36487,7 @@ function ProgressSpinners({ stop  }) {
         })
     ];
     return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement("h1", {
-        className: "header",
+        className: "spinner_header",
         style: {
             backgroundColor: progressSpinnerColor,
             color: "#fff"
@@ -36321,11 +36498,28 @@ function ProgressSpinners({ stop  }) {
             columnNumber: 13
         },
         __self: this
-    }, "Progress Spinners"), /*#__PURE__*/ _react.createElement("div", {
+    }, /*#__PURE__*/ _react.createElement("span", {
+        __source: {
+            fileName: "components/Spinners/ProgressSpinners.tsx",
+            lineNumber: 28,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Progress Spinners - "), /*#__PURE__*/ _react.createElement("a", {
+        href: "https://codesandbox.io/s/infinity-spinners-forked-btq55g",
+        target: "_blank",
+        className: "spinner_header_link",
+        __source: {
+            fileName: "components/Spinners/ProgressSpinners.tsx",
+            lineNumber: 29,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Code")), /*#__PURE__*/ _react.createElement("div", {
         className: "example",
         __source: {
             fileName: "components/Spinners/ProgressSpinners.tsx",
-            lineNumber: 31,
+            lineNumber: 34,
             columnNumber: 13
         },
         __self: this
@@ -36334,7 +36528,7 @@ function ProgressSpinners({ stop  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 34,
+                lineNumber: 37,
                 columnNumber: 25
             },
             __self: this
@@ -36342,7 +36536,7 @@ function ProgressSpinners({ stop  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 35,
+                lineNumber: 38,
                 columnNumber: 29
             },
             __self: this
@@ -36350,7 +36544,7 @@ function ProgressSpinners({ stop  }) {
             className: "code",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 41,
                 columnNumber: 29
             },
             __self: this
@@ -36359,7 +36553,7 @@ function ProgressSpinners({ stop  }) {
             className: "showcode-button",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 39,
+                lineNumber: 42,
                 columnNumber: 33
             },
             __self: this
@@ -36384,11 +36578,12 @@ parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
 const roundedSpinnerColor = "#86198f";
-function RoundedSpinners({ stop  }) {
+function RoundedSpinners({ stop , speed  }) {
     const roundedSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner1), {
             color: roundedSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
                 lineNumber: 12,
@@ -36399,6 +36594,7 @@ function RoundedSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner2), {
             color: roundedSpinnerColor,
             stop: stop,
+            speed: speed,
             thickness: 8,
             secondaryColor: "#cbd5e1",
             __source: {
@@ -36411,6 +36607,7 @@ function RoundedSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner3), {
             color: roundedSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
                 lineNumber: 14,
@@ -36421,6 +36618,7 @@ function RoundedSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner4), {
             color: roundedSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
                 lineNumber: 15,
@@ -36431,6 +36629,7 @@ function RoundedSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner5), {
             color: roundedSpinnerColor,
             stop: stop,
+            speed: speed,
             thickness: 8,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
@@ -36442,6 +36641,7 @@ function RoundedSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner6), {
             color: roundedSpinnerColor,
             stop: stop,
+            speed: speed,
             dotColor: roundedSpinnerColor,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
@@ -36453,6 +36653,7 @@ function RoundedSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner7), {
             color: roundedSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
                 lineNumber: 18,
@@ -36463,6 +36664,7 @@ function RoundedSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner8), {
             color: roundedSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
                 lineNumber: 19,
@@ -36474,6 +36676,7 @@ function RoundedSpinners({ stop  }) {
             color: "#ccc",
             stop: stop,
             dotColor: roundedSpinnerColor,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
                 lineNumber: 20,
@@ -36484,6 +36687,7 @@ function RoundedSpinners({ stop  }) {
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner10), {
             color: roundedSpinnerColor,
             stop: stop,
+            speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
                 lineNumber: 21,
@@ -36493,7 +36697,7 @@ function RoundedSpinners({ stop  }) {
         })
     ];
     return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement("h1", {
-        className: "header",
+        className: "spinner_header",
         style: {
             backgroundColor: roundedSpinnerColor,
             color: "#fff"
@@ -36504,11 +36708,28 @@ function RoundedSpinners({ stop  }) {
             columnNumber: 13
         },
         __self: this
-    }, "Rounded Spinners"), /*#__PURE__*/ _react.createElement("div", {
+    }, /*#__PURE__*/ _react.createElement("span", {
+        __source: {
+            fileName: "components/Spinners/RoundedSpinners.tsx",
+            lineNumber: 28,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Rounded Spinners - "), /*#__PURE__*/ _react.createElement("a", {
+        href: "https://codesandbox.io/s/rounded-spinners-ctkq3w",
+        target: "_blank",
+        className: "spinner_header_link",
+        __source: {
+            fileName: "components/Spinners/RoundedSpinners.tsx",
+            lineNumber: 29,
+            columnNumber: 17
+        },
+        __self: this
+    }, "Code")), /*#__PURE__*/ _react.createElement("div", {
         className: "example",
         __source: {
             fileName: "components/Spinners/RoundedSpinners.tsx",
-            lineNumber: 31,
+            lineNumber: 34,
             columnNumber: 13
         },
         __self: this
@@ -36517,7 +36738,7 @@ function RoundedSpinners({ stop  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 35,
+                lineNumber: 38,
                 columnNumber: 25
             },
             __self: this
@@ -36525,7 +36746,7 @@ function RoundedSpinners({ stop  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 36,
+                lineNumber: 39,
                 columnNumber: 29
             },
             __self: this
@@ -36533,7 +36754,7 @@ function RoundedSpinners({ stop  }) {
             className: "code",
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 39,
+                lineNumber: 42,
                 columnNumber: 29
             },
             __self: this
@@ -36542,7 +36763,7 @@ function RoundedSpinners({ stop  }) {
             className: "showcode-button",
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 40,
+                lineNumber: 43,
                 columnNumber: 33
             },
             __self: this

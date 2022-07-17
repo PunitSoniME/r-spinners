@@ -1,6 +1,4 @@
-## Continuous Spinners Usage
-
-<br />
+## Progress Spinners Usage
 
 > ### To override **color**, use **color** prop, for **height** and **width**, use **height**, **width** prop, don't use css styling for those
 </br >
@@ -10,22 +8,22 @@ Common Props
 
     height?: number | string;
     width?: number | string;
-    color?: string; ( Default is currentColor )
+    
     style?: object;
     speed?: number; ( Default is 1, increase the number to increase the speed of animation )
     stop?: boolean; ( Default is false )
 
 ```
 
-|  Component  | Example |
-| ------------- | ------------- |
-| ```<ContinuousSpinner1 />```  | ```<ContinuousSpinner1 speed={1} color="#514b82" stop={false} />```  |
-| ```<ContinuousSpinner2 />```  | ```<ContinuousSpinner2 speed={1} color="#514b82" stop={false} bgColor="lightgrey" />```  |
-| ```<ContinuousSpinner3 />```  | ```<ContinuousSpinner3 speed={1} color="#514b82" stop={false} />```  |
-| ```<ContinuousSpinner4 />```  | ```<ContinuousSpinner4 speed={1} color="#514b82" stop={false} />```  |
-| ```<ContinuousSpinner5 />```  | ```<ContinuousSpinner5 speed={1} color="#514b82" stop={false} secondaryColor="lightgrey" />```  |
-| ```<ContinuousSpinner6 />```  | ```<ContinuousSpinner6 speed={1} color="#514b82" stop={false} />```  |
-| ```<ContinuousSpinner7 />```  | ```<ContinuousSpinner7 speed={1} color="#514b82" stop={false} />```  |
-| ```<ContinuousSpinner8 />```  | ```<ContinuousSpinner8 speed={1} color="#514b82" stop={false} />```  |
-| ```<ContinuousSpinner9 />```  | ```<ContinuousSpinner9 color="#ccc" stop={stop} dotColor="#514b82" />```  |
-| ```<ContinuousSpinner10 />```  | ```<ContinuousSpinner10 speed={1} color="#514b82" stop={false} bgColor="lightgrey" />```  |
+|  Component  | Other Props | Example |
+| ------------- | ------------- | ------------- |
+| ```<ProgressSpinner1 />```  | ```color?: string; ( Default is currentColor )```  | ```<ProgressSpinner1 color="#dc2626" stop={false} speed={1} />```  |
+| ```<ProgressSpinner2 />```  | ```color?: string; ( Default is currentColor )```  | ```<ProgressSpinner2 color="#dc2626" stop={false} speed={1} bgColor="#cbd5e1" />```  |
+| ```<ProgressSpinner3 />```  | ```color1: string; ( Default is currentColor )```<br />```color2: string; ( Default is #eee )```  | ```<ProgressSpinner3 color1="#dc2626" color2="#0369a1" stop={false} speed={1} />```  |
+| ```<ProgressSpinner4 />```  | ```color?: string; ( Default is currentColor )```  | ```<ProgressSpinner4 color="#dc2626" stop={false} speed={1} />```  |
+| ```<ProgressSpinner5 />```  | ```color?: string; ( Default is currentColor )```  | ```<ProgressSpinner5 color="#dc2626" stop={false} speed={1} />```  |
+| ```<ProgressSpinner6 />```  | ```color?: string; ( Default is currentColor )```  | ```<ProgressSpinner6 color="#dc2626" stop={false} speed={1} />```  |
+| ```<ProgressSpinner7 />```  | ```color?: string; ( Default is currentColor )```  | ```<ProgressSpinner7 color="#dc2626" stop={false} speed={1} bgColor="#cbd5e1" />```  |
+| ```<ProgressSpinner8 />```  | ```color?: string; ( Default is currentColor )```  | ```<ProgressSpinner8 color="#dc2626" stop={false} speed={1} bgColor="#cbd5e1" />```  |
+| ```<ProgressSpinner9 />```  | ```color?: string; ( Default is currentColor )```  | ```<ProgressSpinner9 color="#dc2626" stop={false} speed={1} />```  |
+| ```<ProgressSpinner10 />```  | ```color?: string; ( Default is currentColor )```  | ```<ProgressSpinner10 color="#dc2626" stop={false} speed={1} bgColor="#cbd5e1" />```  |

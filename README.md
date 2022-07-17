@@ -30,6 +30,10 @@ npm install --save r-spinners
 
 <br />
 
+## Demo of all spinners - https://r-spinners.netlify.app/
+
+<br />
+
 ### Rounded Spinners - [`Demo`](https://codesandbox.io/s/rounded-spinners-ctkq3w) - [`Usage`](./src/Spinners/Rounded/README.md)
 
 ### Classic Spinners - [`Demo`](https://codesandbox.io/s/classic-spinners-jg8qb0) - [`Usage`](./src/Spinners/Classic/README.md) 
@@ -42,4 +46,6 @@ npm install --save r-spinners
 
 ### Continuous Spinners - [`Demo`](https://codesandbox.io/s/continuous-spinners-cvziqr) - [`Usage`](./src/Spinners/Continuous/README.md) 
 
-<br />
+
+### Progress Spinners - [`Demo`](https://codesandbox.io/s/progress-spinners-btq55g) - [`Usage`](./src/Spinners/Progress/README.md) 
+
