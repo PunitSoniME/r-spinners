@@ -5,5 +5,4 @@ node_modules
 dist
 example/*
 !example/dist
-.github
 yarn.lock
