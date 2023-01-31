@@ -1,12 +1,19 @@
 # Collection of react spinners
 
 [![npm version](https://badge.fury.io/js/r-spinners.svg)][npm_url]
-[![downloads](https://img.shields.io/npm/dt/r-spinners.svg)][npm_url]
 [![license](https://img.shields.io/npm/l/r-spinners.svg)][npm_url]
-
-<!-- ![Dependency Count](https://badgen.net/bundlephobia/dependency-count/r-spinners) -->
 ![Types Included](https://badgen.net/npm/types/r-spinners)
-[![gzip size](https://img.badgesize.io/https:/unpkg.com/r-spinners/dist/r-spinners.cjs.production.min.js?label=gzip&compression=gzip)](https:/unpkg.com/r-spinners/dist/r-spinners.cjs.production.min.js)
+
+![dependents](https://badgen.net/npm/dependents/r-spinners)
+[![weekly downloads](https://badgen.net/npm/dw/r-spinners)][npm_url]
+[![weekly downloads](https://badgen.net/npm/dm/r-spinners)][npm_url]
+[![downloads](https://img.shields.io/npm/dt/r-spinners.svg)][npm_url]
+![jsDelivr](https://badgen.net/jsdelivr/hits/npm/r-spinners)
+
+![Dependency Count](https://badgen.net/bundlephobia/dependency-count/r-spinners)
+
+![minified](https://badgen.net/bundlephobia/min/r-spinners)
+![gzip](https://badgen.net/bundlephobia/minzip/r-spinners)
 
 [npm_url]: https://www.npmjs.org/package/r-spinners
 
