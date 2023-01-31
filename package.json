@@ -1,6 +1,6 @@
 {
   "name": "r-spinners",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Custom React Spinners",
   "author": "Punit Soni <punit.soni33@gmail.com> (https://punit-soni.web.app)",
   "license": "MIT",
@@ -61,11 +61,11 @@
   "size-limit": [
     {
       "path": "dist/r-spinners.cjs.production.min.js",
-      "limit": "10 KB"
+      "limit": "30 KB"
     },
     {
       "path": "dist/r-spinners.esm.js",
-      "limit": "10 KB"
+      "limit": "30 KB"
     }
   ],
   "devDependencies": {
