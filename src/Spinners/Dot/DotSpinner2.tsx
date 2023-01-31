@@ -8,41 +8,49 @@ const animation = keyframes`
   }
 `;
 
-const DotSpinner2Wrapper = styled.div.attrs(
-  props => ({
-    color: props["color"] || "currentColor",
-    size: (props["size"] ? (typeof props["size"] === "number" ? `${props["size"]}px` : props["size"]) : "60px") as number | string
-  }))`
-  width: ${props => props.size};
-  aspect-ratio: 4;
-  background: radial-gradient(circle closest-side, ${props => props.color} 90%, #0000) 0/calc(100%/3) 100% no-repeat;
-  animation-name: ${animation};
-  animation-iteration-count: infinite;
+const DotSpinner2Wrapper = styled.div.attrs(props => ({
+	color: props['color'] || 'currentColor',
+	size: (props['size']
+		? typeof props['size'] === 'number'
+			? `${props['size']}px`
+			: props['size']
+		: '60px') as number | string,
+}))`
+	width: ${props => props.size};
+	aspect-ratio: 4;
+	background: radial-gradient(
+			circle closest-side,
+			${props => props.color} 90%,
+			#0000
+		)
+		0 / calc(100% / 3) 100% no-repeat;
+	animation-name: ${animation};
+	animation-iteration-count: infinite;
 `;
 
 interface IProps extends ICommonProps {
-  size?: number | string;
+	size?: number | string;
 }
 
 export default function DotSpinner2({
-  size,
-  color,
-  style = {},
-  speed = 1,
-  stop = false,
+	size,
+	color,
+	style = {},
+	speed = 1,
+	stop = false,
 }: IProps) {
+	const updatedSpeed = speed === 0 ? 1 : 1 / speed;
 
-  const updatedSpeed = speed === 0 ? 1 : 1 / speed;
-
-  return (
-    <DotSpinner2Wrapper
-      size={size}
-      color={color}
-      style={{
-        animationDuration: `${updatedSpeed}s`,
-        animationTimingFunction: `steps(3)`,
-        animationPlayState: stop ? "paused" : "running",
-        ...style
-      }} />
-  )
+	return (
+		<DotSpinner2Wrapper
+			size={size}
+			color={color}
+			style={{
+				animationDuration: `${updatedSpeed}s`,
+				animationTimingFunction: `steps(3)`,
+				animationPlayState: stop ? 'paused' : 'running',
+				...style,
+			}}
+		/>
+	);
 }

@@ -1,4 +1,4 @@
-import React from 'react'
+import React from 'react';
 import styled, { keyframes } from 'styled-components';
 import ICommonProps from '../../Model/Common';
 
@@ -9,53 +9,62 @@ const animation = keyframes`
   100% { background-position: calc(4*100%/3) 0 }
 `;
 
-const defaultColors = ["#000", "#b91c1c", "#0369a1", "#15803d"];
+const defaultColors = ['#000', '#b91c1c', '#0369a1', '#15803d'];
 
-const ClassicSpinner10Wrapper = styled.div.attrs(
-  props => ({
-    text: props["text"],
-    colors: (props["colors"] && props["colors"].length === 4 ? props["colors"] : defaultColors) || defaultColors,
-  }))`
-  &:before {
-    content: "${props => props.text}";
-  }
-  color: #0000;
-  font-weight: bold; 
-  font-family: monospace;
-  background: linear-gradient(90deg, ${props => props.colors[0]} 25%, ${props => props.colors[1]} 0 50%, ${props => props.colors[2]} 0 75%, ${props => props.colors[3]} 0) 0 0/400% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation-name: ${animation};
-  animation-iteration-count: infinite;
-  animation-timing-function: cubic-bezier(0.3, 1, 0, 1);
-`
+const ClassicSpinner10Wrapper = styled.div.attrs(props => ({
+	text: props['text'],
+	colors:
+		(props['colors'] && props['colors'].length === 4
+			? props['colors']
+			: defaultColors) || defaultColors,
+}))`
+	&:before {
+		content: '${props => props.text}';
+	}
+	color: #0000;
+	font-weight: bold;
+	font-family: monospace;
+	background: linear-gradient(
+			90deg,
+			${props => props.colors[0]} 25%,
+			${props => props.colors[1]} 0 50%,
+			${props => props.colors[2]} 0 75%,
+			${props => props.colors[3]} 0
+		)
+		0 0/400% 100%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	animation-name: ${animation};
+	animation-iteration-count: infinite;
+	animation-timing-function: cubic-bezier(0.3, 1, 0, 1);
+`;
 
 interface IProps extends ICommonProps {
-  text: string;
-  colors: string[];
-  size?: number | string;
+	text: string;
+	colors: string[];
+	size?: number | string;
 }
 
 export default function ClassicSpinner10({
-  text,
-  colors,
-  size = "1rem",
-  style = {},
-  speed = 1,
-  stop = false
+	text,
+	colors,
+	size = '1rem',
+	style = {},
+	speed = 1,
+	stop = false,
 }: IProps) {
+	const updatedSpeed = speed === 0 ? 5 : 5 / speed;
 
-  const updatedSpeed = speed === 0 ? 5 : 5 / speed;
-
-  return (
-    <ClassicSpinner10Wrapper
-      text={text}
-      colors={colors}
-      style={{
-        fontSize: size,
-        animationDuration: `${updatedSpeed}s`,
-        animationPlayState: stop ? "paused" : "running",
-        ...style
-      }} />
-  )
+	return (
+		<ClassicSpinner10Wrapper
+			text={text}
+			colors={colors}
+			style={{
+				fontSize: size,
+				animationDuration: `${updatedSpeed}s`,
+				animationPlayState: stop ? 'paused' : 'running',
+				...style,
+			}}
+		/>
+	);
 }
