@@ -142,14 +142,14 @@
       this[globalName] = mainExports;
     }
   }
-})({"hi2Fo":[function(require,module,exports) {
-"use strict";
+})({"4QFFA":[function(require,module,exports) {
 var global = arguments[3];
 var HMR_HOST = null;
 var HMR_PORT = null;
 var HMR_SECURE = false;
 var HMR_ENV_HASH = "d6ea1d42532a7575";
 module.bundle.HMR_BUNDLE_ID = "7a2040b76fa4ea68";
+"use strict";
 /* global HMR_HOST, HMR_PORT, HMR_ENV_HASH, HMR_SECURE, chrome, browser, globalThis, __parcel__import__, __parcel__importScripts__, ServiceWorkerGlobalScope */ /*::
 import type {
   HMRAsset,
@@ -158,7 +158,7 @@ import type {
 interface ParcelRequire {
   (string): mixed;
   cache: {|[string]: ParcelModule|};
-  hotData: mixed;
+  hotData: {|[string]: mixed|};
   Module: any;
   parent: ?ParcelRequire;
   isParcelRequire: true;
@@ -200,7 +200,7 @@ var OldModule = module.bundle.Module;
 function Module(moduleName) {
     OldModule.call(this, moduleName);
     this.hot = {
-        data: module.bundle.hotData,
+        data: module.bundle.hotData[moduleName],
         _acceptCallbacks: [],
         _disposeCallbacks: [],
         accept: function(fn) {
@@ -210,10 +210,11 @@ function Module(moduleName) {
             this._disposeCallbacks.push(fn);
         }
     };
-    module.bundle.hotData = undefined;
+    module.bundle.hotData[moduleName] = undefined;
 }
 module.bundle.Module = Module;
-var checkedAssets, acceptedAssets, assetsToAccept /*: Array<[ParcelRequire, string]> */ ;
+module.bundle.hotData = {};
+var checkedAssets, assetsToDispose, assetsToAccept /*: Array<[ParcelRequire, string]> */ ;
 function getHostname() {
     return HMR_HOST || (location.protocol.indexOf("http") === 0 ? location.hostname : "localhost");
 }
@@ -236,8 +237,8 @@ if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== "undefined") {
     } // $FlowFixMe
     ws.onmessage = async function(event) {
         checkedAssets = {} /*: {|[string]: boolean|} */ ;
-        acceptedAssets = {} /*: {|[string]: boolean|} */ ;
         assetsToAccept = [];
+        assetsToDispose = [];
         var data = JSON.parse(event.data);
         if (data.type === "update") {
             // Remove error overlay if there is one
@@ -249,10 +250,22 @@ if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== "undefined") {
             if (handled) {
                 console.clear(); // Dispatch custom event so other runtimes (e.g React Refresh) are aware.
                 if (typeof window !== "undefined" && typeof CustomEvent !== "undefined") window.dispatchEvent(new CustomEvent("parcelhmraccept"));
-                await hmrApplyUpdates(assets);
-                for(var i = 0; i < assetsToAccept.length; i++){
-                    var id = assetsToAccept[i][1];
-                    if (!acceptedAssets[id]) hmrAcceptRun(assetsToAccept[i][0], id);
+                await hmrApplyUpdates(assets); // Dispose all old assets.
+                let processedAssets = {} /*: {|[string]: boolean|} */ ;
+                for(let i = 0; i < assetsToDispose.length; i++){
+                    let id = assetsToDispose[i][1];
+                    if (!processedAssets[id]) {
+                        hmrDispose(assetsToDispose[i][0], id);
+                        processedAssets[id] = true;
+                    }
+                } // Run accept callbacks. This will also re-execute other disposed assets in topological order.
+                processedAssets = {};
+                for(let i = 0; i < assetsToAccept.length; i++){
+                    let id = assetsToAccept[i][1];
+                    if (!processedAssets[id]) {
+                        hmrAccept(assetsToAccept[i][0], id);
+                        processedAssets[id] = true;
+                    }
                 }
             } else fullReload();
         }
@@ -281,7 +294,7 @@ function removeErrorOverlay() {
     var overlay = document.getElementById(OVERLAY_ID);
     if (overlay) {
         overlay.remove();
-        console.log("[parcel] \u2728 Error resolved");
+        console.log("[parcel] ✨ Error resolved");
     }
 }
 function createErrorOverlay(diagnostics) {
@@ -452,23 +465,23 @@ function hmrApply(bundle, asset) {
         } else if (bundle.parent) hmrApply(bundle.parent, asset);
     }
 }
-function hmrDelete(bundle, id1) {
+function hmrDelete(bundle, id) {
     let modules = bundle.modules;
     if (!modules) return;
-    if (modules[id1]) {
+    if (modules[id]) {
         // Collect dependencies that will become orphaned when this module is deleted.
-        let deps = modules[id1][1];
+        let deps = modules[id][1];
         let orphans = [];
         for(let dep in deps){
             let parents = getParents(module.bundle.root, deps[dep]);
             if (parents.length === 1) orphans.push(deps[dep]);
         } // Delete the module. This must be done before deleting dependencies in case of circular dependencies.
-        delete modules[id1];
-        delete bundle.cache[id1]; // Now delete the orphans.
+        delete modules[id];
+        delete bundle.cache[id]; // Now delete the orphans.
         orphans.forEach((id)=>{
             hmrDelete(module.bundle.root, id);
         });
-    } else if (bundle.parent) hmrDelete(bundle.parent, id1);
+    } else if (bundle.parent) hmrDelete(bundle.parent, id);
 }
 function hmrAcceptCheck(bundle, id, depsByBundle) {
     if (hmrAcceptCheckOne(bundle, id, depsByBundle)) return true;
@@ -505,30 +518,42 @@ function hmrAcceptCheckOne(bundle, id, depsByBundle) {
     if (checkedAssets[id]) return true;
     checkedAssets[id] = true;
     var cached = bundle.cache[id];
-    assetsToAccept.push([
+    assetsToDispose.push([
         bundle,
         id
     ]);
-    if (!cached || cached.hot && cached.hot._acceptCallbacks.length) return true;
+    if (!cached || cached.hot && cached.hot._acceptCallbacks.length) {
+        assetsToAccept.push([
+            bundle,
+            id
+        ]);
+        return true;
+    }
 }
-function hmrAcceptRun(bundle, id) {
+function hmrDispose(bundle, id) {
     var cached = bundle.cache[id];
-    bundle.hotData = {};
-    if (cached && cached.hot) cached.hot.data = bundle.hotData;
+    bundle.hotData[id] = {};
+    if (cached && cached.hot) cached.hot.data = bundle.hotData[id];
     if (cached && cached.hot && cached.hot._disposeCallbacks.length) cached.hot._disposeCallbacks.forEach(function(cb) {
-        cb(bundle.hotData);
+        cb(bundle.hotData[id]);
     });
     delete bundle.cache[id];
-    bundle(id);
-    cached = bundle.cache[id];
+}
+function hmrAccept(bundle, id) {
+    // Execute the module.
+    bundle(id); // Run the accept callbacks in the new version of the module.
+    var cached = bundle.cache[id];
     if (cached && cached.hot && cached.hot._acceptCallbacks.length) cached.hot._acceptCallbacks.forEach(function(cb) {
         var assetsToAlsoAccept = cb(function() {
             return getParents(module.bundle.root, id);
         });
-        if (assetsToAlsoAccept && assetsToAccept.length) // $FlowFixMe[method-unbinding]
-        assetsToAccept.push.apply(assetsToAccept, assetsToAlsoAccept);
+        if (assetsToAlsoAccept && assetsToAccept.length) {
+            assetsToAlsoAccept.forEach(function(a) {
+                hmrDispose(a[0], a[1]);
+            }); // $FlowFixMe[method-unbinding]
+            assetsToAccept.push.apply(assetsToAccept, assetsToAlsoAccept);
+        }
     });
-    acceptedAssets[id] = true;
 }
 
 },{}],"kjLP2":[function(require,module,exports) {
@@ -538,6 +563,7 @@ var prevRefreshSig = window.$RefreshSig$;
 $parcel$ReactRefreshHelpers$2125.prelude(module);
 
 try {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 var _ie11 = require("./node_modules/react-app-polyfill/ie11");
 var _ie9 = require("./node_modules/react-app-polyfill/ie9");
 var _react = require("react");
@@ -545,19 +571,19 @@ var _client = require("react-dom/client");
 var _icons = require("./Icons");
 var _spinners = require("./components/Spinners");
 var _stylesCss = require("./styles.css");
+var _demoContext = require("./components/context/DemoContext");
+var _demoContextDefault = parcelHelpers.interopDefault(_demoContext);
 const App = ()=>{
     const [speed, setSpeed] = _react.useState(1);
     const [stop, setStop] = _react.useState(false);
-    return /*#__PURE__*/ _react.createElement(_react.Fragment, null, /*#__PURE__*/ _react.createElement((0, _spinners.RoundedSpinners), {
-        stop: stop,
-        speed: speed,
+    return /*#__PURE__*/ _react.createElement((0, _demoContextDefault.default), {
         __source: {
             fileName: "index.tsx",
             lineNumber: 25,
-            columnNumber: 7
+            columnNumber: 5
         },
         __self: undefined
-    }), /*#__PURE__*/ _react.createElement((0, _spinners.ClassicSpinners), {
+    }, /*#__PURE__*/ _react.createElement((0, _spinners.RoundedSpinners), {
         stop: stop,
         speed: speed,
         __source: {
@@ -566,7 +592,7 @@ const App = ()=>{
             columnNumber: 7
         },
         __self: undefined
-    }), /*#__PURE__*/ _react.createElement((0, _spinners.ProgressSpinners), {
+    }), /*#__PURE__*/ _react.createElement((0, _spinners.ClassicSpinners), {
         stop: stop,
         speed: speed,
         __source: {
@@ -575,7 +601,7 @@ const App = ()=>{
             columnNumber: 7
         },
         __self: undefined
-    }), /*#__PURE__*/ _react.createElement((0, _spinners.DotSpinners), {
+    }), /*#__PURE__*/ _react.createElement((0, _spinners.ProgressSpinners), {
         stop: stop,
         speed: speed,
         __source: {
@@ -584,7 +610,7 @@ const App = ()=>{
             columnNumber: 7
         },
         __self: undefined
-    }), /*#__PURE__*/ _react.createElement((0, _spinners.BarSpinners), {
+    }), /*#__PURE__*/ _react.createElement((0, _spinners.DotSpinners), {
         stop: stop,
         speed: speed,
         __source: {
@@ -593,7 +619,7 @@ const App = ()=>{
             columnNumber: 7
         },
         __self: undefined
-    }), /*#__PURE__*/ _react.createElement((0, _spinners.ContinuousSpinners), {
+    }), /*#__PURE__*/ _react.createElement((0, _spinners.BarSpinners), {
         stop: stop,
         speed: speed,
         __source: {
@@ -602,12 +628,21 @@ const App = ()=>{
             columnNumber: 7
         },
         __self: undefined
-    }), /*#__PURE__*/ _react.createElement((0, _spinners.WobblingSpinners), {
+    }), /*#__PURE__*/ _react.createElement((0, _spinners.ContinuousSpinners), {
         stop: stop,
         speed: speed,
         __source: {
             fileName: "index.tsx",
             lineNumber: 37,
+            columnNumber: 7
+        },
+        __self: undefined
+    }), /*#__PURE__*/ _react.createElement((0, _spinners.WobblingSpinners), {
+        stop: stop,
+        speed: speed,
+        __source: {
+            fileName: "index.tsx",
+            lineNumber: 39,
             columnNumber: 7
         },
         __self: undefined
@@ -620,21 +655,21 @@ const App = ()=>{
         },
         __source: {
             fileName: "index.tsx",
-            lineNumber: 39,
+            lineNumber: 41,
             columnNumber: 7
         },
         __self: undefined
     }, stop ? /*#__PURE__*/ _react.createElement((0, _icons.Play), {
         __source: {
             fileName: "index.tsx",
-            lineNumber: 47,
+            lineNumber: 49,
             columnNumber: 17
         },
         __self: undefined
     }) : /*#__PURE__*/ _react.createElement((0, _icons.Pause), {
         __source: {
             fileName: "index.tsx",
-            lineNumber: 47,
+            lineNumber: 49,
             columnNumber: 28
         },
         __self: undefined
@@ -646,7 +681,7 @@ root.render(// <React.StrictMode>
 /*#__PURE__*/ _react.createElement(App, {
     __source: {
         fileName: "index.tsx",
-        lineNumber: 58,
+        lineNumber: 60,
         columnNumber: 3
     },
     __self: undefined
@@ -657,7 +692,7 @@ root.render(// <React.StrictMode>
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"./node_modules/react-app-polyfill/ie11":"1ALbI","./node_modules/react-app-polyfill/ie9":"edce3","react":"3IZzP","react-dom/client":"elCkH","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","./styles.css":"7N9bM","./Icons":"8m4a8","./components/Spinners":"dEsKZ"}],"1ALbI":[function(require,module,exports) {
+},{"./node_modules/react-app-polyfill/ie11":"1ALbI","./node_modules/react-app-polyfill/ie9":"edce3","react":"3IZzP","react-dom/client":"elCkH","./Icons":"8m4a8","./components/Spinners":"dEsKZ","./styles.css":"7N9bM","./components/context/DemoContext":"dHgQL","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"1ALbI":[function(require,module,exports) {
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
  *
@@ -668,24 +703,24 @@ if (typeof Promise === "undefined") {
     // Rejection tracking prevents a common issue where React gets into an
     // inconsistent state due to an error, but it gets swallowed by a Promise,
     // and the user has no idea what causes React's erratic future behavior.
-    require("promise/lib/rejection-tracking").enable();
-    self.Promise = require("promise/lib/es6-extensions.js");
+    require("56a780984b39eb07").enable();
+    self.Promise = require("842063e923fa39f0");
 }
 // Make sure we're in a Browser-like environment before importing polyfills
 // This prevents `fetch()` from being imported in a Node test environment
 if (typeof window !== "undefined") // fetch() polyfill for making API calls.
-require("whatwg-fetch");
+require("843bf876d17cc4dd");
 // Object.assign() is commonly used with React.
 // It will use the native implementation if it's present and isn't buggy.
-Object.assign = require("object-assign");
+Object.assign = require("d478c8183daca3aa");
 // Support for...of (a commonly used syntax feature that requires Symbols)
-require("core-js/features/symbol");
+require("f6caeb5a3a6d00f9");
 // Support iterable spread (...Set, ...Map)
-require("core-js/features/array/from");
+require("7781ae662c6b07d2");
 
-},{"promise/lib/rejection-tracking":"lnwEH","promise/lib/es6-extensions.js":"hzlcL","whatwg-fetch":"fBkAK","object-assign":"7OXxh","core-js/features/symbol":"lmGLh","core-js/features/array/from":"jBOzI"}],"lnwEH":[function(require,module,exports) {
+},{"56a780984b39eb07":"lnwEH","842063e923fa39f0":"hzlcL","843bf876d17cc4dd":"fBkAK","d478c8183daca3aa":"7OXxh","f6caeb5a3a6d00f9":"lmGLh","7781ae662c6b07d2":"jBOzI"}],"lnwEH":[function(require,module,exports) {
 "use strict";
-var Promise = require("./core");
+var Promise = require("6bd7401dcb5d61d2");
 var DEFAULT_WHITELIST = [
     ReferenceError,
     TypeError,
@@ -695,31 +730,32 @@ var enabled = false;
 exports.disable = disable;
 function disable() {
     enabled = false;
-    Promise._Y = null;
-    Promise._Z = null;
+    Promise._B = null;
+    Promise._C = null;
 }
 exports.enable = enable;
 function enable(options) {
     options = options || {};
     if (enabled) disable();
     enabled = true;
-    var id1 = 0;
+    var id = 0;
     var displayId = 0;
     var rejections = {};
-    Promise._Y = function(promise) {
-        if (promise._V === 2 && rejections[promise._1]) {
-            if (rejections[promise._1].logged) onHandled(promise._1);
-            else clearTimeout(rejections[promise._1].timeout);
-            delete rejections[promise._1];
+    Promise._B = function(promise) {
+        if (promise._y === 2 && // IS REJECTED
+        rejections[promise._E]) {
+            if (rejections[promise._E].logged) onHandled(promise._E);
+            else clearTimeout(rejections[promise._E].timeout);
+            delete rejections[promise._E];
         }
     };
-    Promise._Z = function(promise, err) {
-        if (promise._U === 0) {
-            promise._1 = id1++;
-            rejections[promise._1] = {
+    Promise._C = function(promise, err) {
+        if (promise._x === 0) {
+            promise._E = id++;
+            rejections[promise._E] = {
                 displayId: null,
                 error: err,
-                timeout: setTimeout(onUnhandled.bind(null, promise._1), // For reference errors and type errors, this almost always
+                timeout: setTimeout(onUnhandled.bind(null, promise._E), // For reference errors and type errors, this almost always
                 // means the programmer made a mistake, so log them after just
                 // 100ms
                 // otherwise, wait 2 seconds to see if they get handled
@@ -763,9 +799,9 @@ function matchWhitelist(error, list) {
     });
 }
 
-},{"./core":"3Ytq6"}],"3Ytq6":[function(require,module,exports) {
+},{"6bd7401dcb5d61d2":"3Ytq6"}],"3Ytq6":[function(require,module,exports) {
 "use strict";
-var asap = require("asap/raw");
+var asap = require("58fc7208634deb60");
 function noop() {}
 // States:
 //
@@ -811,16 +847,16 @@ module.exports = Promise;
 function Promise(fn) {
     if (typeof this !== "object") throw new TypeError("Promises must be constructed via new");
     if (typeof fn !== "function") throw new TypeError("Promise constructor's argument is not a function");
-    this._U = 0;
-    this._V = 0;
-    this._W = null;
-    this._X = null;
+    this._x = 0;
+    this._y = 0;
+    this._z = null;
+    this._A = null;
     if (fn === noop) return;
     doResolve(fn, this);
 }
-Promise._Y = null;
-Promise._Z = null;
-Promise._0 = noop;
+Promise._B = null;
+Promise._C = null;
+Promise._D = noop;
 Promise.prototype.then = function(onFulfilled, onRejected) {
     if (this.constructor !== Promise) return safeThen(this, onFulfilled, onRejected);
     var res = new Promise(noop);
@@ -828,43 +864,43 @@ Promise.prototype.then = function(onFulfilled, onRejected) {
     return res;
 };
 function safeThen(self, onFulfilled, onRejected) {
-    return new self.constructor(function(resolve1, reject1) {
+    return new self.constructor(function(resolve, reject) {
         var res = new Promise(noop);
-        res.then(resolve1, reject1);
+        res.then(resolve, reject);
         handle(self, new Handler(onFulfilled, onRejected, res));
     });
 }
 function handle(self, deferred) {
-    while(self._V === 3)self = self._W;
-    if (Promise._Y) Promise._Y(self);
-    if (self._V === 0) {
-        if (self._U === 0) {
-            self._U = 1;
-            self._X = deferred;
+    while(self._y === 3)self = self._z;
+    if (Promise._B) Promise._B(self);
+    if (self._y === 0) {
+        if (self._x === 0) {
+            self._x = 1;
+            self._A = deferred;
             return;
         }
-        if (self._U === 1) {
-            self._U = 2;
-            self._X = [
-                self._X,
+        if (self._x === 1) {
+            self._x = 2;
+            self._A = [
+                self._A,
                 deferred
             ];
             return;
         }
-        self._X.push(deferred);
+        self._A.push(deferred);
         return;
     }
     handleResolved(self, deferred);
 }
 function handleResolved(self, deferred) {
     asap(function() {
-        var cb = self._V === 1 ? deferred.onFulfilled : deferred.onRejected;
+        var cb = self._y === 1 ? deferred.onFulfilled : deferred.onRejected;
         if (cb === null) {
-            if (self._V === 1) resolve(deferred.promise, self._W);
-            else reject(deferred.promise, self._W);
+            if (self._y === 1) resolve(deferred.promise, self._z);
+            else reject(deferred.promise, self._z);
             return;
         }
-        var ret = tryCallOne(cb, self._W);
+        var ret = tryCallOne(cb, self._z);
         if (ret === IS_ERROR) reject(deferred.promise, LAST_ERROR);
         else resolve(deferred.promise, ret);
     });
@@ -876,8 +912,8 @@ function resolve(self, newValue) {
         var then = getThen(newValue);
         if (then === IS_ERROR) return reject(self, LAST_ERROR);
         if (then === self.then && newValue instanceof Promise) {
-            self._V = 3;
-            self._W = newValue;
+            self._y = 3;
+            self._z = newValue;
             finale(self);
             return;
         } else if (typeof then === "function") {
@@ -885,24 +921,24 @@ function resolve(self, newValue) {
             return;
         }
     }
-    self._V = 1;
-    self._W = newValue;
+    self._y = 1;
+    self._z = newValue;
     finale(self);
 }
 function reject(self, newValue) {
-    self._V = 2;
-    self._W = newValue;
-    if (Promise._Z) Promise._Z(self, newValue);
+    self._y = 2;
+    self._z = newValue;
+    if (Promise._C) Promise._C(self, newValue);
     finale(self);
 }
 function finale(self) {
-    if (self._U === 1) {
-        handle(self, self._X);
-        self._X = null;
+    if (self._x === 1) {
+        handle(self, self._A);
+        self._A = null;
     }
-    if (self._U === 2) {
-        for(var i = 0; i < self._X.length; i++)handle(self, self._X[i]);
-        self._X = null;
+    if (self._x === 2) {
+        for(var i = 0; i < self._A.length; i++)handle(self, self._A[i]);
+        self._A = null;
     }
 }
 function Handler(onFulfilled, onRejected, promise) {
@@ -932,9 +968,9 @@ function Handler(onFulfilled, onRejected, promise) {
     }
 }
 
-},{"asap/raw":"9iMrj"}],"9iMrj":[function(require,module,exports) {
-"use strict";
+},{"58fc7208634deb60":"9iMrj"}],"9iMrj":[function(require,module,exports) {
 var global = arguments[3];
+"use strict";
 // Use the fastest means possible to execute a task in its own turn, with
 // priority over other events including IO, animation, reflow, and redraw
 // events in browsers.
@@ -1108,7 +1144,7 @@ rawAsap.makeRequestCallFromTimer = makeRequestCallFromTimer; // ASAP was origina
 },{}],"hzlcL":[function(require,module,exports) {
 "use strict";
 //This file contains the ES6 extensions to the core Promises/A+ API
-var Promise = require("./core.js");
+var Promise = require("6cc5cad07c2e9140");
 module.exports = Promise;
 /* Static Functions */ var TRUE = valuePromise(true);
 var FALSE = valuePromise(false);
@@ -1117,9 +1153,9 @@ var UNDEFINED = valuePromise(undefined);
 var ZERO = valuePromise(0);
 var EMPTYSTRING = valuePromise("");
 function valuePromise(value) {
-    var p = new Promise(Promise._0);
-    p._V = 1;
-    p._W = value;
+    var p = new Promise(Promise._D);
+    p._y = 1;
+    p._z = value;
     return p;
 }
 Promise.resolve = function(value) {
@@ -1157,20 +1193,20 @@ Promise.all = function(arr) {
     return new Promise(function(resolve, reject) {
         if (args.length === 0) return resolve([]);
         var remaining = args.length;
-        function res(i, val1) {
-            if (val1 && (typeof val1 === "object" || typeof val1 === "function")) {
-                if (val1 instanceof Promise && val1.then === Promise.prototype.then) {
-                    while(val1._V === 3)val1 = val1._W;
-                    if (val1._V === 1) return res(i, val1._W);
-                    if (val1._V === 2) reject(val1._W);
-                    val1.then(function(val) {
+        function res(i, val) {
+            if (val && (typeof val === "object" || typeof val === "function")) {
+                if (val instanceof Promise && val.then === Promise.prototype.then) {
+                    while(val._y === 3)val = val._z;
+                    if (val._y === 1) return res(i, val._z);
+                    if (val._y === 2) reject(val._z);
+                    val.then(function(val) {
                         res(i, val);
                     }, reject);
                     return;
                 } else {
-                    var then = val1.then;
+                    var then = val.then;
                     if (typeof then === "function") {
-                        var p = new Promise(then.bind(val1));
+                        var p = new Promise(then.bind(val));
                         p.then(function(val) {
                             res(i, val);
                         }, reject);
@@ -1178,11 +1214,34 @@ Promise.all = function(arr) {
                     }
                 }
             }
-            args[i] = val1;
+            args[i] = val;
             if (--remaining === 0) resolve(args);
         }
-        for(var i1 = 0; i1 < args.length; i1++)res(i1, args[i1]);
+        for(var i = 0; i < args.length; i++)res(i, args[i]);
     });
+};
+function onSettledFulfill(value) {
+    return {
+        status: "fulfilled",
+        value: value
+    };
+}
+function onSettledReject(reason) {
+    return {
+        status: "rejected",
+        reason: reason
+    };
+}
+function mapAllSettled(item) {
+    if (item && (typeof item === "object" || typeof item === "function")) {
+        if (item instanceof Promise && item.then === Promise.prototype.then) return item.then(onSettledFulfill, onSettledReject);
+        var then = item.then;
+        if (typeof then === "function") return new Promise(then.bind(item)).then(onSettledFulfill, onSettledReject);
+    }
+    return onSettledFulfill(item);
+}
+Promise.allSettled = function(iterable) {
+    return Promise.all(iterableToArray(iterable).map(mapAllSettled));
 };
 Promise.reject = function(value) {
     return new Promise(function(resolve, reject) {
@@ -1199,8 +1258,36 @@ Promise.race = function(values) {
 /* Prototype Methods */ Promise.prototype["catch"] = function(onRejected) {
     return this.then(null, onRejected);
 };
+function getAggregateError(errors) {
+    if (typeof AggregateError === "function") return new AggregateError(errors, "All promises were rejected");
+    var error = new Error("All promises were rejected");
+    error.name = "AggregateError";
+    error.errors = errors;
+    return error;
+}
+Promise.any = function promiseAny(values) {
+    return new Promise(function(resolve, reject) {
+        var promises = iterableToArray(values);
+        var hasResolved = false;
+        var rejectionReasons = [];
+        function resolveOnce(value) {
+            if (!hasResolved) {
+                hasResolved = true;
+                resolve(value);
+            }
+        }
+        function rejectionCheck(reason) {
+            rejectionReasons.push(reason);
+            if (rejectionReasons.length === promises.length) reject(getAggregateError(rejectionReasons));
+        }
+        if (promises.length === 0) reject(getAggregateError(rejectionReasons));
+        else promises.forEach(function(value) {
+            Promise.resolve(value).then(resolveOnce, rejectionCheck);
+        });
+    });
+};
 
-},{"./core.js":"3Ytq6"}],"fBkAK":[function(require,module,exports) {
+},{"6cc5cad07c2e9140":"3Ytq6"}],"fBkAK":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "Headers", ()=>Headers);
@@ -1743,68 +1830,70 @@ module.exports = shouldUseNative() ? Object.assign : function(target, source) {
 };
 
 },{}],"lmGLh":[function(require,module,exports) {
-module.exports = require("../../full/symbol");
+module.exports = require("a661c1edf091338b");
 
-},{"../../full/symbol":"dbEIJ"}],"dbEIJ":[function(require,module,exports) {
-var parent = require("../../actual/symbol");
-require("../../modules/esnext.symbol.async-dispose");
-require("../../modules/esnext.symbol.dispose");
-require("../../modules/esnext.symbol.matcher");
-require("../../modules/esnext.symbol.metadata-key");
-require("../../modules/esnext.symbol.observable");
+},{"a661c1edf091338b":"dbEIJ"}],"dbEIJ":[function(require,module,exports) {
+var parent = require("3a859848ec7d914");
+require("10f187458f7967b3");
+require("57108d42cb414b52");
+require("967d598de0248b18");
+require("68771aaef7f34094");
+require("5f6eec5334b8b988");
+require("623dd103822671de");
 // TODO: Remove from `core-js@4`
-require("../../modules/esnext.symbol.metadata");
-require("../../modules/esnext.symbol.pattern-match");
-require("../../modules/esnext.symbol.replace-all");
+require("1e47ba879fc7a8ec");
+require("5c79397f74179648");
+require("f2e806bb75b0a7d5");
 module.exports = parent;
 
-},{"../../actual/symbol":"5PHuo","../../modules/esnext.symbol.async-dispose":"3Uedi","../../modules/esnext.symbol.dispose":"b9ez5","../../modules/esnext.symbol.matcher":"dfu2R","../../modules/esnext.symbol.metadata-key":"cyrVQ","../../modules/esnext.symbol.observable":"bTlfI","../../modules/esnext.symbol.metadata":"8BO53","../../modules/esnext.symbol.pattern-match":"dLSVv","../../modules/esnext.symbol.replace-all":"aTqKR"}],"5PHuo":[function(require,module,exports) {
-var parent = require("../../stable/symbol");
+},{"3a859848ec7d914":"5PHuo","10f187458f7967b3":"3Uedi","57108d42cb414b52":"i6iX1","967d598de0248b18":"3cAFB","68771aaef7f34094":"dfu2R","5f6eec5334b8b988":"cyrVQ","623dd103822671de":"bTlfI","1e47ba879fc7a8ec":"8BO53","5c79397f74179648":"dLSVv","f2e806bb75b0a7d5":"aTqKR"}],"5PHuo":[function(require,module,exports) {
+var parent = require("74bda8bf77277102");
+require("2e01443027558717");
 module.exports = parent;
 
-},{"../../stable/symbol":"hCYKh"}],"hCYKh":[function(require,module,exports) {
-var parent = require("../../es/symbol");
-require("../../modules/web.dom-collections.iterator");
+},{"74bda8bf77277102":"hCYKh","2e01443027558717":"b9ez5"}],"hCYKh":[function(require,module,exports) {
+var parent = require("d592c116f3ded933");
+require("afa47c8b8ca00fdd");
 module.exports = parent;
 
-},{"../../es/symbol":"701kt","../../modules/web.dom-collections.iterator":"3YhYU"}],"701kt":[function(require,module,exports) {
-require("../../modules/es.array.concat");
-require("../../modules/es.object.to-string");
-require("../../modules/es.symbol");
-require("../../modules/es.symbol.async-iterator");
-require("../../modules/es.symbol.description");
-require("../../modules/es.symbol.has-instance");
-require("../../modules/es.symbol.is-concat-spreadable");
-require("../../modules/es.symbol.iterator");
-require("../../modules/es.symbol.match");
-require("../../modules/es.symbol.match-all");
-require("../../modules/es.symbol.replace");
-require("../../modules/es.symbol.search");
-require("../../modules/es.symbol.species");
-require("../../modules/es.symbol.split");
-require("../../modules/es.symbol.to-primitive");
-require("../../modules/es.symbol.to-string-tag");
-require("../../modules/es.symbol.unscopables");
-require("../../modules/es.json.to-string-tag");
-require("../../modules/es.math.to-string-tag");
-require("../../modules/es.reflect.to-string-tag");
-var path = require("../../internals/path");
+},{"d592c116f3ded933":"701kt","afa47c8b8ca00fdd":"3YhYU"}],"701kt":[function(require,module,exports) {
+require("7e7630394576b900");
+require("206b904125e8f0c0");
+require("fd737f93995c6e47");
+require("38dde75c2137bd48");
+require("27fbc44b0dbe7aa4");
+require("13b53d89879c19c2");
+require("dde0c4d301ad0127");
+require("d20683a6799144bb");
+require("cc24ef7ae27ae7cd");
+require("5327ff061470b1de");
+require("f584134667757b6f");
+require("1a17d66c70bedd95");
+require("256731d8c0dfa9c");
+require("8d824e6d5179f561");
+require("291e749743c47c96");
+require("74f70e11e5fcb94b");
+require("b89625e3dae7306");
+require("2db094ed92f09faf");
+require("58790bfc791d382");
+require("a475e7f41c1ddfd4");
+var path = require("295cc5fe2cf2ae0e");
 module.exports = path.Symbol;
 
-},{"../../modules/es.array.concat":"jprpE","../../modules/es.object.to-string":"9XvHS","../../modules/es.symbol":"c39HV","../../modules/es.symbol.async-iterator":"RU9Zf","../../modules/es.symbol.description":"9PnxW","../../modules/es.symbol.has-instance":"9uKu1","../../modules/es.symbol.is-concat-spreadable":"fCzth","../../modules/es.symbol.iterator":"i3PKT","../../modules/es.symbol.match":"hWT2K","../../modules/es.symbol.match-all":"a5lqJ","../../modules/es.symbol.replace":"5wvK6","../../modules/es.symbol.search":"6VGtU","../../modules/es.symbol.species":"jxmZY","../../modules/es.symbol.split":"j3TNE","../../modules/es.symbol.to-primitive":"72eMP","../../modules/es.symbol.to-string-tag":"jRTLb","../../modules/es.symbol.unscopables":"dkEbD","../../modules/es.json.to-string-tag":"5v5yi","../../modules/es.math.to-string-tag":"7b0UU","../../modules/es.reflect.to-string-tag":"2qZLg","../../internals/path":"gKjqB"}],"jprpE":[function(require,module,exports) {
+},{"7e7630394576b900":"jprpE","206b904125e8f0c0":"9XvHS","fd737f93995c6e47":"c39HV","38dde75c2137bd48":"RU9Zf","27fbc44b0dbe7aa4":"9PnxW","13b53d89879c19c2":"9uKu1","dde0c4d301ad0127":"fCzth","d20683a6799144bb":"i3PKT","cc24ef7ae27ae7cd":"hWT2K","5327ff061470b1de":"a5lqJ","f584134667757b6f":"5wvK6","1a17d66c70bedd95":"6VGtU","256731d8c0dfa9c":"jxmZY","8d824e6d5179f561":"j3TNE","291e749743c47c96":"72eMP","74f70e11e5fcb94b":"jRTLb","b89625e3dae7306":"dkEbD","2db094ed92f09faf":"5v5yi","58790bfc791d382":"7b0UU","a475e7f41c1ddfd4":"2qZLg","295cc5fe2cf2ae0e":"gKjqB"}],"jprpE":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var fails = require("../internals/fails");
-var isArray = require("../internals/is-array");
-var isObject = require("../internals/is-object");
-var toObject = require("../internals/to-object");
-var lengthOfArrayLike = require("../internals/length-of-array-like");
-var doesNotExceedSafeInteger = require("../internals/does-not-exceed-safe-integer");
-var createProperty = require("../internals/create-property");
-var arraySpeciesCreate = require("../internals/array-species-create");
-var arrayMethodHasSpeciesSupport = require("../internals/array-method-has-species-support");
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var V8_VERSION = require("../internals/engine-v8-version");
+var $ = require("6d6c2153f3f2d93");
+var fails = require("5dcc9354bcbdc64");
+var isArray = require("e10755e1dd70259e");
+var isObject = require("41b8670262d2b8a0");
+var toObject = require("191a74ccdfa01be9");
+var lengthOfArrayLike = require("18b1f57a37e39697");
+var doesNotExceedSafeInteger = require("43f7f14c1ab00890");
+var createProperty = require("97cfc9e2ae849bc1");
+var arraySpeciesCreate = require("eb8027b210663080");
+var arrayMethodHasSpeciesSupport = require("7f3d1136bec27943");
+var wellKnownSymbol = require("1edf3417fba9e1a8");
+var V8_VERSION = require("5c5b55f54494b303");
 var IS_CONCAT_SPREADABLE = wellKnownSymbol("isConcatSpreadable");
 // We can't use this feature detection in V8 since it causes
 // deoptimization and serious performance degradation
@@ -1814,13 +1903,12 @@ var IS_CONCAT_SPREADABLE_SUPPORT = V8_VERSION >= 51 || !fails(function() {
     array[IS_CONCAT_SPREADABLE] = false;
     return array.concat()[0] !== array;
 });
-var SPECIES_SUPPORT = arrayMethodHasSpeciesSupport("concat");
 var isConcatSpreadable = function(O) {
     if (!isObject(O)) return false;
     var spreadable = O[IS_CONCAT_SPREADABLE];
     return spreadable !== undefined ? !!spreadable : isArray(O);
 };
-var FORCED = !IS_CONCAT_SPREADABLE_SUPPORT || !SPECIES_SUPPORT;
+var FORCED = !IS_CONCAT_SPREADABLE_SUPPORT || !arrayMethodHasSpeciesSupport("concat");
 // `Array.prototype.concat` method
 // https://tc39.es/ecma262/#sec-array.prototype.concat
 // with adding support of @@isConcatSpreadable and @@species
@@ -1852,14 +1940,14 @@ $({
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/fails":"hL6D2","../internals/is-array":"iZ18O","../internals/is-object":"Z0pBo","../internals/to-object":"5cb35","../internals/length-of-array-like":"lY4mS","../internals/does-not-exceed-safe-integer":"80pBR","../internals/create-property":"76HND","../internals/array-species-create":"27bo1","../internals/array-method-has-species-support":"f9nnM","../internals/well-known-symbol":"gTwyA","../internals/engine-v8-version":"bjFlO"}],"dIGt4":[function(require,module,exports) {
-var global = require("../internals/global");
-var getOwnPropertyDescriptor = require("../internals/object-get-own-property-descriptor").f;
-var createNonEnumerableProperty = require("../internals/create-non-enumerable-property");
-var defineBuiltIn = require("../internals/define-built-in");
-var defineGlobalProperty = require("../internals/define-global-property");
-var copyConstructorProperties = require("../internals/copy-constructor-properties");
-var isForced = require("../internals/is-forced");
+},{"6d6c2153f3f2d93":"dIGt4","5dcc9354bcbdc64":"hL6D2","e10755e1dd70259e":"iZ18O","41b8670262d2b8a0":"Z0pBo","191a74ccdfa01be9":"5cb35","18b1f57a37e39697":"lY4mS","43f7f14c1ab00890":"80pBR","97cfc9e2ae849bc1":"76HND","eb8027b210663080":"27bo1","7f3d1136bec27943":"f9nnM","1edf3417fba9e1a8":"gTwyA","5c5b55f54494b303":"bjFlO"}],"dIGt4":[function(require,module,exports) {
+var global = require("684c68e7cd526d12");
+var getOwnPropertyDescriptor = require("b4fb666dc385e3d").f;
+var createNonEnumerableProperty = require("eb9347d065aef475");
+var defineBuiltIn = require("df14df8105cb8818");
+var defineGlobalProperty = require("dd817a5f7dbaae98");
+var copyConstructorProperties = require("bfc4045abbb5515d");
+var isForced = require("d69cd4972f68ab92");
 /*
   options.target         - name of the target object
   options.global         - target is the global object
@@ -1900,29 +1988,29 @@ var isForced = require("../internals/is-forced");
     }
 };
 
-},{"../internals/global":"i8HOC","../internals/object-get-own-property-descriptor":"lk5NI","../internals/create-non-enumerable-property":"8CL42","../internals/define-built-in":"6XwEX","../internals/define-global-property":"ggjnO","../internals/copy-constructor-properties":"9Z12i","../internals/is-forced":"6uTCZ"}],"i8HOC":[function(require,module,exports) {
+},{"684c68e7cd526d12":"i8HOC","b4fb666dc385e3d":"lk5NI","eb9347d065aef475":"8CL42","df14df8105cb8818":"6XwEX","dd817a5f7dbaae98":"ggjnO","bfc4045abbb5515d":"9Z12i","d69cd4972f68ab92":"6uTCZ"}],"i8HOC":[function(require,module,exports) {
 var global = arguments[3];
 var check = function(it) {
     return it && it.Math == Math && it;
 };
 // https://github.com/zloirock/core-js/issues/86#issuecomment-115759028
-module.exports = // eslint-disable-next-line es-x/no-global-this -- safe
+module.exports = // eslint-disable-next-line es/no-global-this -- safe
 check(typeof globalThis == "object" && globalThis) || check(typeof window == "object" && window) || // eslint-disable-next-line no-restricted-globals -- safe
 check(typeof self == "object" && self) || check(typeof global == "object" && global) || // eslint-disable-next-line no-new-func -- fallback
 function() {
     return this;
-}() || Function("return this")();
+}() || this || Function("return this")();
 
 },{}],"lk5NI":[function(require,module,exports) {
-var DESCRIPTORS = require("../internals/descriptors");
-var call = require("../internals/function-call");
-var propertyIsEnumerableModule = require("../internals/object-property-is-enumerable");
-var createPropertyDescriptor = require("../internals/create-property-descriptor");
-var toIndexedObject = require("../internals/to-indexed-object");
-var toPropertyKey = require("../internals/to-property-key");
-var hasOwn = require("../internals/has-own-property");
-var IE8_DOM_DEFINE = require("../internals/ie8-dom-define");
-// eslint-disable-next-line es-x/no-object-getownpropertydescriptor -- safe
+var DESCRIPTORS = require("2fb2d37a26f1b08b");
+var call = require("8b61054a653d22ea");
+var propertyIsEnumerableModule = require("8a520fceb61c2f50");
+var createPropertyDescriptor = require("ac0949033ad8857c");
+var toIndexedObject = require("b3852d35b1cff840");
+var toPropertyKey = require("d31fef3abda70e2c");
+var hasOwn = require("2025bbf22f90f700");
+var IE8_DOM_DEFINE = require("b1425e0905a5e6d1");
+// eslint-disable-next-line es/no-object-getownpropertydescriptor -- safe
 var $getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 // `Object.getOwnPropertyDescriptor` method
 // https://tc39.es/ecma262/#sec-object.getownpropertydescriptor
@@ -1935,11 +2023,11 @@ exports.f = DESCRIPTORS ? $getOwnPropertyDescriptor : function getOwnPropertyDes
     if (hasOwn(O, P)) return createPropertyDescriptor(!call(propertyIsEnumerableModule.f, O, P), O[P]);
 };
 
-},{"../internals/descriptors":"92ZIi","../internals/function-call":"d7JlP","../internals/object-property-is-enumerable":"7SuiS","../internals/create-property-descriptor":"1lpav","../internals/to-indexed-object":"jLWwQ","../internals/to-property-key":"5XWKd","../internals/has-own-property":"gC2Q5","../internals/ie8-dom-define":"qS9uN"}],"92ZIi":[function(require,module,exports) {
-var fails = require("../internals/fails");
+},{"2fb2d37a26f1b08b":"92ZIi","8b61054a653d22ea":"d7JlP","8a520fceb61c2f50":"7SuiS","ac0949033ad8857c":"1lpav","b3852d35b1cff840":"jLWwQ","d31fef3abda70e2c":"5XWKd","2025bbf22f90f700":"gC2Q5","b1425e0905a5e6d1":"qS9uN"}],"92ZIi":[function(require,module,exports) {
+var fails = require("752b6f922d441921");
 // Detect IE8's incomplete defineProperty implementation
 module.exports = !fails(function() {
-    // eslint-disable-next-line es-x/no-object-defineproperty -- required for testing
+    // eslint-disable-next-line es/no-object-defineproperty -- required for testing
     return Object.defineProperty({}, 1, {
         get: function() {
             return 7;
@@ -1947,7 +2035,7 @@ module.exports = !fails(function() {
     })[1] != 7;
 });
 
-},{"../internals/fails":"hL6D2"}],"hL6D2":[function(require,module,exports) {
+},{"752b6f922d441921":"hL6D2"}],"hL6D2":[function(require,module,exports) {
 module.exports = function(exec) {
     try {
         return !!exec();
@@ -1957,25 +2045,25 @@ module.exports = function(exec) {
 };
 
 },{}],"d7JlP":[function(require,module,exports) {
-var NATIVE_BIND = require("../internals/function-bind-native");
+var NATIVE_BIND = require("2d94e9dee9d1a312");
 var call = Function.prototype.call;
 module.exports = NATIVE_BIND ? call.bind(call) : function() {
     return call.apply(call, arguments);
 };
 
-},{"../internals/function-bind-native":"i16Dq"}],"i16Dq":[function(require,module,exports) {
-var fails = require("../internals/fails");
+},{"2d94e9dee9d1a312":"i16Dq"}],"i16Dq":[function(require,module,exports) {
+var fails = require("23d3d24b19cbe120");
 module.exports = !fails(function() {
-    // eslint-disable-next-line es-x/no-function-prototype-bind -- safe
+    // eslint-disable-next-line es/no-function-prototype-bind -- safe
     var test = (function() {}).bind();
     // eslint-disable-next-line no-prototype-builtins -- safe
     return typeof test != "function" || test.hasOwnProperty("prototype");
 });
 
-},{"../internals/fails":"hL6D2"}],"7SuiS":[function(require,module,exports) {
+},{"23d3d24b19cbe120":"hL6D2"}],"7SuiS":[function(require,module,exports) {
 "use strict";
 var $propertyIsEnumerable = {}.propertyIsEnumerable;
-// eslint-disable-next-line es-x/no-object-getownpropertydescriptor -- safe
+// eslint-disable-next-line es/no-object-getownpropertydescriptor -- safe
 var getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 // Nashorn ~ JDK8 bug
 var NASHORN_BUG = getOwnPropertyDescriptor && !$propertyIsEnumerable.call({
@@ -2000,16 +2088,16 @@ module.exports = function(bitmap, value) {
 
 },{}],"jLWwQ":[function(require,module,exports) {
 // toObject with fallback for non-array-like ES3 strings
-var IndexedObject = require("../internals/indexed-object");
-var requireObjectCoercible = require("../internals/require-object-coercible");
+var IndexedObject = require("be5112a82031264b");
+var requireObjectCoercible = require("79f2020a335b100");
 module.exports = function(it) {
     return IndexedObject(requireObjectCoercible(it));
 };
 
-},{"../internals/indexed-object":"kPk5h","../internals/require-object-coercible":"fOR0B"}],"kPk5h":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
-var fails = require("../internals/fails");
-var classof = require("../internals/classof-raw");
+},{"be5112a82031264b":"kPk5h","79f2020a335b100":"fOR0B"}],"kPk5h":[function(require,module,exports) {
+var uncurryThis = require("12a9089275cbebd5");
+var fails = require("8f63bd2ab76adeeb");
+var classof = require("c494c094e713e405");
 var $Object = Object;
 var split = uncurryThis("".split);
 // fallback for non-array-like ES3 and non-enumerable old V8 strings
@@ -2021,40 +2109,45 @@ module.exports = fails(function() {
     return classof(it) == "String" ? split(it, "") : $Object(it);
 } : $Object;
 
-},{"../internals/function-uncurry-this":"7GlkT","../internals/fails":"hL6D2","../internals/classof-raw":"bdfmm"}],"7GlkT":[function(require,module,exports) {
-var NATIVE_BIND = require("../internals/function-bind-native");
+},{"12a9089275cbebd5":"7GlkT","8f63bd2ab76adeeb":"hL6D2","c494c094e713e405":"bdfmm"}],"7GlkT":[function(require,module,exports) {
+var NATIVE_BIND = require("209e7c0c7b9b5b5a");
 var FunctionPrototype = Function.prototype;
-var bind = FunctionPrototype.bind;
 var call = FunctionPrototype.call;
-var uncurryThis = NATIVE_BIND && bind.bind(call, call);
-module.exports = NATIVE_BIND ? function(fn) {
-    return fn && uncurryThis(fn);
-} : function(fn) {
-    return fn && function() {
+var uncurryThisWithBind = NATIVE_BIND && FunctionPrototype.bind.bind(call, call);
+module.exports = NATIVE_BIND ? uncurryThisWithBind : function(fn) {
+    return function() {
         return call.apply(fn, arguments);
     };
 };
 
-},{"../internals/function-bind-native":"i16Dq"}],"bdfmm":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
+},{"209e7c0c7b9b5b5a":"i16Dq"}],"bdfmm":[function(require,module,exports) {
+var uncurryThis = require("f9625eee2b463bd1");
 var toString = uncurryThis({}.toString);
 var stringSlice = uncurryThis("".slice);
 module.exports = function(it) {
     return stringSlice(toString(it), 8, -1);
 };
 
-},{"../internals/function-uncurry-this":"7GlkT"}],"fOR0B":[function(require,module,exports) {
+},{"f9625eee2b463bd1":"7GlkT"}],"fOR0B":[function(require,module,exports) {
+var isNullOrUndefined = require("248a5b72ed8f1d5d");
 var $TypeError = TypeError;
 // `RequireObjectCoercible` abstract operation
 // https://tc39.es/ecma262/#sec-requireobjectcoercible
 module.exports = function(it) {
-    if (it == undefined) throw $TypeError("Can't call method on " + it);
+    if (isNullOrUndefined(it)) throw $TypeError("Can't call method on " + it);
     return it;
 };
 
+},{"248a5b72ed8f1d5d":"gM5ar"}],"gM5ar":[function(require,module,exports) {
+// we can't use just `it == null` since of `document.all` special case
+// https://tc39.es/ecma262/#sec-IsHTMLDDA-internal-slot-aec
+module.exports = function(it) {
+    return it === null || it === undefined;
+};
+
 },{}],"5XWKd":[function(require,module,exports) {
-var toPrimitive = require("../internals/to-primitive");
-var isSymbol = require("../internals/is-symbol");
+var toPrimitive = require("38d781f0841ea445");
+var isSymbol = require("1a8ed8ef6dd6b745");
 // `ToPropertyKey` abstract operation
 // https://tc39.es/ecma262/#sec-topropertykey
 module.exports = function(argument) {
@@ -2062,13 +2155,13 @@ module.exports = function(argument) {
     return isSymbol(key) ? key : key + "";
 };
 
-},{"../internals/to-primitive":"a2mK1","../internals/is-symbol":"4aV4F"}],"a2mK1":[function(require,module,exports) {
-var call = require("../internals/function-call");
-var isObject = require("../internals/is-object");
-var isSymbol = require("../internals/is-symbol");
-var getMethod = require("../internals/get-method");
-var ordinaryToPrimitive = require("../internals/ordinary-to-primitive");
-var wellKnownSymbol = require("../internals/well-known-symbol");
+},{"38d781f0841ea445":"a2mK1","1a8ed8ef6dd6b745":"4aV4F"}],"a2mK1":[function(require,module,exports) {
+var call = require("a72076e2e2295d62");
+var isObject = require("a700a3dcf55ccfab");
+var isSymbol = require("46216d271f06fb34");
+var getMethod = require("b52f4d2acefc676f");
+var ordinaryToPrimitive = require("8be0cf01eeebc7fa");
+var wellKnownSymbol = require("a4114606a12a8600");
 var $TypeError = TypeError;
 var TO_PRIMITIVE = wellKnownSymbol("toPrimitive");
 // `ToPrimitive` abstract operation
@@ -2087,24 +2180,42 @@ module.exports = function(input, pref) {
     return ordinaryToPrimitive(input, pref);
 };
 
-},{"../internals/function-call":"d7JlP","../internals/is-object":"Z0pBo","../internals/is-symbol":"4aV4F","../internals/get-method":"9Zfiw","../internals/ordinary-to-primitive":"7MME2","../internals/well-known-symbol":"gTwyA"}],"Z0pBo":[function(require,module,exports) {
-var isCallable = require("../internals/is-callable");
-module.exports = function(it) {
+},{"a72076e2e2295d62":"d7JlP","a700a3dcf55ccfab":"Z0pBo","46216d271f06fb34":"4aV4F","b52f4d2acefc676f":"9Zfiw","8be0cf01eeebc7fa":"7MME2","a4114606a12a8600":"gTwyA"}],"Z0pBo":[function(require,module,exports) {
+var isCallable = require("e26f5c2f0f1edb03");
+var $documentAll = require("ed04e53faa63c625");
+var documentAll = $documentAll.all;
+module.exports = $documentAll.IS_HTMLDDA ? function(it) {
+    return typeof it == "object" ? it !== null : isCallable(it) || it === documentAll;
+} : function(it) {
     return typeof it == "object" ? it !== null : isCallable(it);
 };
 
-},{"../internals/is-callable":"l3Kyn"}],"l3Kyn":[function(require,module,exports) {
+},{"e26f5c2f0f1edb03":"l3Kyn","ed04e53faa63c625":"5MHqB"}],"l3Kyn":[function(require,module,exports) {
+var $documentAll = require("7c1d8e00de5c414b");
+var documentAll = $documentAll.all;
 // `IsCallable` abstract operation
 // https://tc39.es/ecma262/#sec-iscallable
-module.exports = function(argument) {
+module.exports = $documentAll.IS_HTMLDDA ? function(argument) {
+    return typeof argument == "function" || argument === documentAll;
+} : function(argument) {
     return typeof argument == "function";
 };
 
+},{"7c1d8e00de5c414b":"5MHqB"}],"5MHqB":[function(require,module,exports) {
+var documentAll = typeof document == "object" && document.all;
+// https://tc39.es/ecma262/#sec-IsHTMLDDA-internal-slot
+// eslint-disable-next-line unicorn/no-typeof-undefined -- required for testing
+var IS_HTMLDDA = typeof documentAll == "undefined" && documentAll !== undefined;
+module.exports = {
+    all: documentAll,
+    IS_HTMLDDA: IS_HTMLDDA
+};
+
 },{}],"4aV4F":[function(require,module,exports) {
-var getBuiltIn = require("../internals/get-built-in");
-var isCallable = require("../internals/is-callable");
-var isPrototypeOf = require("../internals/object-is-prototype-of");
-var USE_SYMBOL_AS_UID = require("../internals/use-symbol-as-uid");
+var getBuiltIn = require("9126e956816e6ab6");
+var isCallable = require("2706d984d6ef536c");
+var isPrototypeOf = require("dbaa52ab5b3f0bd4");
+var USE_SYMBOL_AS_UID = require("70badb860d816716");
 var $Object = Object;
 module.exports = USE_SYMBOL_AS_UID ? function(it) {
     return typeof it == "symbol";
@@ -2113,9 +2224,9 @@ module.exports = USE_SYMBOL_AS_UID ? function(it) {
     return isCallable($Symbol) && isPrototypeOf($Symbol.prototype, $Object(it));
 };
 
-},{"../internals/get-built-in":"6ZUSY","../internals/is-callable":"l3Kyn","../internals/object-is-prototype-of":"3jtKQ","../internals/use-symbol-as-uid":"2Ye8Q"}],"6ZUSY":[function(require,module,exports) {
-var global = require("../internals/global");
-var isCallable = require("../internals/is-callable");
+},{"9126e956816e6ab6":"6ZUSY","2706d984d6ef536c":"l3Kyn","dbaa52ab5b3f0bd4":"3jtKQ","70badb860d816716":"2Ye8Q"}],"6ZUSY":[function(require,module,exports) {
+var global = require("b867e26a33922708");
+var isCallable = require("3486cc790d33c0f2");
 var aFunction = function(argument) {
     return isCallable(argument) ? argument : undefined;
 };
@@ -2123,29 +2234,33 @@ module.exports = function(namespace, method) {
     return arguments.length < 2 ? aFunction(global[namespace]) : global[namespace] && global[namespace][method];
 };
 
-},{"../internals/global":"i8HOC","../internals/is-callable":"l3Kyn"}],"3jtKQ":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
+},{"b867e26a33922708":"i8HOC","3486cc790d33c0f2":"l3Kyn"}],"3jtKQ":[function(require,module,exports) {
+var uncurryThis = require("55bbabb69095c07");
 module.exports = uncurryThis({}.isPrototypeOf);
 
-},{"../internals/function-uncurry-this":"7GlkT"}],"2Ye8Q":[function(require,module,exports) {
-/* eslint-disable es-x/no-symbol -- required for testing */ var NATIVE_SYMBOL = require("../internals/native-symbol");
+},{"55bbabb69095c07":"7GlkT"}],"2Ye8Q":[function(require,module,exports) {
+/* eslint-disable es/no-symbol -- required for testing */ var NATIVE_SYMBOL = require("2015176f4151880c");
 module.exports = NATIVE_SYMBOL && !Symbol.sham && typeof Symbol.iterator == "symbol";
 
-},{"../internals/native-symbol":"grUXC"}],"grUXC":[function(require,module,exports) {
-/* eslint-disable es-x/no-symbol -- required for testing */ var V8_VERSION = require("../internals/engine-v8-version");
-var fails = require("../internals/fails");
-// eslint-disable-next-line es-x/no-object-getownpropertysymbols -- required for testing
+},{"2015176f4151880c":"8KyTD"}],"8KyTD":[function(require,module,exports) {
+/* eslint-disable es/no-symbol -- required for testing */ var V8_VERSION = require("a6063e923a467828");
+var fails = require("8f420a593cfb6ff1");
+var global = require("21d6e12da2155e86");
+var $String = global.String;
+// eslint-disable-next-line es/no-object-getownpropertysymbols -- required for testing
 module.exports = !!Object.getOwnPropertySymbols && !fails(function() {
     var symbol = Symbol();
     // Chrome 38 Symbol has incorrect toString conversion
     // `get-own-property-symbols` polyfill symbols converted to object are not Symbol instances
-    return !String(symbol) || !(Object(symbol) instanceof Symbol) || // Chrome 38-40 symbols are not inherited from DOM collections prototypes to instances
+    // nb: Do not call `String` directly to avoid this being optimized out to `symbol+''` which will,
+    // of course, fail.
+    return !$String(symbol) || !(Object(symbol) instanceof Symbol) || // Chrome 38-40 symbols are not inherited from DOM collections prototypes to instances
     !Symbol.sham && V8_VERSION && V8_VERSION < 41;
 });
 
-},{"../internals/engine-v8-version":"bjFlO","../internals/fails":"hL6D2"}],"bjFlO":[function(require,module,exports) {
-var global = require("../internals/global");
-var userAgent = require("../internals/engine-user-agent");
+},{"a6063e923a467828":"bjFlO","8f420a593cfb6ff1":"hL6D2","21d6e12da2155e86":"i8HOC"}],"bjFlO":[function(require,module,exports) {
+var global = require("cb2655036b6df1f4");
+var userAgent = require("9d79cd17b1ec4a0");
 var process = global.process;
 var Deno = global.Deno;
 var versions = process && process.versions || Deno && Deno.version;
@@ -2168,22 +2283,22 @@ if (!version && userAgent) {
 }
 module.exports = version;
 
-},{"../internals/global":"i8HOC","../internals/engine-user-agent":"73xBt"}],"73xBt":[function(require,module,exports) {
-var getBuiltIn = require("../internals/get-built-in");
-module.exports = getBuiltIn("navigator", "userAgent") || "";
+},{"cb2655036b6df1f4":"i8HOC","9d79cd17b1ec4a0":"73xBt"}],"73xBt":[function(require,module,exports) {
+module.exports = typeof navigator != "undefined" && String(navigator.userAgent) || "";
 
-},{"../internals/get-built-in":"6ZUSY"}],"9Zfiw":[function(require,module,exports) {
-var aCallable = require("../internals/a-callable");
+},{}],"9Zfiw":[function(require,module,exports) {
+var aCallable = require("cfe4139250ff430d");
+var isNullOrUndefined = require("483e831b460ce2ed");
 // `GetMethod` abstract operation
 // https://tc39.es/ecma262/#sec-getmethod
 module.exports = function(V, P) {
     var func = V[P];
-    return func == null ? undefined : aCallable(func);
+    return isNullOrUndefined(func) ? undefined : aCallable(func);
 };
 
-},{"../internals/a-callable":"gOMir"}],"gOMir":[function(require,module,exports) {
-var isCallable = require("../internals/is-callable");
-var tryToString = require("../internals/try-to-string");
+},{"cfe4139250ff430d":"gOMir","483e831b460ce2ed":"gM5ar"}],"gOMir":[function(require,module,exports) {
+var isCallable = require("56b6cd9c1eb29710");
+var tryToString = require("3623056fdcce6a48");
 var $TypeError = TypeError;
 // `Assert: IsCallable(argument) is true`
 module.exports = function(argument) {
@@ -2191,7 +2306,7 @@ module.exports = function(argument) {
     throw $TypeError(tryToString(argument) + " is not a function");
 };
 
-},{"../internals/is-callable":"l3Kyn","../internals/try-to-string":"4O7d7"}],"4O7d7":[function(require,module,exports) {
+},{"56b6cd9c1eb29710":"l3Kyn","3623056fdcce6a48":"4O7d7"}],"4O7d7":[function(require,module,exports) {
 var $String = String;
 module.exports = function(argument) {
     try {
@@ -2202,9 +2317,9 @@ module.exports = function(argument) {
 };
 
 },{}],"7MME2":[function(require,module,exports) {
-var call = require("../internals/function-call");
-var isCallable = require("../internals/is-callable");
-var isObject = require("../internals/is-object");
+var call = require("abb1f1d95bff9ed7");
+var isCallable = require("d3d8dc6fd5f33a78");
+var isObject = require("6f314285a1e47f2e");
 var $TypeError = TypeError;
 // `OrdinaryToPrimitive` abstract operation
 // https://tc39.es/ecma262/#sec-ordinarytoprimitive
@@ -2216,53 +2331,47 @@ module.exports = function(input, pref) {
     throw $TypeError("Can't convert object to primitive value");
 };
 
-},{"../internals/function-call":"d7JlP","../internals/is-callable":"l3Kyn","../internals/is-object":"Z0pBo"}],"gTwyA":[function(require,module,exports) {
-var global = require("../internals/global");
-var shared = require("../internals/shared");
-var hasOwn = require("../internals/has-own-property");
-var uid = require("../internals/uid");
-var NATIVE_SYMBOL = require("../internals/native-symbol");
-var USE_SYMBOL_AS_UID = require("../internals/use-symbol-as-uid");
-var WellKnownSymbolsStore = shared("wks");
+},{"abb1f1d95bff9ed7":"d7JlP","d3d8dc6fd5f33a78":"l3Kyn","6f314285a1e47f2e":"Z0pBo"}],"gTwyA":[function(require,module,exports) {
+var global = require("d15f6ad7dce7a576");
+var shared = require("831a9121a21d69b7");
+var hasOwn = require("36791e53b8a7f236");
+var uid = require("6b623dd92e8a0c54");
+var NATIVE_SYMBOL = require("645dfca885f21dbd");
+var USE_SYMBOL_AS_UID = require("1af0beea88793315");
 var Symbol = global.Symbol;
-var symbolFor = Symbol && Symbol["for"];
-var createWellKnownSymbol = USE_SYMBOL_AS_UID ? Symbol : Symbol && Symbol.withoutSetter || uid;
+var WellKnownSymbolsStore = shared("wks");
+var createWellKnownSymbol = USE_SYMBOL_AS_UID ? Symbol["for"] || Symbol : Symbol && Symbol.withoutSetter || uid;
 module.exports = function(name) {
-    if (!hasOwn(WellKnownSymbolsStore, name) || !(NATIVE_SYMBOL || typeof WellKnownSymbolsStore[name] == "string")) {
-        var description = "Symbol." + name;
-        if (NATIVE_SYMBOL && hasOwn(Symbol, name)) WellKnownSymbolsStore[name] = Symbol[name];
-        else if (USE_SYMBOL_AS_UID && symbolFor) WellKnownSymbolsStore[name] = symbolFor(description);
-        else WellKnownSymbolsStore[name] = createWellKnownSymbol(description);
-    }
+    if (!hasOwn(WellKnownSymbolsStore, name)) WellKnownSymbolsStore[name] = NATIVE_SYMBOL && hasOwn(Symbol, name) ? Symbol[name] : createWellKnownSymbol("Symbol." + name);
     return WellKnownSymbolsStore[name];
 };
 
-},{"../internals/global":"i8HOC","../internals/shared":"i1mHK","../internals/has-own-property":"gC2Q5","../internals/uid":"a3SEE","../internals/native-symbol":"grUXC","../internals/use-symbol-as-uid":"2Ye8Q"}],"i1mHK":[function(require,module,exports) {
-var IS_PURE = require("../internals/is-pure");
-var store = require("../internals/shared-store");
+},{"d15f6ad7dce7a576":"i8HOC","831a9121a21d69b7":"i1mHK","36791e53b8a7f236":"gC2Q5","6b623dd92e8a0c54":"a3SEE","645dfca885f21dbd":"8KyTD","1af0beea88793315":"2Ye8Q"}],"i1mHK":[function(require,module,exports) {
+var IS_PURE = require("84635e3a4fa93b2d");
+var store = require("b7eca30bff81dfc0");
 (module.exports = function(key, value) {
     return store[key] || (store[key] = value !== undefined ? value : {});
 })("versions", []).push({
-    version: "3.23.3",
+    version: "3.30.2",
     mode: IS_PURE ? "pure" : "global",
-    copyright: "\xa9 2014-2022 Denis Pushkarev (zloirock.ru)",
-    license: "https://github.com/zloirock/core-js/blob/v3.23.3/LICENSE",
+    copyright: "\xa9 2014-2023 Denis Pushkarev (zloirock.ru)",
+    license: "https://github.com/zloirock/core-js/blob/v3.30.2/LICENSE",
     source: "https://github.com/zloirock/core-js"
 });
 
-},{"../internals/is-pure":"5ZsyC","../internals/shared-store":"l4ncH"}],"5ZsyC":[function(require,module,exports) {
+},{"84635e3a4fa93b2d":"5ZsyC","b7eca30bff81dfc0":"l4ncH"}],"5ZsyC":[function(require,module,exports) {
 module.exports = false;
 
 },{}],"l4ncH":[function(require,module,exports) {
-var global = require("../internals/global");
-var defineGlobalProperty = require("../internals/define-global-property");
+var global = require("7737675d3bc0f315");
+var defineGlobalProperty = require("4397266dc5516b48");
 var SHARED = "__core-js_shared__";
 var store = global[SHARED] || defineGlobalProperty(SHARED, {});
 module.exports = store;
 
-},{"../internals/global":"i8HOC","../internals/define-global-property":"ggjnO"}],"ggjnO":[function(require,module,exports) {
-var global = require("../internals/global");
-// eslint-disable-next-line es-x/no-object-defineproperty -- safe
+},{"7737675d3bc0f315":"i8HOC","4397266dc5516b48":"ggjnO"}],"ggjnO":[function(require,module,exports) {
+var global = require("fef456cf658eb0fc");
+// eslint-disable-next-line es/no-object-defineproperty -- safe
 var defineProperty = Object.defineProperty;
 module.exports = function(key, value) {
     try {
@@ -2277,19 +2386,19 @@ module.exports = function(key, value) {
     return value;
 };
 
-},{"../internals/global":"i8HOC"}],"gC2Q5":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
-var toObject = require("../internals/to-object");
+},{"fef456cf658eb0fc":"i8HOC"}],"gC2Q5":[function(require,module,exports) {
+var uncurryThis = require("c086079b2557d067");
+var toObject = require("d594d46daa2d1df1");
 var hasOwnProperty = uncurryThis({}.hasOwnProperty);
 // `HasOwnProperty` abstract operation
 // https://tc39.es/ecma262/#sec-hasownproperty
-// eslint-disable-next-line es-x/no-object-hasown -- safe
+// eslint-disable-next-line es/no-object-hasown -- safe
 module.exports = Object.hasOwn || function hasOwn(it, key) {
     return hasOwnProperty(toObject(it), key);
 };
 
-},{"../internals/function-uncurry-this":"7GlkT","../internals/to-object":"5cb35"}],"5cb35":[function(require,module,exports) {
-var requireObjectCoercible = require("../internals/require-object-coercible");
+},{"c086079b2557d067":"7GlkT","d594d46daa2d1df1":"5cb35"}],"5cb35":[function(require,module,exports) {
+var requireObjectCoercible = require("6fc356d4957afc72");
 var $Object = Object;
 // `ToObject` abstract operation
 // https://tc39.es/ecma262/#sec-toobject
@@ -2297,8 +2406,8 @@ module.exports = function(argument) {
     return $Object(requireObjectCoercible(argument));
 };
 
-},{"../internals/require-object-coercible":"fOR0B"}],"a3SEE":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
+},{"6fc356d4957afc72":"fOR0B"}],"a3SEE":[function(require,module,exports) {
+var uncurryThis = require("1c75d388be7eeab0");
 var id = 0;
 var postfix = Math.random();
 var toString = uncurryThis(1.0.toString);
@@ -2306,13 +2415,13 @@ module.exports = function(key) {
     return "Symbol(" + (key === undefined ? "" : key) + ")_" + toString(++id + postfix, 36);
 };
 
-},{"../internals/function-uncurry-this":"7GlkT"}],"qS9uN":[function(require,module,exports) {
-var DESCRIPTORS = require("../internals/descriptors");
-var fails = require("../internals/fails");
-var createElement = require("../internals/document-create-element");
+},{"1c75d388be7eeab0":"7GlkT"}],"qS9uN":[function(require,module,exports) {
+var DESCRIPTORS = require("82e01ba66667a197");
+var fails = require("60abca4a9680b1f1");
+var createElement = require("4d48baa00eaabda5");
 // Thanks to IE8 for its funny defineProperty
 module.exports = !DESCRIPTORS && !fails(function() {
-    // eslint-disable-next-line es-x/no-object-defineproperty -- required for testing
+    // eslint-disable-next-line es/no-object-defineproperty -- required for testing
     return Object.defineProperty(createElement("div"), "a", {
         get: function() {
             return 7;
@@ -2320,9 +2429,9 @@ module.exports = !DESCRIPTORS && !fails(function() {
     }).a != 7;
 });
 
-},{"../internals/descriptors":"92ZIi","../internals/fails":"hL6D2","../internals/document-create-element":"4bOHl"}],"4bOHl":[function(require,module,exports) {
-var global = require("../internals/global");
-var isObject = require("../internals/is-object");
+},{"82e01ba66667a197":"92ZIi","60abca4a9680b1f1":"hL6D2","4d48baa00eaabda5":"4bOHl"}],"4bOHl":[function(require,module,exports) {
+var global = require("33e6949df5501b7e");
+var isObject = require("1aa776ef2f8a7f65");
 var document = global.document;
 // typeof document.createElement is 'object' in old IE
 var EXISTS = isObject(document) && isObject(document.createElement);
@@ -2330,10 +2439,10 @@ module.exports = function(it) {
     return EXISTS ? document.createElement(it) : {};
 };
 
-},{"../internals/global":"i8HOC","../internals/is-object":"Z0pBo"}],"8CL42":[function(require,module,exports) {
-var DESCRIPTORS = require("../internals/descriptors");
-var definePropertyModule = require("../internals/object-define-property");
-var createPropertyDescriptor = require("../internals/create-property-descriptor");
+},{"33e6949df5501b7e":"i8HOC","1aa776ef2f8a7f65":"Z0pBo"}],"8CL42":[function(require,module,exports) {
+var DESCRIPTORS = require("4865212e440c3dda");
+var definePropertyModule = require("a26d1f1239806424");
+var createPropertyDescriptor = require("eb9f5996de05456a");
 module.exports = DESCRIPTORS ? function(object, key, value) {
     return definePropertyModule.f(object, key, createPropertyDescriptor(1, value));
 } : function(object, key, value) {
@@ -2341,16 +2450,16 @@ module.exports = DESCRIPTORS ? function(object, key, value) {
     return object;
 };
 
-},{"../internals/descriptors":"92ZIi","../internals/object-define-property":"iJR4w","../internals/create-property-descriptor":"1lpav"}],"iJR4w":[function(require,module,exports) {
-var DESCRIPTORS = require("../internals/descriptors");
-var IE8_DOM_DEFINE = require("../internals/ie8-dom-define");
-var V8_PROTOTYPE_DEFINE_BUG = require("../internals/v8-prototype-define-bug");
-var anObject = require("../internals/an-object");
-var toPropertyKey = require("../internals/to-property-key");
+},{"4865212e440c3dda":"92ZIi","a26d1f1239806424":"iJR4w","eb9f5996de05456a":"1lpav"}],"iJR4w":[function(require,module,exports) {
+var DESCRIPTORS = require("a0a05703c8ba3235");
+var IE8_DOM_DEFINE = require("c2622f612c3a8d19");
+var V8_PROTOTYPE_DEFINE_BUG = require("a9077bd991ef947");
+var anObject = require("874d0a7eeef76435");
+var toPropertyKey = require("1ae4181e43720d2e");
 var $TypeError = TypeError;
-// eslint-disable-next-line es-x/no-object-defineproperty -- safe
+// eslint-disable-next-line es/no-object-defineproperty -- safe
 var $defineProperty = Object.defineProperty;
-// eslint-disable-next-line es-x/no-object-getownpropertydescriptor -- safe
+// eslint-disable-next-line es/no-object-getownpropertydescriptor -- safe
 var $getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 var ENUMERABLE = "enumerable";
 var CONFIGURABLE = "configurable";
@@ -2385,21 +2494,21 @@ exports.f = DESCRIPTORS ? V8_PROTOTYPE_DEFINE_BUG ? function defineProperty(O, P
     return O;
 };
 
-},{"../internals/descriptors":"92ZIi","../internals/ie8-dom-define":"qS9uN","../internals/v8-prototype-define-bug":"ka1Un","../internals/an-object":"4isCr","../internals/to-property-key":"5XWKd"}],"ka1Un":[function(require,module,exports) {
-var DESCRIPTORS = require("../internals/descriptors");
-var fails = require("../internals/fails");
+},{"a0a05703c8ba3235":"92ZIi","c2622f612c3a8d19":"qS9uN","a9077bd991ef947":"ka1Un","874d0a7eeef76435":"4isCr","1ae4181e43720d2e":"5XWKd"}],"ka1Un":[function(require,module,exports) {
+var DESCRIPTORS = require("84df53652d985c1");
+var fails = require("6b3f42f62463bed0");
 // V8 ~ Chrome 36-
 // https://bugs.chromium.org/p/v8/issues/detail?id=3334
 module.exports = DESCRIPTORS && fails(function() {
-    // eslint-disable-next-line es-x/no-object-defineproperty -- required for testing
+    // eslint-disable-next-line es/no-object-defineproperty -- required for testing
     return Object.defineProperty(function() {}, "prototype", {
         value: 42,
         writable: false
     }).prototype != 42;
 });
 
-},{"../internals/descriptors":"92ZIi","../internals/fails":"hL6D2"}],"4isCr":[function(require,module,exports) {
-var isObject = require("../internals/is-object");
+},{"84df53652d985c1":"92ZIi","6b3f42f62463bed0":"hL6D2"}],"4isCr":[function(require,module,exports) {
+var isObject = require("e8f08fe6873b14e3");
 var $String = String;
 var $TypeError = TypeError;
 // `Assert: Type(argument) is Object`
@@ -2408,11 +2517,11 @@ module.exports = function(argument) {
     throw $TypeError($String(argument) + " is not an object");
 };
 
-},{"../internals/is-object":"Z0pBo"}],"6XwEX":[function(require,module,exports) {
-var isCallable = require("../internals/is-callable");
-var definePropertyModule = require("../internals/object-define-property");
-var makeBuiltIn = require("../internals/make-built-in");
-var defineGlobalProperty = require("../internals/define-global-property");
+},{"e8f08fe6873b14e3":"Z0pBo"}],"6XwEX":[function(require,module,exports) {
+var isCallable = require("9b07181355cd3d2e");
+var definePropertyModule = require("ead0743d72fbdc3f");
+var makeBuiltIn = require("ec8b17f12984fe4b");
+var defineGlobalProperty = require("53b8efa70072ea8d");
 module.exports = function(O, key, value, options) {
     if (!options) options = {};
     var simple = options.enumerable;
@@ -2437,18 +2546,23 @@ module.exports = function(O, key, value, options) {
     return O;
 };
 
-},{"../internals/is-callable":"l3Kyn","../internals/object-define-property":"iJR4w","../internals/make-built-in":"cTB4k","../internals/define-global-property":"ggjnO"}],"cTB4k":[function(require,module,exports) {
-var fails = require("../internals/fails");
-var isCallable = require("../internals/is-callable");
-var hasOwn = require("../internals/has-own-property");
-var DESCRIPTORS = require("../internals/descriptors");
-var CONFIGURABLE_FUNCTION_NAME = require("../internals/function-name").CONFIGURABLE;
-var inspectSource = require("../internals/inspect-source");
-var InternalStateModule = require("../internals/internal-state");
+},{"9b07181355cd3d2e":"l3Kyn","ead0743d72fbdc3f":"iJR4w","ec8b17f12984fe4b":"cTB4k","53b8efa70072ea8d":"ggjnO"}],"cTB4k":[function(require,module,exports) {
+var uncurryThis = require("b62670233ca960eb");
+var fails = require("b6685fc0acf8b83a");
+var isCallable = require("e308f6043622d2c2");
+var hasOwn = require("25d8b164f337183b");
+var DESCRIPTORS = require("9ca6a9590f33fe4f");
+var CONFIGURABLE_FUNCTION_NAME = require("64473d847ff8f860").CONFIGURABLE;
+var inspectSource = require("21ebd9eae6713564");
+var InternalStateModule = require("58056f0c7370bf2e");
 var enforceInternalState = InternalStateModule.enforce;
 var getInternalState = InternalStateModule.get;
-// eslint-disable-next-line es-x/no-object-defineproperty -- safe
+var $String = String;
+// eslint-disable-next-line es/no-object-defineproperty -- safe
 var defineProperty = Object.defineProperty;
+var stringSlice = uncurryThis("".slice);
+var replace = uncurryThis("".replace);
+var join = uncurryThis([].join);
 var CONFIGURABLE_LENGTH = DESCRIPTORS && !fails(function() {
     return defineProperty(function() {}, "length", {
         value: 8
@@ -2456,7 +2570,7 @@ var CONFIGURABLE_LENGTH = DESCRIPTORS && !fails(function() {
 });
 var TEMPLATE = String(String).split("String");
 var makeBuiltIn = module.exports = function(value, name, options) {
-    if (String(name).slice(0, 7) === "Symbol(") name = "[" + String(name).replace(/^Symbol\(([^)]*)\)/, "$1") + "]";
+    if (stringSlice($String(name), 0, 7) === "Symbol(") name = "[" + replace($String(name), /^Symbol\(([^)]*)\)/, "$1") + "]";
     if (options && options.getter) name = "get " + name;
     if (options && options.setter) name = "set " + name;
     if (!hasOwn(value, "name") || CONFIGURABLE_FUNCTION_NAME && value.name !== name) {
@@ -2477,7 +2591,7 @@ var makeBuiltIn = module.exports = function(value, name, options) {
         } else if (value.prototype) value.prototype = undefined;
     } catch (error) {}
     var state = enforceInternalState(value);
-    if (!hasOwn(state, "source")) state.source = TEMPLATE.join(typeof name == "string" ? name : "");
+    if (!hasOwn(state, "source")) state.source = join(TEMPLATE, typeof name == "string" ? name : "");
     return value;
 };
 // add fake Function#toString for correct work wrapped methods / constructors with methods like LoDash isNative
@@ -2486,11 +2600,11 @@ Function.prototype.toString = makeBuiltIn(function toString() {
     return isCallable(this) && getInternalState(this).source || inspectSource(this);
 }, "toString");
 
-},{"../internals/fails":"hL6D2","../internals/is-callable":"l3Kyn","../internals/has-own-property":"gC2Q5","../internals/descriptors":"92ZIi","../internals/function-name":"l6Kgd","../internals/inspect-source":"9jh7O","../internals/internal-state":"7AMlF"}],"l6Kgd":[function(require,module,exports) {
-var DESCRIPTORS = require("../internals/descriptors");
-var hasOwn = require("../internals/has-own-property");
+},{"b62670233ca960eb":"7GlkT","b6685fc0acf8b83a":"hL6D2","e308f6043622d2c2":"l3Kyn","25d8b164f337183b":"gC2Q5","9ca6a9590f33fe4f":"92ZIi","64473d847ff8f860":"l6Kgd","21ebd9eae6713564":"9jh7O","58056f0c7370bf2e":"7AMlF"}],"l6Kgd":[function(require,module,exports) {
+var DESCRIPTORS = require("75e7a297ebaeff15");
+var hasOwn = require("55af3a1df23638f4");
 var FunctionPrototype = Function.prototype;
-// eslint-disable-next-line es-x/no-object-getownpropertydescriptor -- safe
+// eslint-disable-next-line es/no-object-getownpropertydescriptor -- safe
 var getDescriptor = DESCRIPTORS && Object.getOwnPropertyDescriptor;
 var EXISTS = hasOwn(FunctionPrototype, "name");
 // additional protection from minified / mangled / dropped function names
@@ -2502,10 +2616,10 @@ module.exports = {
     CONFIGURABLE: CONFIGURABLE
 };
 
-},{"../internals/descriptors":"92ZIi","../internals/has-own-property":"gC2Q5"}],"9jh7O":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
-var isCallable = require("../internals/is-callable");
-var store = require("../internals/shared-store");
+},{"75e7a297ebaeff15":"92ZIi","55af3a1df23638f4":"gC2Q5"}],"9jh7O":[function(require,module,exports) {
+var uncurryThis = require("e58907754dad675f");
+var isCallable = require("4df90045944fd4ea");
+var store = require("bc74e6e9f3139bfd");
 var functionToString = uncurryThis(Function.toString);
 // this helper broken in `core-js@3.4.1-3.4.4`, so we can't use `shared` helper
 if (!isCallable(store.inspectSource)) store.inspectSource = function(it) {
@@ -2513,16 +2627,15 @@ if (!isCallable(store.inspectSource)) store.inspectSource = function(it) {
 };
 module.exports = store.inspectSource;
 
-},{"../internals/function-uncurry-this":"7GlkT","../internals/is-callable":"l3Kyn","../internals/shared-store":"l4ncH"}],"7AMlF":[function(require,module,exports) {
-var NATIVE_WEAK_MAP = require("../internals/native-weak-map");
-var global = require("../internals/global");
-var uncurryThis = require("../internals/function-uncurry-this");
-var isObject = require("../internals/is-object");
-var createNonEnumerableProperty = require("../internals/create-non-enumerable-property");
-var hasOwn = require("../internals/has-own-property");
-var shared = require("../internals/shared-store");
-var sharedKey = require("../internals/shared-key");
-var hiddenKeys = require("../internals/hidden-keys");
+},{"e58907754dad675f":"7GlkT","4df90045944fd4ea":"l3Kyn","bc74e6e9f3139bfd":"l4ncH"}],"7AMlF":[function(require,module,exports) {
+var NATIVE_WEAK_MAP = require("66a6fc31843e3480");
+var global = require("6bfa3ab942a5fc7d");
+var isObject = require("c004f4694562e0e1");
+var createNonEnumerableProperty = require("d015115641f40551");
+var hasOwn = require("f43837eff2d7127e");
+var shared = require("ff80f1aeb4fc523a");
+var sharedKey = require("2912cc75a40742ac");
+var hiddenKeys = require("a21f22c65809fec7");
 var OBJECT_ALREADY_INITIALIZED = "Object already initialized";
 var TypeError = global.TypeError;
 var WeakMap = global.WeakMap;
@@ -2539,26 +2652,26 @@ var getterFor = function(TYPE) {
 };
 if (NATIVE_WEAK_MAP || shared.state) {
     var store = shared.state || (shared.state = new WeakMap());
-    var wmget = uncurryThis(store.get);
-    var wmhas = uncurryThis(store.has);
-    var wmset = uncurryThis(store.set);
-    set = function(it, metadata) {
-        if (wmhas(store, it)) throw new TypeError(OBJECT_ALREADY_INITIALIZED);
+    /* eslint-disable no-self-assign -- prototype methods protection */ store.get = store.get;
+    store.has = store.has;
+    store.set = store.set;
+    /* eslint-enable no-self-assign -- prototype methods protection */ set = function(it, metadata) {
+        if (store.has(it)) throw TypeError(OBJECT_ALREADY_INITIALIZED);
         metadata.facade = it;
-        wmset(store, it, metadata);
+        store.set(it, metadata);
         return metadata;
     };
     get = function(it) {
-        return wmget(store, it) || {};
+        return store.get(it) || {};
     };
     has = function(it) {
-        return wmhas(store, it);
+        return store.has(it);
     };
 } else {
     var STATE = sharedKey("state");
     hiddenKeys[STATE] = true;
     set = function(it, metadata) {
-        if (hasOwn(it, STATE)) throw new TypeError(OBJECT_ALREADY_INITIALIZED);
+        if (hasOwn(it, STATE)) throw TypeError(OBJECT_ALREADY_INITIALIZED);
         metadata.facade = it;
         createNonEnumerableProperty(it, STATE, metadata);
         return metadata;
@@ -2578,29 +2691,28 @@ module.exports = {
     getterFor: getterFor
 };
 
-},{"../internals/native-weak-map":"7LdJl","../internals/global":"i8HOC","../internals/function-uncurry-this":"7GlkT","../internals/is-object":"Z0pBo","../internals/create-non-enumerable-property":"8CL42","../internals/has-own-property":"gC2Q5","../internals/shared-store":"l4ncH","../internals/shared-key":"eAjGz","../internals/hidden-keys":"661m4"}],"7LdJl":[function(require,module,exports) {
-var global = require("../internals/global");
-var isCallable = require("../internals/is-callable");
-var inspectSource = require("../internals/inspect-source");
+},{"66a6fc31843e3480":"2PZTl","6bfa3ab942a5fc7d":"i8HOC","c004f4694562e0e1":"Z0pBo","d015115641f40551":"8CL42","f43837eff2d7127e":"gC2Q5","ff80f1aeb4fc523a":"l4ncH","2912cc75a40742ac":"eAjGz","a21f22c65809fec7":"661m4"}],"2PZTl":[function(require,module,exports) {
+var global = require("f78789ab96bf709a");
+var isCallable = require("6cc4fe65e727bef");
 var WeakMap = global.WeakMap;
-module.exports = isCallable(WeakMap) && /native code/.test(inspectSource(WeakMap));
+module.exports = isCallable(WeakMap) && /native code/.test(String(WeakMap));
 
-},{"../internals/global":"i8HOC","../internals/is-callable":"l3Kyn","../internals/inspect-source":"9jh7O"}],"eAjGz":[function(require,module,exports) {
-var shared = require("../internals/shared");
-var uid = require("../internals/uid");
+},{"f78789ab96bf709a":"i8HOC","6cc4fe65e727bef":"l3Kyn"}],"eAjGz":[function(require,module,exports) {
+var shared = require("f69d9d69182f4e2b");
+var uid = require("e649e7b56f675e05");
 var keys = shared("keys");
 module.exports = function(key) {
     return keys[key] || (keys[key] = uid(key));
 };
 
-},{"../internals/shared":"i1mHK","../internals/uid":"a3SEE"}],"661m4":[function(require,module,exports) {
+},{"f69d9d69182f4e2b":"i1mHK","e649e7b56f675e05":"a3SEE"}],"661m4":[function(require,module,exports) {
 module.exports = {};
 
 },{}],"9Z12i":[function(require,module,exports) {
-var hasOwn = require("../internals/has-own-property");
-var ownKeys = require("../internals/own-keys");
-var getOwnPropertyDescriptorModule = require("../internals/object-get-own-property-descriptor");
-var definePropertyModule = require("../internals/object-define-property");
+var hasOwn = require("c930c3198b911c31");
+var ownKeys = require("4cc5f4c3b7b7c81b");
+var getOwnPropertyDescriptorModule = require("276481b3da1e3e8d");
+var definePropertyModule = require("de2d6b96bbe30d46");
 module.exports = function(target, source, exceptions) {
     var keys = ownKeys(source);
     var defineProperty = definePropertyModule.f;
@@ -2611,12 +2723,12 @@ module.exports = function(target, source, exceptions) {
     }
 };
 
-},{"../internals/has-own-property":"gC2Q5","../internals/own-keys":"1CX1A","../internals/object-get-own-property-descriptor":"lk5NI","../internals/object-define-property":"iJR4w"}],"1CX1A":[function(require,module,exports) {
-var getBuiltIn = require("../internals/get-built-in");
-var uncurryThis = require("../internals/function-uncurry-this");
-var getOwnPropertyNamesModule = require("../internals/object-get-own-property-names");
-var getOwnPropertySymbolsModule = require("../internals/object-get-own-property-symbols");
-var anObject = require("../internals/an-object");
+},{"c930c3198b911c31":"gC2Q5","4cc5f4c3b7b7c81b":"1CX1A","276481b3da1e3e8d":"lk5NI","de2d6b96bbe30d46":"iJR4w"}],"1CX1A":[function(require,module,exports) {
+var getBuiltIn = require("75fc48f862dbce41");
+var uncurryThis = require("bffccb817a3ee80a");
+var getOwnPropertyNamesModule = require("4c1bf6e4ad9c174c");
+var getOwnPropertySymbolsModule = require("c6d98caeef37666a");
+var anObject = require("e019b5b29cac3df6");
 var concat = uncurryThis([].concat);
 // all object keys, includes non-enumerable and symbols
 module.exports = getBuiltIn("Reflect", "ownKeys") || function ownKeys(it) {
@@ -2625,23 +2737,23 @@ module.exports = getBuiltIn("Reflect", "ownKeys") || function ownKeys(it) {
     return getOwnPropertySymbols ? concat(keys, getOwnPropertySymbols(it)) : keys;
 };
 
-},{"../internals/get-built-in":"6ZUSY","../internals/function-uncurry-this":"7GlkT","../internals/object-get-own-property-names":"fjY04","../internals/object-get-own-property-symbols":"4DWO3","../internals/an-object":"4isCr"}],"fjY04":[function(require,module,exports) {
-var internalObjectKeys = require("../internals/object-keys-internal");
-var enumBugKeys = require("../internals/enum-bug-keys");
+},{"75fc48f862dbce41":"6ZUSY","bffccb817a3ee80a":"7GlkT","4c1bf6e4ad9c174c":"fjY04","c6d98caeef37666a":"4DWO3","e019b5b29cac3df6":"4isCr"}],"fjY04":[function(require,module,exports) {
+var internalObjectKeys = require("cb274a1de4b6023a");
+var enumBugKeys = require("873e15b297da796a");
 var hiddenKeys = enumBugKeys.concat("length", "prototype");
 // `Object.getOwnPropertyNames` method
 // https://tc39.es/ecma262/#sec-object.getownpropertynames
-// eslint-disable-next-line es-x/no-object-getownpropertynames -- safe
+// eslint-disable-next-line es/no-object-getownpropertynames -- safe
 exports.f = Object.getOwnPropertyNames || function getOwnPropertyNames(O) {
     return internalObjectKeys(O, hiddenKeys);
 };
 
-},{"../internals/object-keys-internal":"hl5T1","../internals/enum-bug-keys":"9RnJm"}],"hl5T1":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
-var hasOwn = require("../internals/has-own-property");
-var toIndexedObject = require("../internals/to-indexed-object");
-var indexOf = require("../internals/array-includes").indexOf;
-var hiddenKeys = require("../internals/hidden-keys");
+},{"cb274a1de4b6023a":"hl5T1","873e15b297da796a":"9RnJm"}],"hl5T1":[function(require,module,exports) {
+var uncurryThis = require("c0c1f69f5f89331d");
+var hasOwn = require("ee9b8940feb08e9e");
+var toIndexedObject = require("61ff760219252383");
+var indexOf = require("86a80a6e223558f0").indexOf;
+var hiddenKeys = require("6cc1234f40a46611");
 var push = uncurryThis([].push);
 module.exports = function(object, names) {
     var O = toIndexedObject(object);
@@ -2654,10 +2766,10 @@ module.exports = function(object, names) {
     return result;
 };
 
-},{"../internals/function-uncurry-this":"7GlkT","../internals/has-own-property":"gC2Q5","../internals/to-indexed-object":"jLWwQ","../internals/array-includes":"n5IsC","../internals/hidden-keys":"661m4"}],"n5IsC":[function(require,module,exports) {
-var toIndexedObject = require("../internals/to-indexed-object");
-var toAbsoluteIndex = require("../internals/to-absolute-index");
-var lengthOfArrayLike = require("../internals/length-of-array-like");
+},{"c0c1f69f5f89331d":"7GlkT","ee9b8940feb08e9e":"gC2Q5","61ff760219252383":"jLWwQ","86a80a6e223558f0":"n5IsC","6cc1234f40a46611":"661m4"}],"n5IsC":[function(require,module,exports) {
+var toIndexedObject = require("5da916ae3e9422da");
+var toAbsoluteIndex = require("218011a1421dc513");
+var lengthOfArrayLike = require("2e64530fddbdf9ca");
 // `Array.prototype.{ indexOf, includes }` methods implementation
 var createMethod = function(IS_INCLUDES) {
     return function($this, el, fromIndex) {
@@ -2688,8 +2800,8 @@ module.exports = {
     indexOf: createMethod(false)
 };
 
-},{"../internals/to-indexed-object":"jLWwQ","../internals/to-absolute-index":"5yh27","../internals/length-of-array-like":"lY4mS"}],"5yh27":[function(require,module,exports) {
-var toIntegerOrInfinity = require("../internals/to-integer-or-infinity");
+},{"5da916ae3e9422da":"jLWwQ","218011a1421dc513":"5yh27","2e64530fddbdf9ca":"lY4mS"}],"5yh27":[function(require,module,exports) {
+var toIntegerOrInfinity = require("13791fd767c24ec3");
 var max = Math.max;
 var min = Math.min;
 // Helper for a popular repeating case of the spec:
@@ -2700,8 +2812,8 @@ module.exports = function(index, length) {
     return integer < 0 ? max(integer + length, 0) : min(integer, length);
 };
 
-},{"../internals/to-integer-or-infinity":"kLXGe"}],"kLXGe":[function(require,module,exports) {
-var trunc = require("../internals/math-trunc");
+},{"13791fd767c24ec3":"kLXGe"}],"kLXGe":[function(require,module,exports) {
+var trunc = require("555b438513fc5cd7");
 // `ToIntegerOrInfinity` abstract operation
 // https://tc39.es/ecma262/#sec-tointegerorinfinity
 module.exports = function(argument) {
@@ -2710,27 +2822,27 @@ module.exports = function(argument) {
     return number !== number || number === 0 ? 0 : trunc(number);
 };
 
-},{"../internals/math-trunc":"7O8gb"}],"7O8gb":[function(require,module,exports) {
+},{"555b438513fc5cd7":"7O8gb"}],"7O8gb":[function(require,module,exports) {
 var ceil = Math.ceil;
 var floor = Math.floor;
 // `Math.trunc` method
 // https://tc39.es/ecma262/#sec-math.trunc
-// eslint-disable-next-line es-x/no-math-trunc -- safe
+// eslint-disable-next-line es/no-math-trunc -- safe
 module.exports = Math.trunc || function trunc(x) {
     var n = +x;
     return (n > 0 ? floor : ceil)(n);
 };
 
 },{}],"lY4mS":[function(require,module,exports) {
-var toLength = require("../internals/to-length");
+var toLength = require("7c75aa06d96669ab");
 // `LengthOfArrayLike` abstract operation
 // https://tc39.es/ecma262/#sec-lengthofarraylike
 module.exports = function(obj) {
     return toLength(obj.length);
 };
 
-},{"../internals/to-length":"fU04N"}],"fU04N":[function(require,module,exports) {
-var toIntegerOrInfinity = require("../internals/to-integer-or-infinity");
+},{"7c75aa06d96669ab":"fU04N"}],"fU04N":[function(require,module,exports) {
+var toIntegerOrInfinity = require("c68a2aaa52e5011f");
 var min = Math.min;
 // `ToLength` abstract operation
 // https://tc39.es/ecma262/#sec-tolength
@@ -2738,7 +2850,7 @@ module.exports = function(argument) {
     return argument > 0 ? min(toIntegerOrInfinity(argument), 0x1FFFFFFFFFFFFF) : 0; // 2 ** 53 - 1 == 9007199254740991
 };
 
-},{"../internals/to-integer-or-infinity":"kLXGe"}],"9RnJm":[function(require,module,exports) {
+},{"c68a2aaa52e5011f":"kLXGe"}],"9RnJm":[function(require,module,exports) {
 // IE8- don't enum bug keys
 module.exports = [
     "constructor",
@@ -2751,12 +2863,12 @@ module.exports = [
 ];
 
 },{}],"4DWO3":[function(require,module,exports) {
-// eslint-disable-next-line es-x/no-object-getownpropertysymbols -- safe
+// eslint-disable-next-line es/no-object-getownpropertysymbols -- safe
 exports.f = Object.getOwnPropertySymbols;
 
 },{}],"6uTCZ":[function(require,module,exports) {
-var fails = require("../internals/fails");
-var isCallable = require("../internals/is-callable");
+var fails = require("a971561dd35147df");
+var isCallable = require("fa8ec62a066dbe22");
 var replacement = /#|\.prototype\./;
 var isForced = function(feature, detection) {
     var value = data[normalize(feature)];
@@ -2770,16 +2882,16 @@ var NATIVE = isForced.NATIVE = "N";
 var POLYFILL = isForced.POLYFILL = "P";
 module.exports = isForced;
 
-},{"../internals/fails":"hL6D2","../internals/is-callable":"l3Kyn"}],"iZ18O":[function(require,module,exports) {
-var classof = require("../internals/classof-raw");
+},{"a971561dd35147df":"hL6D2","fa8ec62a066dbe22":"l3Kyn"}],"iZ18O":[function(require,module,exports) {
+var classof = require("5954a20fe128d5a9");
 // `IsArray` abstract operation
 // https://tc39.es/ecma262/#sec-isarray
-// eslint-disable-next-line es-x/no-array-isarray -- safe
+// eslint-disable-next-line es/no-array-isarray -- safe
 module.exports = Array.isArray || function isArray(argument) {
     return classof(argument) == "Array";
 };
 
-},{"../internals/classof-raw":"bdfmm"}],"80pBR":[function(require,module,exports) {
+},{"5954a20fe128d5a9":"bdfmm"}],"80pBR":[function(require,module,exports) {
 var $TypeError = TypeError;
 var MAX_SAFE_INTEGER = 0x1FFFFFFFFFFFFF; // 2 ** 53 - 1 == 9007199254740991
 module.exports = function(it) {
@@ -2789,28 +2901,28 @@ module.exports = function(it) {
 
 },{}],"76HND":[function(require,module,exports) {
 "use strict";
-var toPropertyKey = require("../internals/to-property-key");
-var definePropertyModule = require("../internals/object-define-property");
-var createPropertyDescriptor = require("../internals/create-property-descriptor");
+var toPropertyKey = require("6e0c9b43151fe763");
+var definePropertyModule = require("177287c2961415a2");
+var createPropertyDescriptor = require("5cb3d35960609f9f");
 module.exports = function(object, key, value) {
     var propertyKey = toPropertyKey(key);
     if (propertyKey in object) definePropertyModule.f(object, propertyKey, createPropertyDescriptor(0, value));
     else object[propertyKey] = value;
 };
 
-},{"../internals/to-property-key":"5XWKd","../internals/object-define-property":"iJR4w","../internals/create-property-descriptor":"1lpav"}],"27bo1":[function(require,module,exports) {
-var arraySpeciesConstructor = require("../internals/array-species-constructor");
+},{"6e0c9b43151fe763":"5XWKd","177287c2961415a2":"iJR4w","5cb3d35960609f9f":"1lpav"}],"27bo1":[function(require,module,exports) {
+var arraySpeciesConstructor = require("4d077408703b75d9");
 // `ArraySpeciesCreate` abstract operation
 // https://tc39.es/ecma262/#sec-arrayspeciescreate
 module.exports = function(originalArray, length) {
     return new (arraySpeciesConstructor(originalArray))(length === 0 ? 0 : length);
 };
 
-},{"../internals/array-species-constructor":"2cWdm"}],"2cWdm":[function(require,module,exports) {
-var isArray = require("../internals/is-array");
-var isConstructor = require("../internals/is-constructor");
-var isObject = require("../internals/is-object");
-var wellKnownSymbol = require("../internals/well-known-symbol");
+},{"4d077408703b75d9":"2cWdm"}],"2cWdm":[function(require,module,exports) {
+var isArray = require("946d6ff26b4c76e3");
+var isConstructor = require("a2c9ea273cfc1bdb");
+var isObject = require("f5b3de7970aa8be6");
+var wellKnownSymbol = require("3e79c65d53613baa");
 var SPECIES = wellKnownSymbol("species");
 var $Array = Array;
 // a part of `ArraySpeciesCreate` abstract operation
@@ -2829,13 +2941,13 @@ module.exports = function(originalArray) {
     return C === undefined ? $Array : C;
 };
 
-},{"../internals/is-array":"iZ18O","../internals/is-constructor":"iVgSy","../internals/is-object":"Z0pBo","../internals/well-known-symbol":"gTwyA"}],"iVgSy":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
-var fails = require("../internals/fails");
-var isCallable = require("../internals/is-callable");
-var classof = require("../internals/classof");
-var getBuiltIn = require("../internals/get-built-in");
-var inspectSource = require("../internals/inspect-source");
+},{"946d6ff26b4c76e3":"iZ18O","a2c9ea273cfc1bdb":"iVgSy","f5b3de7970aa8be6":"Z0pBo","3e79c65d53613baa":"gTwyA"}],"iVgSy":[function(require,module,exports) {
+var uncurryThis = require("c0c8463a136f954a");
+var fails = require("97405b953f7f2dd3");
+var isCallable = require("da1ef9156414fc64");
+var classof = require("abe828dce4b50d73");
+var getBuiltIn = require("c35df0c40be61f9f");
+var inspectSource = require("9967f95f693711a4");
 var noop = function() {};
 var empty = [];
 var construct = getBuiltIn("Reflect", "construct");
@@ -2878,11 +2990,11 @@ module.exports = !construct || fails(function() {
     }) || called;
 }) ? isConstructorLegacy : isConstructorModern;
 
-},{"../internals/function-uncurry-this":"7GlkT","../internals/fails":"hL6D2","../internals/is-callable":"l3Kyn","../internals/classof":"dKT7A","../internals/get-built-in":"6ZUSY","../internals/inspect-source":"9jh7O"}],"dKT7A":[function(require,module,exports) {
-var TO_STRING_TAG_SUPPORT = require("../internals/to-string-tag-support");
-var isCallable = require("../internals/is-callable");
-var classofRaw = require("../internals/classof-raw");
-var wellKnownSymbol = require("../internals/well-known-symbol");
+},{"c0c8463a136f954a":"7GlkT","97405b953f7f2dd3":"hL6D2","da1ef9156414fc64":"l3Kyn","abe828dce4b50d73":"dKT7A","c35df0c40be61f9f":"6ZUSY","9967f95f693711a4":"9jh7O"}],"dKT7A":[function(require,module,exports) {
+var TO_STRING_TAG_SUPPORT = require("25d43708eb3c6fd4");
+var isCallable = require("eb4f05414e714e77");
+var classofRaw = require("8e3c5b81888906be");
+var wellKnownSymbol = require("f57af59a45fbc6fa");
 var TO_STRING_TAG = wellKnownSymbol("toStringTag");
 var $Object = Object;
 // ES3 wrong here
@@ -2901,17 +3013,17 @@ module.exports = TO_STRING_TAG_SUPPORT ? classofRaw : function(it) {
     return it === undefined ? "Undefined" : it === null ? "Null" : typeof (tag = tryGet(O = $Object(it), TO_STRING_TAG)) == "string" ? tag : CORRECT_ARGUMENTS ? classofRaw(O) : (result = classofRaw(O)) == "Object" && isCallable(O.callee) ? "Arguments" : result;
 };
 
-},{"../internals/to-string-tag-support":"3Do6Z","../internals/is-callable":"l3Kyn","../internals/classof-raw":"bdfmm","../internals/well-known-symbol":"gTwyA"}],"3Do6Z":[function(require,module,exports) {
-var wellKnownSymbol = require("../internals/well-known-symbol");
+},{"25d43708eb3c6fd4":"3Do6Z","eb4f05414e714e77":"l3Kyn","8e3c5b81888906be":"bdfmm","f57af59a45fbc6fa":"gTwyA"}],"3Do6Z":[function(require,module,exports) {
+var wellKnownSymbol = require("b96d9d36911cef7e");
 var TO_STRING_TAG = wellKnownSymbol("toStringTag");
 var test = {};
 test[TO_STRING_TAG] = "z";
 module.exports = String(test) === "[object z]";
 
-},{"../internals/well-known-symbol":"gTwyA"}],"f9nnM":[function(require,module,exports) {
-var fails = require("../internals/fails");
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var V8_VERSION = require("../internals/engine-v8-version");
+},{"b96d9d36911cef7e":"gTwyA"}],"f9nnM":[function(require,module,exports) {
+var fails = require("e7e2174d1da296c6");
+var wellKnownSymbol = require("e16a77553e9bfefd");
+var V8_VERSION = require("9aa806962d47209");
 var SPECIES = wellKnownSymbol("species");
 module.exports = function(METHOD_NAME) {
     // We can't use this feature detection in V8 since it causes
@@ -2929,72 +3041,73 @@ module.exports = function(METHOD_NAME) {
     });
 };
 
-},{"../internals/fails":"hL6D2","../internals/well-known-symbol":"gTwyA","../internals/engine-v8-version":"bjFlO"}],"9XvHS":[function(require,module,exports) {
-var TO_STRING_TAG_SUPPORT = require("../internals/to-string-tag-support");
-var defineBuiltIn = require("../internals/define-built-in");
-var toString = require("../internals/object-to-string");
+},{"e7e2174d1da296c6":"hL6D2","e16a77553e9bfefd":"gTwyA","9aa806962d47209":"bjFlO"}],"9XvHS":[function(require,module,exports) {
+var TO_STRING_TAG_SUPPORT = require("72108f6b1c38b50");
+var defineBuiltIn = require("a2a95da01210b81b");
+var toString = require("b1fdcee3c3012f73");
 // `Object.prototype.toString` method
 // https://tc39.es/ecma262/#sec-object.prototype.tostring
 if (!TO_STRING_TAG_SUPPORT) defineBuiltIn(Object.prototype, "toString", toString, {
     unsafe: true
 });
 
-},{"../internals/to-string-tag-support":"3Do6Z","../internals/define-built-in":"6XwEX","../internals/object-to-string":"9etkB"}],"9etkB":[function(require,module,exports) {
+},{"72108f6b1c38b50":"3Do6Z","a2a95da01210b81b":"6XwEX","b1fdcee3c3012f73":"9etkB"}],"9etkB":[function(require,module,exports) {
 "use strict";
-var TO_STRING_TAG_SUPPORT = require("../internals/to-string-tag-support");
-var classof = require("../internals/classof");
+var TO_STRING_TAG_SUPPORT = require("ab4c8cdeabc819b2");
+var classof = require("f1dd703063805d72");
 // `Object.prototype.toString` method implementation
 // https://tc39.es/ecma262/#sec-object.prototype.tostring
 module.exports = TO_STRING_TAG_SUPPORT ? ({}).toString : function toString() {
     return "[object " + classof(this) + "]";
 };
 
-},{"../internals/to-string-tag-support":"3Do6Z","../internals/classof":"dKT7A"}],"c39HV":[function(require,module,exports) {
+},{"ab4c8cdeabc819b2":"3Do6Z","f1dd703063805d72":"dKT7A"}],"c39HV":[function(require,module,exports) {
 // TODO: Remove this module from `core-js@4` since it's split to modules listed below
-require("../modules/es.symbol.constructor");
-require("../modules/es.symbol.for");
-require("../modules/es.symbol.key-for");
-require("../modules/es.json.stringify");
-require("../modules/es.object.get-own-property-symbols");
+require("6455e3f5e303e352");
+require("b82a96e72d52b824");
+require("888e6c4a480d2fe8");
+require("717a12ec1ab7e4c2");
+require("688eaa505d890a5");
 
-},{"../modules/es.symbol.constructor":"3B3Vb","../modules/es.symbol.for":"d29gK","../modules/es.symbol.key-for":"iUB0I","../modules/es.json.stringify":"1kdiO","../modules/es.object.get-own-property-symbols":"cMwHd"}],"3B3Vb":[function(require,module,exports) {
+},{"6455e3f5e303e352":"3B3Vb","b82a96e72d52b824":"d29gK","888e6c4a480d2fe8":"iUB0I","717a12ec1ab7e4c2":"1kdiO","688eaa505d890a5":"cMwHd"}],"3B3Vb":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var global = require("../internals/global");
-var call = require("../internals/function-call");
-var uncurryThis = require("../internals/function-uncurry-this");
-var IS_PURE = require("../internals/is-pure");
-var DESCRIPTORS = require("../internals/descriptors");
-var NATIVE_SYMBOL = require("../internals/native-symbol");
-var fails = require("../internals/fails");
-var hasOwn = require("../internals/has-own-property");
-var isPrototypeOf = require("../internals/object-is-prototype-of");
-var anObject = require("../internals/an-object");
-var toIndexedObject = require("../internals/to-indexed-object");
-var toPropertyKey = require("../internals/to-property-key");
-var $toString = require("../internals/to-string");
-var createPropertyDescriptor = require("../internals/create-property-descriptor");
-var nativeObjectCreate = require("../internals/object-create");
-var objectKeys = require("../internals/object-keys");
-var getOwnPropertyNamesModule = require("../internals/object-get-own-property-names");
-var getOwnPropertyNamesExternal = require("../internals/object-get-own-property-names-external");
-var getOwnPropertySymbolsModule = require("../internals/object-get-own-property-symbols");
-var getOwnPropertyDescriptorModule = require("../internals/object-get-own-property-descriptor");
-var definePropertyModule = require("../internals/object-define-property");
-var definePropertiesModule = require("../internals/object-define-properties");
-var propertyIsEnumerableModule = require("../internals/object-property-is-enumerable");
-var defineBuiltIn = require("../internals/define-built-in");
-var shared = require("../internals/shared");
-var sharedKey = require("../internals/shared-key");
-var hiddenKeys = require("../internals/hidden-keys");
-var uid = require("../internals/uid");
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var wrappedWellKnownSymbolModule = require("../internals/well-known-symbol-wrapped");
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
-var defineSymbolToPrimitive = require("../internals/symbol-define-to-primitive");
-var setToStringTag = require("../internals/set-to-string-tag");
-var InternalStateModule = require("../internals/internal-state");
-var $forEach = require("../internals/array-iteration").forEach;
+var $ = require("ccaf31c9cce5d335");
+var global = require("6b460e7bb6bce607");
+var call = require("d803b53c34054e38");
+var uncurryThis = require("fd4f6349a10fc5ef");
+var IS_PURE = require("a4203d8a499c0e81");
+var DESCRIPTORS = require("40b002cbadd25088");
+var NATIVE_SYMBOL = require("d7bc9c0c1f28e2ac");
+var fails = require("868457986467cd52");
+var hasOwn = require("57aa98b07d417953");
+var isPrototypeOf = require("635207865d8e0c8c");
+var anObject = require("54a03103c10973ac");
+var toIndexedObject = require("2a32eee51b7ff38d");
+var toPropertyKey = require("42e6cc45d9bdc0fc");
+var $toString = require("4d32dc685bc8d761");
+var createPropertyDescriptor = require("18d229b68d8e7149");
+var nativeObjectCreate = require("19753cda4ff54f38");
+var objectKeys = require("997a922a13e91d14");
+var getOwnPropertyNamesModule = require("53329f552fa37904");
+var getOwnPropertyNamesExternal = require("9c1372e5bc3df9ff");
+var getOwnPropertySymbolsModule = require("cef13fe0e98c4344");
+var getOwnPropertyDescriptorModule = require("13cff6cfc24e0d08");
+var definePropertyModule = require("f781493fedabdbb3");
+var definePropertiesModule = require("ec170a76221642e1");
+var propertyIsEnumerableModule = require("a34069fa39f1161c");
+var defineBuiltIn = require("693d71d1c29da85f");
+var defineBuiltInAccessor = require("864e1327ed1dc4ca");
+var shared = require("ade0781ab98d7de0");
+var sharedKey = require("a0f38fa13866b904");
+var hiddenKeys = require("331dd001fc488703");
+var uid = require("7ce829b369b9fcaa");
+var wellKnownSymbol = require("87a0ba07b1871a86");
+var wrappedWellKnownSymbolModule = require("f25573917a9ee654");
+var defineWellKnownSymbol = require("e03a21dc6792ccc7");
+var defineSymbolToPrimitive = require("6ae952f7eb749ffb");
+var setToStringTag = require("d06e2243ebf0a3");
+var InternalStateModule = require("7dfac304e648429c");
+var $forEach = require("f581bc6959efaa16").forEach;
 var HIDDEN = sharedKey("hidden");
 var SYMBOL = "Symbol";
 var PROTOTYPE = "prototype";
@@ -3138,7 +3251,7 @@ if (!NATIVE_SYMBOL) {
     };
     if (DESCRIPTORS) {
         // https://github.com/tc39/proposal-Symbol-description
-        nativeDefineProperty(SymbolPrototype, "description", {
+        defineBuiltInAccessor(SymbolPrototype, "description", {
             configurable: true,
             get: function description() {
                 return getInternalState(this).description;
@@ -3209,22 +3322,22 @@ defineSymbolToPrimitive();
 setToStringTag($Symbol, SYMBOL);
 hiddenKeys[HIDDEN] = true;
 
-},{"../internals/export":"dIGt4","../internals/global":"i8HOC","../internals/function-call":"d7JlP","../internals/function-uncurry-this":"7GlkT","../internals/is-pure":"5ZsyC","../internals/descriptors":"92ZIi","../internals/native-symbol":"grUXC","../internals/fails":"hL6D2","../internals/has-own-property":"gC2Q5","../internals/object-is-prototype-of":"3jtKQ","../internals/an-object":"4isCr","../internals/to-indexed-object":"jLWwQ","../internals/to-property-key":"5XWKd","../internals/to-string":"a1yl4","../internals/create-property-descriptor":"1lpav","../internals/object-create":"duSQE","../internals/object-keys":"kzBf4","../internals/object-get-own-property-names":"fjY04","../internals/object-get-own-property-names-external":"1bojN","../internals/object-get-own-property-symbols":"4DWO3","../internals/object-get-own-property-descriptor":"lk5NI","../internals/object-define-property":"iJR4w","../internals/object-define-properties":"duA6W","../internals/object-property-is-enumerable":"7SuiS","../internals/define-built-in":"6XwEX","../internals/shared":"i1mHK","../internals/shared-key":"eAjGz","../internals/hidden-keys":"661m4","../internals/uid":"a3SEE","../internals/well-known-symbol":"gTwyA","../internals/well-known-symbol-wrapped":"9TrPc","../internals/define-well-known-symbol":"gwaCb","../internals/symbol-define-to-primitive":"cSLvM","../internals/set-to-string-tag":"ffT5i","../internals/internal-state":"7AMlF","../internals/array-iteration":"3NAaU"}],"a1yl4":[function(require,module,exports) {
-var classof = require("../internals/classof");
+},{"ccaf31c9cce5d335":"dIGt4","6b460e7bb6bce607":"i8HOC","d803b53c34054e38":"d7JlP","fd4f6349a10fc5ef":"7GlkT","a4203d8a499c0e81":"5ZsyC","40b002cbadd25088":"92ZIi","d7bc9c0c1f28e2ac":"8KyTD","868457986467cd52":"hL6D2","57aa98b07d417953":"gC2Q5","635207865d8e0c8c":"3jtKQ","54a03103c10973ac":"4isCr","2a32eee51b7ff38d":"jLWwQ","42e6cc45d9bdc0fc":"5XWKd","4d32dc685bc8d761":"a1yl4","18d229b68d8e7149":"1lpav","19753cda4ff54f38":"duSQE","997a922a13e91d14":"kzBf4","53329f552fa37904":"fjY04","9c1372e5bc3df9ff":"1bojN","cef13fe0e98c4344":"4DWO3","13cff6cfc24e0d08":"lk5NI","f781493fedabdbb3":"iJR4w","ec170a76221642e1":"duA6W","a34069fa39f1161c":"7SuiS","693d71d1c29da85f":"6XwEX","864e1327ed1dc4ca":"592rH","ade0781ab98d7de0":"i1mHK","a0f38fa13866b904":"eAjGz","331dd001fc488703":"661m4","7ce829b369b9fcaa":"a3SEE","87a0ba07b1871a86":"gTwyA","f25573917a9ee654":"9TrPc","e03a21dc6792ccc7":"en5fF","6ae952f7eb749ffb":"cSLvM","d06e2243ebf0a3":"ffT5i","7dfac304e648429c":"7AMlF","f581bc6959efaa16":"3NAaU"}],"a1yl4":[function(require,module,exports) {
+var classof = require("2808cb9bb9cbcb09");
 var $String = String;
 module.exports = function(argument) {
     if (classof(argument) === "Symbol") throw TypeError("Cannot convert a Symbol value to a string");
     return $String(argument);
 };
 
-},{"../internals/classof":"dKT7A"}],"duSQE":[function(require,module,exports) {
-/* global ActiveXObject -- old IE, WSH */ var anObject = require("../internals/an-object");
-var definePropertiesModule = require("../internals/object-define-properties");
-var enumBugKeys = require("../internals/enum-bug-keys");
-var hiddenKeys = require("../internals/hidden-keys");
-var html = require("../internals/html");
-var documentCreateElement = require("../internals/document-create-element");
-var sharedKey = require("../internals/shared-key");
+},{"2808cb9bb9cbcb09":"dKT7A"}],"duSQE":[function(require,module,exports) {
+/* global ActiveXObject -- old IE, WSH */ var anObject = require("df3ed9a9e6ab6753");
+var definePropertiesModule = require("93033ac26a4f9ed");
+var enumBugKeys = require("d3cd24c5035fa7ea");
+var hiddenKeys = require("9457fdc20a73ffb2");
+var html = require("934a651f9121a97c");
+var documentCreateElement = require("f6262469c31f1b3d");
+var sharedKey = require("41995e2c8b9093fd");
 var GT = ">";
 var LT = "<";
 var PROTOTYPE = "prototype";
@@ -3235,11 +3348,11 @@ var scriptTag = function(content) {
     return LT + SCRIPT + GT + content + LT + "/" + SCRIPT + GT;
 };
 // Create object with fake `null` prototype: use ActiveX Object with cleared prototype
-var NullProtoObjectViaActiveX = function(activeXDocument1) {
-    activeXDocument1.write(scriptTag(""));
-    activeXDocument1.close();
-    var temp = activeXDocument1.parentWindow.Object;
-    activeXDocument1 = null; // avoid memory leak
+var NullProtoObjectViaActiveX = function(activeXDocument) {
+    activeXDocument.write(scriptTag(""));
+    activeXDocument.close();
+    var temp = activeXDocument.parentWindow.Object;
+    activeXDocument = null; // avoid memory leak
     return temp;
 };
 // Create object with fake `null` prototype: use iframe Object with cleared prototype
@@ -3277,7 +3390,7 @@ var NullProtoObject = function() {
 hiddenKeys[IE_PROTO] = true;
 // `Object.create` method
 // https://tc39.es/ecma262/#sec-object.create
-// eslint-disable-next-line es-x/no-object-create -- safe
+// eslint-disable-next-line es/no-object-create -- safe
 module.exports = Object.create || function create(O, Properties) {
     var result;
     if (O !== null) {
@@ -3290,16 +3403,16 @@ module.exports = Object.create || function create(O, Properties) {
     return Properties === undefined ? result : definePropertiesModule.f(result, Properties);
 };
 
-},{"../internals/an-object":"4isCr","../internals/object-define-properties":"duA6W","../internals/enum-bug-keys":"9RnJm","../internals/hidden-keys":"661m4","../internals/html":"2pze4","../internals/document-create-element":"4bOHl","../internals/shared-key":"eAjGz"}],"duA6W":[function(require,module,exports) {
-var DESCRIPTORS = require("../internals/descriptors");
-var V8_PROTOTYPE_DEFINE_BUG = require("../internals/v8-prototype-define-bug");
-var definePropertyModule = require("../internals/object-define-property");
-var anObject = require("../internals/an-object");
-var toIndexedObject = require("../internals/to-indexed-object");
-var objectKeys = require("../internals/object-keys");
+},{"df3ed9a9e6ab6753":"4isCr","93033ac26a4f9ed":"duA6W","d3cd24c5035fa7ea":"9RnJm","9457fdc20a73ffb2":"661m4","934a651f9121a97c":"2pze4","f6262469c31f1b3d":"4bOHl","41995e2c8b9093fd":"eAjGz"}],"duA6W":[function(require,module,exports) {
+var DESCRIPTORS = require("66f7a9f105ecbc8f");
+var V8_PROTOTYPE_DEFINE_BUG = require("afbbb01454203136");
+var definePropertyModule = require("222afbfe5299170b");
+var anObject = require("19c75874e13ee5a");
+var toIndexedObject = require("1c8a3d86e546fb89");
+var objectKeys = require("ddcc7cc21392ae9d");
 // `Object.defineProperties` method
 // https://tc39.es/ecma262/#sec-object.defineproperties
-// eslint-disable-next-line es-x/no-object-defineproperties -- safe
+// eslint-disable-next-line es/no-object-defineproperties -- safe
 exports.f = DESCRIPTORS && !V8_PROTOTYPE_DEFINE_BUG ? Object.defineProperties : function defineProperties(O, Properties) {
     anObject(O);
     var props = toIndexedObject(Properties);
@@ -3311,25 +3424,25 @@ exports.f = DESCRIPTORS && !V8_PROTOTYPE_DEFINE_BUG ? Object.defineProperties : 
     return O;
 };
 
-},{"../internals/descriptors":"92ZIi","../internals/v8-prototype-define-bug":"ka1Un","../internals/object-define-property":"iJR4w","../internals/an-object":"4isCr","../internals/to-indexed-object":"jLWwQ","../internals/object-keys":"kzBf4"}],"kzBf4":[function(require,module,exports) {
-var internalObjectKeys = require("../internals/object-keys-internal");
-var enumBugKeys = require("../internals/enum-bug-keys");
+},{"66f7a9f105ecbc8f":"92ZIi","afbbb01454203136":"ka1Un","222afbfe5299170b":"iJR4w","19c75874e13ee5a":"4isCr","1c8a3d86e546fb89":"jLWwQ","ddcc7cc21392ae9d":"kzBf4"}],"kzBf4":[function(require,module,exports) {
+var internalObjectKeys = require("7e82c0a17a30eae");
+var enumBugKeys = require("dfecf9a64b4fa04");
 // `Object.keys` method
 // https://tc39.es/ecma262/#sec-object.keys
-// eslint-disable-next-line es-x/no-object-keys -- safe
+// eslint-disable-next-line es/no-object-keys -- safe
 module.exports = Object.keys || function keys(O) {
     return internalObjectKeys(O, enumBugKeys);
 };
 
-},{"../internals/object-keys-internal":"hl5T1","../internals/enum-bug-keys":"9RnJm"}],"2pze4":[function(require,module,exports) {
-var getBuiltIn = require("../internals/get-built-in");
+},{"7e82c0a17a30eae":"hl5T1","dfecf9a64b4fa04":"9RnJm"}],"2pze4":[function(require,module,exports) {
+var getBuiltIn = require("1ee842a3485e4ee");
 module.exports = getBuiltIn("document", "documentElement");
 
-},{"../internals/get-built-in":"6ZUSY"}],"1bojN":[function(require,module,exports) {
-/* eslint-disable es-x/no-object-getownpropertynames -- safe */ var classof = require("../internals/classof-raw");
-var toIndexedObject = require("../internals/to-indexed-object");
-var $getOwnPropertyNames = require("../internals/object-get-own-property-names").f;
-var arraySlice = require("../internals/array-slice-simple");
+},{"1ee842a3485e4ee":"6ZUSY"}],"1bojN":[function(require,module,exports) {
+/* eslint-disable es/no-object-getownpropertynames -- safe */ var classof = require("2c5450a67b6b2b6a");
+var toIndexedObject = require("557c964f36defe02");
+var $getOwnPropertyNames = require("6a420f50fed47933").f;
+var arraySlice = require("e6541078e60ab20a");
 var windowNames = typeof window == "object" && window && Object.getOwnPropertyNames ? Object.getOwnPropertyNames(window) : [];
 var getWindowNames = function(it) {
     try {
@@ -3343,10 +3456,10 @@ module.exports.f = function getOwnPropertyNames(it) {
     return windowNames && classof(it) == "Window" ? getWindowNames(it) : $getOwnPropertyNames(toIndexedObject(it));
 };
 
-},{"../internals/classof-raw":"bdfmm","../internals/to-indexed-object":"jLWwQ","../internals/object-get-own-property-names":"fjY04","../internals/array-slice-simple":"gF6nm"}],"gF6nm":[function(require,module,exports) {
-var toAbsoluteIndex = require("../internals/to-absolute-index");
-var lengthOfArrayLike = require("../internals/length-of-array-like");
-var createProperty = require("../internals/create-property");
+},{"2c5450a67b6b2b6a":"bdfmm","557c964f36defe02":"jLWwQ","6a420f50fed47933":"fjY04","e6541078e60ab20a":"gF6nm"}],"gF6nm":[function(require,module,exports) {
+var toAbsoluteIndex = require("6f452d4df15fbbb9");
+var lengthOfArrayLike = require("a129614e9415b019");
+var createProperty = require("e2e6bc1e89991862");
 var $Array = Array;
 var max = Math.max;
 module.exports = function(O, start, end) {
@@ -3359,15 +3472,28 @@ module.exports = function(O, start, end) {
     return result;
 };
 
-},{"../internals/to-absolute-index":"5yh27","../internals/length-of-array-like":"lY4mS","../internals/create-property":"76HND"}],"9TrPc":[function(require,module,exports) {
-var wellKnownSymbol = require("../internals/well-known-symbol");
+},{"6f452d4df15fbbb9":"5yh27","a129614e9415b019":"lY4mS","e2e6bc1e89991862":"76HND"}],"592rH":[function(require,module,exports) {
+var makeBuiltIn = require("6024f6bb15f15ff2");
+var defineProperty = require("225c71d8e3fea98");
+module.exports = function(target, name, descriptor) {
+    if (descriptor.get) makeBuiltIn(descriptor.get, name, {
+        getter: true
+    });
+    if (descriptor.set) makeBuiltIn(descriptor.set, name, {
+        setter: true
+    });
+    return defineProperty.f(target, name, descriptor);
+};
+
+},{"6024f6bb15f15ff2":"cTB4k","225c71d8e3fea98":"iJR4w"}],"9TrPc":[function(require,module,exports) {
+var wellKnownSymbol = require("1c212760d52f74f3");
 exports.f = wellKnownSymbol;
 
-},{"../internals/well-known-symbol":"gTwyA"}],"gwaCb":[function(require,module,exports) {
-var path = require("../internals/path");
-var hasOwn = require("../internals/has-own-property");
-var wrappedWellKnownSymbolModule = require("../internals/well-known-symbol-wrapped");
-var defineProperty = require("../internals/object-define-property").f;
+},{"1c212760d52f74f3":"gTwyA"}],"en5fF":[function(require,module,exports) {
+var path = require("cff6d2f3d4f1d93e");
+var hasOwn = require("114efa5ceef39bdc");
+var wrappedWellKnownSymbolModule = require("21b2d327ea357fa9");
+var defineProperty = require("d7207beac92abf90").f;
 module.exports = function(NAME) {
     var Symbol = path.Symbol || (path.Symbol = {});
     if (!hasOwn(Symbol, NAME)) defineProperty(Symbol, NAME, {
@@ -3375,15 +3501,15 @@ module.exports = function(NAME) {
     });
 };
 
-},{"../internals/path":"gKjqB","../internals/has-own-property":"gC2Q5","../internals/well-known-symbol-wrapped":"9TrPc","../internals/object-define-property":"iJR4w"}],"gKjqB":[function(require,module,exports) {
-var global = require("../internals/global");
+},{"cff6d2f3d4f1d93e":"gKjqB","114efa5ceef39bdc":"gC2Q5","21b2d327ea357fa9":"9TrPc","d7207beac92abf90":"iJR4w"}],"gKjqB":[function(require,module,exports) {
+var global = require("3f92601ddad372f9");
 module.exports = global;
 
-},{"../internals/global":"i8HOC"}],"cSLvM":[function(require,module,exports) {
-var call = require("../internals/function-call");
-var getBuiltIn = require("../internals/get-built-in");
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var defineBuiltIn = require("../internals/define-built-in");
+},{"3f92601ddad372f9":"i8HOC"}],"cSLvM":[function(require,module,exports) {
+var call = require("9339041e12eb7040");
+var getBuiltIn = require("6475a7102c847a44");
+var wellKnownSymbol = require("c25d417b87746b8f");
+var defineBuiltIn = require("583fa8b3c970c268");
 module.exports = function() {
     var Symbol = getBuiltIn("Symbol");
     var SymbolPrototype = Symbol && Symbol.prototype;
@@ -3399,10 +3525,10 @@ module.exports = function() {
     });
 };
 
-},{"../internals/function-call":"d7JlP","../internals/get-built-in":"6ZUSY","../internals/well-known-symbol":"gTwyA","../internals/define-built-in":"6XwEX"}],"ffT5i":[function(require,module,exports) {
-var defineProperty = require("../internals/object-define-property").f;
-var hasOwn = require("../internals/has-own-property");
-var wellKnownSymbol = require("../internals/well-known-symbol");
+},{"9339041e12eb7040":"d7JlP","6475a7102c847a44":"6ZUSY","c25d417b87746b8f":"gTwyA","583fa8b3c970c268":"6XwEX"}],"ffT5i":[function(require,module,exports) {
+var defineProperty = require("d7c666ea39a2c8d2").f;
+var hasOwn = require("86f5749850af9c5e");
+var wellKnownSymbol = require("59f735048dec171a");
 var TO_STRING_TAG = wellKnownSymbol("toStringTag");
 module.exports = function(target, TAG, STATIC) {
     if (target && !STATIC) target = target.prototype;
@@ -3412,13 +3538,13 @@ module.exports = function(target, TAG, STATIC) {
     });
 };
 
-},{"../internals/object-define-property":"iJR4w","../internals/has-own-property":"gC2Q5","../internals/well-known-symbol":"gTwyA"}],"3NAaU":[function(require,module,exports) {
-var bind = require("../internals/function-bind-context");
-var uncurryThis = require("../internals/function-uncurry-this");
-var IndexedObject = require("../internals/indexed-object");
-var toObject = require("../internals/to-object");
-var lengthOfArrayLike = require("../internals/length-of-array-like");
-var arraySpeciesCreate = require("../internals/array-species-create");
+},{"d7c666ea39a2c8d2":"iJR4w","86f5749850af9c5e":"gC2Q5","59f735048dec171a":"gTwyA"}],"3NAaU":[function(require,module,exports) {
+var bind = require("ad0386a73ceac67e");
+var uncurryThis = require("200bd021b889bb02");
+var IndexedObject = require("5cee4908f5aa2f5a");
+var toObject = require("76fdc2babcf11eb6");
+var lengthOfArrayLike = require("19556a33050897e4");
+var arraySpeciesCreate = require("f37a04c141b24eae");
 var push = uncurryThis([].push);
 // `Array.prototype.{ forEach, map, filter, some, every, find, findIndex, filterReject }` methods implementation
 var createMethod = function(TYPE) {
@@ -3491,10 +3617,10 @@ module.exports = {
     filterReject: createMethod(7)
 };
 
-},{"../internals/function-bind-context":"7vpmS","../internals/function-uncurry-this":"7GlkT","../internals/indexed-object":"kPk5h","../internals/to-object":"5cb35","../internals/length-of-array-like":"lY4mS","../internals/array-species-create":"27bo1"}],"7vpmS":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
-var aCallable = require("../internals/a-callable");
-var NATIVE_BIND = require("../internals/function-bind-native");
+},{"ad0386a73ceac67e":"7vpmS","200bd021b889bb02":"7GlkT","5cee4908f5aa2f5a":"kPk5h","76fdc2babcf11eb6":"5cb35","19556a33050897e4":"lY4mS","f37a04c141b24eae":"27bo1"}],"7vpmS":[function(require,module,exports) {
+var uncurryThis = require("76b6bc5028a723e");
+var aCallable = require("63d48ede6017a8e0");
+var NATIVE_BIND = require("6ff2fbd201c17bbd");
 var bind = uncurryThis(uncurryThis.bind);
 // optional / simple context binding
 module.exports = function(fn, that) {
@@ -3504,13 +3630,23 @@ module.exports = function(fn, that) {
     };
 };
 
-},{"../internals/function-uncurry-this":"7GlkT","../internals/a-callable":"gOMir","../internals/function-bind-native":"i16Dq"}],"d29gK":[function(require,module,exports) {
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var hasOwn = require("../internals/has-own-property");
-var toString = require("../internals/to-string");
-var shared = require("../internals/shared");
-var NATIVE_SYMBOL_REGISTRY = require("../internals/native-symbol-registry");
+},{"76b6bc5028a723e":"5Hioa","63d48ede6017a8e0":"gOMir","6ff2fbd201c17bbd":"i16Dq"}],"5Hioa":[function(require,module,exports) {
+var classofRaw = require("af299407bd3d7816");
+var uncurryThis = require("89983071c29708c0");
+module.exports = function(fn) {
+    // Nashorn bug:
+    //   https://github.com/zloirock/core-js/issues/1128
+    //   https://github.com/zloirock/core-js/issues/1130
+    if (classofRaw(fn) === "Function") return uncurryThis(fn);
+};
+
+},{"af299407bd3d7816":"bdfmm","89983071c29708c0":"7GlkT"}],"d29gK":[function(require,module,exports) {
+var $ = require("a46eb5d4319cbfc0");
+var getBuiltIn = require("bb67461f326cc09b");
+var hasOwn = require("1cfc1a4a82808a41");
+var toString = require("6001407859bf6405");
+var shared = require("126444dae654d685");
+var NATIVE_SYMBOL_REGISTRY = require("407545a8d94c86bd");
 var StringToSymbolRegistry = shared("string-to-symbol-registry");
 var SymbolToStringRegistry = shared("symbol-to-string-registry");
 // `Symbol.for` method
@@ -3530,17 +3666,17 @@ $({
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/has-own-property":"gC2Q5","../internals/to-string":"a1yl4","../internals/shared":"i1mHK","../internals/native-symbol-registry":"9SgBi"}],"9SgBi":[function(require,module,exports) {
-var NATIVE_SYMBOL = require("../internals/native-symbol");
-/* eslint-disable es-x/no-symbol -- safe */ module.exports = NATIVE_SYMBOL && !!Symbol["for"] && !!Symbol.keyFor;
+},{"a46eb5d4319cbfc0":"dIGt4","bb67461f326cc09b":"6ZUSY","1cfc1a4a82808a41":"gC2Q5","6001407859bf6405":"a1yl4","126444dae654d685":"i1mHK","407545a8d94c86bd":"huYqp"}],"huYqp":[function(require,module,exports) {
+var NATIVE_SYMBOL = require("eb59abe30b4abd49");
+/* eslint-disable es/no-symbol -- safe */ module.exports = NATIVE_SYMBOL && !!Symbol["for"] && !!Symbol.keyFor;
 
-},{"../internals/native-symbol":"grUXC"}],"iUB0I":[function(require,module,exports) {
-var $ = require("../internals/export");
-var hasOwn = require("../internals/has-own-property");
-var isSymbol = require("../internals/is-symbol");
-var tryToString = require("../internals/try-to-string");
-var shared = require("../internals/shared");
-var NATIVE_SYMBOL_REGISTRY = require("../internals/native-symbol-registry");
+},{"eb59abe30b4abd49":"8KyTD"}],"iUB0I":[function(require,module,exports) {
+var $ = require("601fe767309e77a4");
+var hasOwn = require("2d920e9419549be5");
+var isSymbol = require("97598319a82cda52");
+var tryToString = require("849da17f85e1604e");
+var shared = require("123f0ab86d5ccd07");
+var NATIVE_SYMBOL_REGISTRY = require("eb186ca6551caef6");
 var SymbolToStringRegistry = shared("symbol-to-string-registry");
 // `Symbol.keyFor` method
 // https://tc39.es/ecma262/#sec-symbol.keyfor
@@ -3555,19 +3691,19 @@ $({
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/has-own-property":"gC2Q5","../internals/is-symbol":"4aV4F","../internals/try-to-string":"4O7d7","../internals/shared":"i1mHK","../internals/native-symbol-registry":"9SgBi"}],"1kdiO":[function(require,module,exports) {
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var apply = require("../internals/function-apply");
-var call = require("../internals/function-call");
-var uncurryThis = require("../internals/function-uncurry-this");
-var fails = require("../internals/fails");
-var isArray = require("../internals/is-array");
-var isCallable = require("../internals/is-callable");
-var isObject = require("../internals/is-object");
-var isSymbol = require("../internals/is-symbol");
-var arraySlice = require("../internals/array-slice");
-var NATIVE_SYMBOL = require("../internals/native-symbol");
+},{"601fe767309e77a4":"dIGt4","2d920e9419549be5":"gC2Q5","97598319a82cda52":"4aV4F","849da17f85e1604e":"4O7d7","123f0ab86d5ccd07":"i1mHK","eb186ca6551caef6":"huYqp"}],"1kdiO":[function(require,module,exports) {
+var $ = require("7a56ece4abfd0315");
+var getBuiltIn = require("63549a2a38630c51");
+var apply = require("963965ccec37d421");
+var call = require("e2f6ab07cf7a5663");
+var uncurryThis = require("32175bcd5a34d13a");
+var fails = require("29431ca392ac3563");
+var isCallable = require("d069316fcf07d362");
+var isSymbol = require("eedf064951c667b");
+var arraySlice = require("deef71e5404e00ac");
+var getReplacerFunction = require("19c4e6e0e5618a30");
+var NATIVE_SYMBOL = require("e0c9530766b9b350");
+var $String = String;
 var $stringify = getBuiltIn("JSON", "stringify");
 var exec = uncurryThis(/./.exec);
 var charAt = uncurryThis("".charAt);
@@ -3592,13 +3728,13 @@ var ILL_FORMED_UNICODE = fails(function() {
 });
 var stringifyWithSymbolsFix = function(it, replacer) {
     var args = arraySlice(arguments);
-    var $replacer = replacer;
-    if (!isObject(replacer) && it === undefined || isSymbol(it)) return; // IE8 returns string on undefined
-    if (!isArray(replacer)) replacer = function(key, value) {
-        if (isCallable($replacer)) value = call($replacer, this, key, value);
+    var $replacer = getReplacerFunction(replacer);
+    if (!isCallable($replacer) && (it === undefined || isSymbol(it))) return; // IE8 returns string on undefined
+    args[1] = function(key, value) {
+        // some old implementations (like WebKit) could pass numbers as keys
+        if (isCallable($replacer)) value = call($replacer, this, $String(key), value);
         if (!isSymbol(value)) return value;
     };
-    args[1] = replacer;
     return apply($stringify, null, args);
 };
 var fixIllFormed = function(match, offset, string) {
@@ -3623,26 +3759,55 @@ $({
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-apply":"148ka","../internals/function-call":"d7JlP","../internals/function-uncurry-this":"7GlkT","../internals/fails":"hL6D2","../internals/is-array":"iZ18O","../internals/is-callable":"l3Kyn","../internals/is-object":"Z0pBo","../internals/is-symbol":"4aV4F","../internals/array-slice":"RsFXo","../internals/native-symbol":"grUXC"}],"148ka":[function(require,module,exports) {
-var NATIVE_BIND = require("../internals/function-bind-native");
+},{"7a56ece4abfd0315":"dIGt4","63549a2a38630c51":"6ZUSY","963965ccec37d421":"148ka","e2f6ab07cf7a5663":"d7JlP","32175bcd5a34d13a":"7GlkT","29431ca392ac3563":"hL6D2","d069316fcf07d362":"l3Kyn","eedf064951c667b":"4aV4F","deef71e5404e00ac":"RsFXo","19c4e6e0e5618a30":"gw5vO","e0c9530766b9b350":"8KyTD"}],"148ka":[function(require,module,exports) {
+var NATIVE_BIND = require("1a8d4bbedc3082b3");
 var FunctionPrototype = Function.prototype;
 var apply = FunctionPrototype.apply;
 var call = FunctionPrototype.call;
-// eslint-disable-next-line es-x/no-reflect -- safe
+// eslint-disable-next-line es/no-reflect -- safe
 module.exports = typeof Reflect == "object" && Reflect.apply || (NATIVE_BIND ? call.bind(apply) : function() {
     return call.apply(apply, arguments);
 });
 
-},{"../internals/function-bind-native":"i16Dq"}],"RsFXo":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
+},{"1a8d4bbedc3082b3":"i16Dq"}],"RsFXo":[function(require,module,exports) {
+var uncurryThis = require("e7a0f701a08a985b");
 module.exports = uncurryThis([].slice);
 
-},{"../internals/function-uncurry-this":"7GlkT"}],"cMwHd":[function(require,module,exports) {
-var $ = require("../internals/export");
-var NATIVE_SYMBOL = require("../internals/native-symbol");
-var fails = require("../internals/fails");
-var getOwnPropertySymbolsModule = require("../internals/object-get-own-property-symbols");
-var toObject = require("../internals/to-object");
+},{"e7a0f701a08a985b":"7GlkT"}],"gw5vO":[function(require,module,exports) {
+var uncurryThis = require("4ecfb4447dfa2b39");
+var isArray = require("920e8fb9a9bcba0a");
+var isCallable = require("81144d9eb90217a9");
+var classof = require("8ed4470d6f49df7");
+var toString = require("3825ea00d5771c41");
+var push = uncurryThis([].push);
+module.exports = function(replacer) {
+    if (isCallable(replacer)) return replacer;
+    if (!isArray(replacer)) return;
+    var rawLength = replacer.length;
+    var keys = [];
+    for(var i = 0; i < rawLength; i++){
+        var element = replacer[i];
+        if (typeof element == "string") push(keys, element);
+        else if (typeof element == "number" || classof(element) == "Number" || classof(element) == "String") push(keys, toString(element));
+    }
+    var keysLength = keys.length;
+    var root = true;
+    return function(key, value) {
+        if (root) {
+            root = false;
+            return value;
+        }
+        if (isArray(this)) return value;
+        for(var j = 0; j < keysLength; j++)if (keys[j] === key) return value;
+    };
+};
+
+},{"4ecfb4447dfa2b39":"7GlkT","920e8fb9a9bcba0a":"iZ18O","81144d9eb90217a9":"l3Kyn","8ed4470d6f49df7":"bdfmm","3825ea00d5771c41":"a1yl4"}],"cMwHd":[function(require,module,exports) {
+var $ = require("b83eb96451ad7380");
+var NATIVE_SYMBOL = require("6a0038cd5e0c7186");
+var fails = require("1c1bf1b6dd774b49");
+var getOwnPropertySymbolsModule = require("dd1bbe77a1a7d4af");
+var toObject = require("b7d8617b1c41b357");
 // V8 ~ Chrome 38 and 39 `Object.getOwnPropertySymbols` fails on primitives
 // https://bugs.chromium.org/p/v8/issues/detail?id=3443
 var FORCED = !NATIVE_SYMBOL || fails(function() {
@@ -3661,26 +3826,26 @@ $({
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/native-symbol":"grUXC","../internals/fails":"hL6D2","../internals/object-get-own-property-symbols":"4DWO3","../internals/to-object":"5cb35"}],"RU9Zf":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"b83eb96451ad7380":"dIGt4","6a0038cd5e0c7186":"8KyTD","1c1bf1b6dd774b49":"hL6D2","dd1bbe77a1a7d4af":"4DWO3","b7d8617b1c41b357":"5cb35"}],"RU9Zf":[function(require,module,exports) {
+var defineWellKnownSymbol = require("c1c04cd086459b34");
 // `Symbol.asyncIterator` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.asynciterator
 defineWellKnownSymbol("asyncIterator");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"9PnxW":[function(require,module,exports) {
+},{"c1c04cd086459b34":"en5fF"}],"9PnxW":[function(require,module,exports) {
 // `Symbol.prototype.description` getter
 // https://tc39.es/ecma262/#sec-symbol.prototype.description
 "use strict";
-var $ = require("../internals/export");
-var DESCRIPTORS = require("../internals/descriptors");
-var global = require("../internals/global");
-var uncurryThis = require("../internals/function-uncurry-this");
-var hasOwn = require("../internals/has-own-property");
-var isCallable = require("../internals/is-callable");
-var isPrototypeOf = require("../internals/object-is-prototype-of");
-var toString = require("../internals/to-string");
-var defineProperty = require("../internals/object-define-property").f;
-var copyConstructorProperties = require("../internals/copy-constructor-properties");
+var $ = require("33ebe68119625617");
+var DESCRIPTORS = require("719e9518d3906fda");
+var global = require("fbcdb9c84a4eedde");
+var uncurryThis = require("ea5bce035bd81245");
+var hasOwn = require("c632ad8f0ca2134c");
+var isCallable = require("ea751e750d4fbf3");
+var isPrototypeOf = require("94fa0d951dd8964e");
+var toString = require("bf9520bffebab793");
+var defineBuiltInAccessor = require("c75086312adbe3df");
+var copyConstructorProperties = require("4855135e8c0e7544");
 var NativeSymbol = global.Symbol;
 var SymbolPrototype = NativeSymbol && NativeSymbol.prototype;
 if (DESCRIPTORS && isCallable(NativeSymbol) && (!("description" in SymbolPrototype) || // Safari 12 bug
@@ -3697,17 +3862,17 @@ NativeSymbol().description !== undefined)) {
     SymbolWrapper.prototype = SymbolPrototype;
     SymbolPrototype.constructor = SymbolWrapper;
     var NATIVE_SYMBOL = String(NativeSymbol("test")) == "Symbol(test)";
-    var symbolToString = uncurryThis(SymbolPrototype.toString);
-    var symbolValueOf = uncurryThis(SymbolPrototype.valueOf);
+    var thisSymbolValue = uncurryThis(SymbolPrototype.valueOf);
+    var symbolDescriptiveString = uncurryThis(SymbolPrototype.toString);
     var regexp = /^Symbol\((.*)\)[^)]+$/;
     var replace = uncurryThis("".replace);
     var stringSlice = uncurryThis("".slice);
-    defineProperty(SymbolPrototype, "description", {
+    defineBuiltInAccessor(SymbolPrototype, "description", {
         configurable: true,
         get: function description() {
-            var symbol = symbolValueOf(this);
-            var string = symbolToString(symbol);
+            var symbol = thisSymbolValue(this);
             if (hasOwn(EmptyStringDescriptionStore, symbol)) return "";
+            var string = symbolDescriptiveString(symbol);
             var desc = NATIVE_SYMBOL ? stringSlice(string, 7, -1) : replace(string, regexp, "$1");
             return desc === "" ? undefined : desc;
         }
@@ -3721,63 +3886,63 @@ NativeSymbol().description !== undefined)) {
     });
 }
 
-},{"../internals/export":"dIGt4","../internals/descriptors":"92ZIi","../internals/global":"i8HOC","../internals/function-uncurry-this":"7GlkT","../internals/has-own-property":"gC2Q5","../internals/is-callable":"l3Kyn","../internals/object-is-prototype-of":"3jtKQ","../internals/to-string":"a1yl4","../internals/object-define-property":"iJR4w","../internals/copy-constructor-properties":"9Z12i"}],"9uKu1":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"33ebe68119625617":"dIGt4","719e9518d3906fda":"92ZIi","fbcdb9c84a4eedde":"i8HOC","ea5bce035bd81245":"7GlkT","c632ad8f0ca2134c":"gC2Q5","ea751e750d4fbf3":"l3Kyn","94fa0d951dd8964e":"3jtKQ","bf9520bffebab793":"a1yl4","c75086312adbe3df":"592rH","4855135e8c0e7544":"9Z12i"}],"9uKu1":[function(require,module,exports) {
+var defineWellKnownSymbol = require("f19a534c9c8a1db4");
 // `Symbol.hasInstance` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.hasinstance
 defineWellKnownSymbol("hasInstance");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"fCzth":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"f19a534c9c8a1db4":"en5fF"}],"fCzth":[function(require,module,exports) {
+var defineWellKnownSymbol = require("ea5851c75f254b99");
 // `Symbol.isConcatSpreadable` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.isconcatspreadable
 defineWellKnownSymbol("isConcatSpreadable");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"i3PKT":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"ea5851c75f254b99":"en5fF"}],"i3PKT":[function(require,module,exports) {
+var defineWellKnownSymbol = require("341914aa97e74695");
 // `Symbol.iterator` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.iterator
 defineWellKnownSymbol("iterator");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"hWT2K":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"341914aa97e74695":"en5fF"}],"hWT2K":[function(require,module,exports) {
+var defineWellKnownSymbol = require("6f05f889accff81f");
 // `Symbol.match` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.match
 defineWellKnownSymbol("match");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"a5lqJ":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"6f05f889accff81f":"en5fF"}],"a5lqJ":[function(require,module,exports) {
+var defineWellKnownSymbol = require("aa2e468d1486e88c");
 // `Symbol.matchAll` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.matchall
 defineWellKnownSymbol("matchAll");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"5wvK6":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"aa2e468d1486e88c":"en5fF"}],"5wvK6":[function(require,module,exports) {
+var defineWellKnownSymbol = require("1eb8a3e1f18444b5");
 // `Symbol.replace` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.replace
 defineWellKnownSymbol("replace");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"6VGtU":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"1eb8a3e1f18444b5":"en5fF"}],"6VGtU":[function(require,module,exports) {
+var defineWellKnownSymbol = require("5d4ad432a0579346");
 // `Symbol.search` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.search
 defineWellKnownSymbol("search");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"jxmZY":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"5d4ad432a0579346":"en5fF"}],"jxmZY":[function(require,module,exports) {
+var defineWellKnownSymbol = require("ab1e4428dc25a93f");
 // `Symbol.species` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.species
 defineWellKnownSymbol("species");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"j3TNE":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"ab1e4428dc25a93f":"en5fF"}],"j3TNE":[function(require,module,exports) {
+var defineWellKnownSymbol = require("9dcc090d8d89ee64");
 // `Symbol.split` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.split
 defineWellKnownSymbol("split");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"72eMP":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
-var defineSymbolToPrimitive = require("../internals/symbol-define-to-primitive");
+},{"9dcc090d8d89ee64":"en5fF"}],"72eMP":[function(require,module,exports) {
+var defineWellKnownSymbol = require("53e42624c5b44b00");
+var defineSymbolToPrimitive = require("d2bc7e5aaf0e5c7");
 // `Symbol.toPrimitive` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.toprimitive
 defineWellKnownSymbol("toPrimitive");
@@ -3785,10 +3950,10 @@ defineWellKnownSymbol("toPrimitive");
 // https://tc39.es/ecma262/#sec-symbol.prototype-@@toprimitive
 defineSymbolToPrimitive();
 
-},{"../internals/define-well-known-symbol":"gwaCb","../internals/symbol-define-to-primitive":"cSLvM"}],"jRTLb":[function(require,module,exports) {
-var getBuiltIn = require("../internals/get-built-in");
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
-var setToStringTag = require("../internals/set-to-string-tag");
+},{"53e42624c5b44b00":"en5fF","d2bc7e5aaf0e5c7":"cSLvM"}],"jRTLb":[function(require,module,exports) {
+var getBuiltIn = require("b4da8963474db8dd");
+var defineWellKnownSymbol = require("a0d301c603a88fc0");
+var setToStringTag = require("282cb5b1855b28f3");
 // `Symbol.toStringTag` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.tostringtag
 defineWellKnownSymbol("toStringTag");
@@ -3796,29 +3961,29 @@ defineWellKnownSymbol("toStringTag");
 // https://tc39.es/ecma262/#sec-symbol.prototype-@@tostringtag
 setToStringTag(getBuiltIn("Symbol"), "Symbol");
 
-},{"../internals/get-built-in":"6ZUSY","../internals/define-well-known-symbol":"gwaCb","../internals/set-to-string-tag":"ffT5i"}],"dkEbD":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"b4da8963474db8dd":"6ZUSY","a0d301c603a88fc0":"en5fF","282cb5b1855b28f3":"ffT5i"}],"dkEbD":[function(require,module,exports) {
+var defineWellKnownSymbol = require("46834d74e177e176");
 // `Symbol.unscopables` well-known symbol
 // https://tc39.es/ecma262/#sec-symbol.unscopables
 defineWellKnownSymbol("unscopables");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"5v5yi":[function(require,module,exports) {
-var global = require("../internals/global");
-var setToStringTag = require("../internals/set-to-string-tag");
+},{"46834d74e177e176":"en5fF"}],"5v5yi":[function(require,module,exports) {
+var global = require("3affb8964a67fa7a");
+var setToStringTag = require("19cba45a9e1c0211");
 // JSON[@@toStringTag] property
 // https://tc39.es/ecma262/#sec-json-@@tostringtag
 setToStringTag(global.JSON, "JSON", true);
 
-},{"../internals/global":"i8HOC","../internals/set-to-string-tag":"ffT5i"}],"7b0UU":[function(require,module,exports) {
-var setToStringTag = require("../internals/set-to-string-tag");
+},{"3affb8964a67fa7a":"i8HOC","19cba45a9e1c0211":"ffT5i"}],"7b0UU":[function(require,module,exports) {
+var setToStringTag = require("d4244ccb2c2e5c59");
 // Math[@@toStringTag] property
 // https://tc39.es/ecma262/#sec-math-@@tostringtag
 setToStringTag(Math, "Math", true);
 
-},{"../internals/set-to-string-tag":"ffT5i"}],"2qZLg":[function(require,module,exports) {
-var $ = require("../internals/export");
-var global = require("../internals/global");
-var setToStringTag = require("../internals/set-to-string-tag");
+},{"d4244ccb2c2e5c59":"ffT5i"}],"2qZLg":[function(require,module,exports) {
+var $ = require("54e9cc91fd6d5d32");
+var global = require("7273769a460bce50");
+var setToStringTag = require("fec3d890bf44b25e");
 $({
     global: true
 }, {
@@ -3828,17 +3993,17 @@ $({
 // https://tc39.es/ecma262/#sec-reflect-@@tostringtag
 setToStringTag(global.Reflect, "Reflect", true);
 
-},{"../internals/export":"dIGt4","../internals/global":"i8HOC","../internals/set-to-string-tag":"ffT5i"}],"3YhYU":[function(require,module,exports) {
-var global = require("../internals/global");
-var DOMIterables = require("../internals/dom-iterables");
-var DOMTokenListPrototype = require("../internals/dom-token-list-prototype");
-var ArrayIteratorMethods = require("../modules/es.array.iterator");
-var createNonEnumerableProperty = require("../internals/create-non-enumerable-property");
-var wellKnownSymbol = require("../internals/well-known-symbol");
+},{"54e9cc91fd6d5d32":"dIGt4","7273769a460bce50":"i8HOC","fec3d890bf44b25e":"ffT5i"}],"3YhYU":[function(require,module,exports) {
+var global = require("1c9416e9c234e710");
+var DOMIterables = require("308348b7e6d6f808");
+var DOMTokenListPrototype = require("3ed663a9504a6131");
+var ArrayIteratorMethods = require("bae0435806be2682");
+var createNonEnumerableProperty = require("64dcd3c2ee723330");
+var wellKnownSymbol = require("c0e2e08512b2f6aa");
 var ITERATOR = wellKnownSymbol("iterator");
 var TO_STRING_TAG = wellKnownSymbol("toStringTag");
 var ArrayValues = ArrayIteratorMethods.values;
-var handlePrototype = function(CollectionPrototype, COLLECTION_NAME1) {
+var handlePrototype = function(CollectionPrototype, COLLECTION_NAME) {
     if (CollectionPrototype) {
         // some Chrome versions have non-configurable methods on DOMTokenList
         if (CollectionPrototype[ITERATOR] !== ArrayValues) try {
@@ -3846,8 +4011,8 @@ var handlePrototype = function(CollectionPrototype, COLLECTION_NAME1) {
         } catch (error) {
             CollectionPrototype[ITERATOR] = ArrayValues;
         }
-        if (!CollectionPrototype[TO_STRING_TAG]) createNonEnumerableProperty(CollectionPrototype, TO_STRING_TAG, COLLECTION_NAME1);
-        if (DOMIterables[COLLECTION_NAME1]) for(var METHOD_NAME in ArrayIteratorMethods){
+        if (!CollectionPrototype[TO_STRING_TAG]) createNonEnumerableProperty(CollectionPrototype, TO_STRING_TAG, COLLECTION_NAME);
+        if (DOMIterables[COLLECTION_NAME]) for(var METHOD_NAME in ArrayIteratorMethods){
             // some Chrome versions have non-configurable methods on DOMTokenList
             if (CollectionPrototype[METHOD_NAME] !== ArrayIteratorMethods[METHOD_NAME]) try {
                 createNonEnumerableProperty(CollectionPrototype, METHOD_NAME, ArrayIteratorMethods[METHOD_NAME]);
@@ -3860,7 +4025,7 @@ var handlePrototype = function(CollectionPrototype, COLLECTION_NAME1) {
 for(var COLLECTION_NAME in DOMIterables)handlePrototype(global[COLLECTION_NAME] && global[COLLECTION_NAME].prototype, COLLECTION_NAME);
 handlePrototype(DOMTokenListPrototype, "DOMTokenList");
 
-},{"../internals/global":"i8HOC","../internals/dom-iterables":"iy1lG","../internals/dom-token-list-prototype":"cIqNV","../modules/es.array.iterator":"dFlRN","../internals/create-non-enumerable-property":"8CL42","../internals/well-known-symbol":"gTwyA"}],"iy1lG":[function(require,module,exports) {
+},{"1c9416e9c234e710":"i8HOC","308348b7e6d6f808":"iy1lG","3ed663a9504a6131":"cIqNV","bae0435806be2682":"dFlRN","64dcd3c2ee723330":"8CL42","c0e2e08512b2f6aa":"gTwyA"}],"iy1lG":[function(require,module,exports) {
 // iterable DOM collections
 // flag - `iterable` interface - 'entries', 'keys', 'values', 'forEach' methods
 module.exports = {
@@ -3899,21 +4064,22 @@ module.exports = {
 
 },{}],"cIqNV":[function(require,module,exports) {
 // in old WebKit versions, `element.classList` is not an instance of global `DOMTokenList`
-var documentCreateElement = require("../internals/document-create-element");
+var documentCreateElement = require("361dcaa79eac276c");
 var classList = documentCreateElement("span").classList;
 var DOMTokenListPrototype = classList && classList.constructor && classList.constructor.prototype;
 module.exports = DOMTokenListPrototype === Object.prototype ? undefined : DOMTokenListPrototype;
 
-},{"../internals/document-create-element":"4bOHl"}],"dFlRN":[function(require,module,exports) {
+},{"361dcaa79eac276c":"4bOHl"}],"dFlRN":[function(require,module,exports) {
 "use strict";
-var toIndexedObject = require("../internals/to-indexed-object");
-var addToUnscopables = require("../internals/add-to-unscopables");
-var Iterators = require("../internals/iterators");
-var InternalStateModule = require("../internals/internal-state");
-var defineProperty = require("../internals/object-define-property").f;
-var defineIterator = require("../internals/define-iterator");
-var IS_PURE = require("../internals/is-pure");
-var DESCRIPTORS = require("../internals/descriptors");
+var toIndexedObject = require("e4b564cd3a31d721");
+var addToUnscopables = require("7c0ca22f3ee55792");
+var Iterators = require("2be8c9b7e5423968");
+var InternalStateModule = require("f38bb13de8a30cdc");
+var defineProperty = require("19276fc503feebe4").f;
+var defineIterator = require("22f9e94bd0a8156e");
+var createIterResultObject = require("6c11c5f6b65ae2bb");
+var IS_PURE = require("2610a4fc5b354a61");
+var DESCRIPTORS = require("e2cbd2768fd88c90");
 var ARRAY_ITERATOR = "Array Iterator";
 var setInternalState = InternalStateModule.set;
 var getInternalState = InternalStateModule.getterFor(ARRAY_ITERATOR);
@@ -3943,26 +4109,14 @@ module.exports = defineIterator(Array, "Array", function(iterated, kind) {
     var index = state.index++;
     if (!target || index >= target.length) {
         state.target = undefined;
-        return {
-            value: undefined,
-            done: true
-        };
+        return createIterResultObject(undefined, true);
     }
-    if (kind == "keys") return {
-        value: index,
-        done: false
-    };
-    if (kind == "values") return {
-        value: target[index],
-        done: false
-    };
-    return {
-        value: [
-            index,
-            target[index]
-        ],
-        done: false
-    };
+    if (kind == "keys") return createIterResultObject(index, false);
+    if (kind == "values") return createIterResultObject(target[index], false);
+    return createIterResultObject([
+        index,
+        target[index]
+    ], false);
 }, "values");
 // argumentsList[@@iterator] is %ArrayProto_values%
 // https://tc39.es/ecma262/#sec-createunmappedargumentsobject
@@ -3979,10 +4133,10 @@ if (!IS_PURE && DESCRIPTORS && values.name !== "values") try {
     });
 } catch (error) {}
 
-},{"../internals/to-indexed-object":"jLWwQ","../internals/add-to-unscopables":"jx7ej","../internals/iterators":"30XHR","../internals/internal-state":"7AMlF","../internals/object-define-property":"iJR4w","../internals/define-iterator":"gHDuw","../internals/is-pure":"5ZsyC","../internals/descriptors":"92ZIi"}],"jx7ej":[function(require,module,exports) {
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var create = require("../internals/object-create");
-var defineProperty = require("../internals/object-define-property").f;
+},{"e4b564cd3a31d721":"jLWwQ","7c0ca22f3ee55792":"jx7ej","2be8c9b7e5423968":"30XHR","f38bb13de8a30cdc":"7AMlF","19276fc503feebe4":"iJR4w","22f9e94bd0a8156e":"i2KIH","6c11c5f6b65ae2bb":"5DJos","2610a4fc5b354a61":"5ZsyC","e2cbd2768fd88c90":"92ZIi"}],"jx7ej":[function(require,module,exports) {
+var wellKnownSymbol = require("519456790e3975c0");
+var create = require("c8ecbb7aa91d0ad1");
+var defineProperty = require("19925bca980d9059").f;
 var UNSCOPABLES = wellKnownSymbol("unscopables");
 var ArrayPrototype = Array.prototype;
 // Array.prototype[@@unscopables]
@@ -3996,25 +4150,25 @@ module.exports = function(key) {
     ArrayPrototype[UNSCOPABLES][key] = true;
 };
 
-},{"../internals/well-known-symbol":"gTwyA","../internals/object-create":"duSQE","../internals/object-define-property":"iJR4w"}],"30XHR":[function(require,module,exports) {
+},{"519456790e3975c0":"gTwyA","c8ecbb7aa91d0ad1":"duSQE","19925bca980d9059":"iJR4w"}],"30XHR":[function(require,module,exports) {
 module.exports = {};
 
-},{}],"gHDuw":[function(require,module,exports) {
+},{}],"i2KIH":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var call = require("../internals/function-call");
-var IS_PURE = require("../internals/is-pure");
-var FunctionName = require("../internals/function-name");
-var isCallable = require("../internals/is-callable");
-var createIteratorConstructor = require("../internals/create-iterator-constructor");
-var getPrototypeOf = require("../internals/object-get-prototype-of");
-var setPrototypeOf = require("../internals/object-set-prototype-of");
-var setToStringTag = require("../internals/set-to-string-tag");
-var createNonEnumerableProperty = require("../internals/create-non-enumerable-property");
-var defineBuiltIn = require("../internals/define-built-in");
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var Iterators = require("../internals/iterators");
-var IteratorsCore = require("../internals/iterators-core");
+var $ = require("ebe2ec3855b775ee");
+var call = require("f314e12882436a05");
+var IS_PURE = require("dea9f1497fbd198d");
+var FunctionName = require("68b1f30a6015372a");
+var isCallable = require("947f96807b9e565f");
+var createIteratorConstructor = require("f87e591e0b7d8436");
+var getPrototypeOf = require("619525f21ea4207e");
+var setPrototypeOf = require("f412e7013a0b5653");
+var setToStringTag = require("67e97db27cfc7124");
+var createNonEnumerableProperty = require("81f30e850d1d5582");
+var defineBuiltIn = require("497e9835ed414e7");
+var wellKnownSymbol = require("5612c018826d5ea1");
+var Iterators = require("4a14cf084818467f");
+var IteratorsCore = require("9abf05937ac051d9");
 var PROPER_FUNCTION_NAME = FunctionName.PROPER;
 var CONFIGURABLE_FUNCTION_NAME = FunctionName.CONFIGURABLE;
 var IteratorPrototype = IteratorsCore.IteratorPrototype;
@@ -4102,13 +4256,13 @@ module.exports = function(Iterable, NAME, IteratorConstructor, next, DEFAULT, IS
     return methods;
 };
 
-},{"../internals/export":"dIGt4","../internals/function-call":"d7JlP","../internals/is-pure":"5ZsyC","../internals/function-name":"l6Kgd","../internals/is-callable":"l3Kyn","../internals/create-iterator-constructor":"5wa4K","../internals/object-get-prototype-of":"2wazs","../internals/object-set-prototype-of":"2EnFi","../internals/set-to-string-tag":"ffT5i","../internals/create-non-enumerable-property":"8CL42","../internals/define-built-in":"6XwEX","../internals/well-known-symbol":"gTwyA","../internals/iterators":"30XHR","../internals/iterators-core":"1oRO7"}],"5wa4K":[function(require,module,exports) {
+},{"ebe2ec3855b775ee":"dIGt4","f314e12882436a05":"d7JlP","dea9f1497fbd198d":"5ZsyC","68b1f30a6015372a":"l6Kgd","947f96807b9e565f":"l3Kyn","f87e591e0b7d8436":"gdIwf","619525f21ea4207e":"2wazs","f412e7013a0b5653":"2EnFi","67e97db27cfc7124":"ffT5i","81f30e850d1d5582":"8CL42","497e9835ed414e7":"6XwEX","5612c018826d5ea1":"gTwyA","4a14cf084818467f":"30XHR","9abf05937ac051d9":"1oRO7"}],"gdIwf":[function(require,module,exports) {
 "use strict";
-var IteratorPrototype = require("../internals/iterators-core").IteratorPrototype;
-var create = require("../internals/object-create");
-var createPropertyDescriptor = require("../internals/create-property-descriptor");
-var setToStringTag = require("../internals/set-to-string-tag");
-var Iterators = require("../internals/iterators");
+var IteratorPrototype = require("cf2eb0625890a854").IteratorPrototype;
+var create = require("336eba92553b5faf");
+var createPropertyDescriptor = require("17426139d98c57a7");
+var setToStringTag = require("44094d99b6a9715c");
+var Iterators = require("c5f68ee7e054142f");
 var returnThis = function() {
     return this;
 };
@@ -4122,21 +4276,22 @@ module.exports = function(IteratorConstructor, NAME, next, ENUMERABLE_NEXT) {
     return IteratorConstructor;
 };
 
-},{"../internals/iterators-core":"1oRO7","../internals/object-create":"duSQE","../internals/create-property-descriptor":"1lpav","../internals/set-to-string-tag":"ffT5i","../internals/iterators":"30XHR"}],"1oRO7":[function(require,module,exports) {
+},{"cf2eb0625890a854":"1oRO7","336eba92553b5faf":"duSQE","17426139d98c57a7":"1lpav","44094d99b6a9715c":"ffT5i","c5f68ee7e054142f":"30XHR"}],"1oRO7":[function(require,module,exports) {
 "use strict";
-var fails = require("../internals/fails");
-var isCallable = require("../internals/is-callable");
-var create = require("../internals/object-create");
-var getPrototypeOf = require("../internals/object-get-prototype-of");
-var defineBuiltIn = require("../internals/define-built-in");
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var IS_PURE = require("../internals/is-pure");
+var fails = require("f08b1b705d034bab");
+var isCallable = require("c389ea714003c045");
+var isObject = require("4e97d3be859a5016");
+var create = require("bcae35d08652225b");
+var getPrototypeOf = require("6c0498cbfe81778d");
+var defineBuiltIn = require("edf1263ae1357e55");
+var wellKnownSymbol = require("4b00f0c8822a0404");
+var IS_PURE = require("43e4c4f713e19b49");
 var ITERATOR = wellKnownSymbol("iterator");
 var BUGGY_SAFARI_ITERATORS = false;
 // `%IteratorPrototype%` object
 // https://tc39.es/ecma262/#sec-%iteratorprototype%-object
 var IteratorPrototype, PrototypeOfArrayIteratorPrototype, arrayIterator;
-/* eslint-disable es-x/no-array-prototype-keys -- safe */ if ([].keys) {
+/* eslint-disable es/no-array-prototype-keys -- safe */ if ([].keys) {
     arrayIterator = [].keys();
     // Safari 8 has buggy iterators w/o `next`
     if (!("next" in arrayIterator)) BUGGY_SAFARI_ITERATORS = true;
@@ -4145,7 +4300,7 @@ var IteratorPrototype, PrototypeOfArrayIteratorPrototype, arrayIterator;
         if (PrototypeOfArrayIteratorPrototype !== Object.prototype) IteratorPrototype = PrototypeOfArrayIteratorPrototype;
     }
 }
-var NEW_ITERATOR_PROTOTYPE = IteratorPrototype == undefined || fails(function() {
+var NEW_ITERATOR_PROTOTYPE = !isObject(IteratorPrototype) || fails(function() {
     var test = {};
     // FF44- legacy iterators case
     return IteratorPrototype[ITERATOR].call(test) !== test;
@@ -4162,18 +4317,18 @@ module.exports = {
     BUGGY_SAFARI_ITERATORS: BUGGY_SAFARI_ITERATORS
 };
 
-},{"../internals/fails":"hL6D2","../internals/is-callable":"l3Kyn","../internals/object-create":"duSQE","../internals/object-get-prototype-of":"2wazs","../internals/define-built-in":"6XwEX","../internals/well-known-symbol":"gTwyA","../internals/is-pure":"5ZsyC"}],"2wazs":[function(require,module,exports) {
-var hasOwn = require("../internals/has-own-property");
-var isCallable = require("../internals/is-callable");
-var toObject = require("../internals/to-object");
-var sharedKey = require("../internals/shared-key");
-var CORRECT_PROTOTYPE_GETTER = require("../internals/correct-prototype-getter");
+},{"f08b1b705d034bab":"hL6D2","c389ea714003c045":"l3Kyn","4e97d3be859a5016":"Z0pBo","bcae35d08652225b":"duSQE","6c0498cbfe81778d":"2wazs","edf1263ae1357e55":"6XwEX","4b00f0c8822a0404":"gTwyA","43e4c4f713e19b49":"5ZsyC"}],"2wazs":[function(require,module,exports) {
+var hasOwn = require("ba2a3731f7ff1482");
+var isCallable = require("a962c96db80adaa6");
+var toObject = require("283a5aee7172cf90");
+var sharedKey = require("bbfed22583079e95");
+var CORRECT_PROTOTYPE_GETTER = require("2afda5afaf6c4a35");
 var IE_PROTO = sharedKey("IE_PROTO");
 var $Object = Object;
 var ObjectPrototype = $Object.prototype;
 // `Object.getPrototypeOf` method
 // https://tc39.es/ecma262/#sec-object.getprototypeof
-// eslint-disable-next-line es-x/no-object-getprototypeof -- safe
+// eslint-disable-next-line es/no-object-getprototypeof -- safe
 module.exports = CORRECT_PROTOTYPE_GETTER ? $Object.getPrototypeOf : function(O) {
     var object = toObject(O);
     if (hasOwn(object, IE_PROTO)) return object[IE_PROTO];
@@ -4182,30 +4337,29 @@ module.exports = CORRECT_PROTOTYPE_GETTER ? $Object.getPrototypeOf : function(O)
     return object instanceof $Object ? ObjectPrototype : null;
 };
 
-},{"../internals/has-own-property":"gC2Q5","../internals/is-callable":"l3Kyn","../internals/to-object":"5cb35","../internals/shared-key":"eAjGz","../internals/correct-prototype-getter":"i8nB5"}],"i8nB5":[function(require,module,exports) {
-var fails = require("../internals/fails");
+},{"ba2a3731f7ff1482":"gC2Q5","a962c96db80adaa6":"l3Kyn","283a5aee7172cf90":"5cb35","bbfed22583079e95":"eAjGz","2afda5afaf6c4a35":"i8nB5"}],"i8nB5":[function(require,module,exports) {
+var fails = require("4620d161ab3e0e58");
 module.exports = !fails(function() {
     function F() {}
     F.prototype.constructor = null;
-    // eslint-disable-next-line es-x/no-object-getprototypeof -- required for testing
+    // eslint-disable-next-line es/no-object-getprototypeof -- required for testing
     return Object.getPrototypeOf(new F()) !== F.prototype;
 });
 
-},{"../internals/fails":"hL6D2"}],"2EnFi":[function(require,module,exports) {
-/* eslint-disable no-proto -- safe */ var uncurryThis = require("../internals/function-uncurry-this");
-var anObject = require("../internals/an-object");
-var aPossiblePrototype = require("../internals/a-possible-prototype");
+},{"4620d161ab3e0e58":"hL6D2"}],"2EnFi":[function(require,module,exports) {
+/* eslint-disable no-proto -- safe */ var uncurryThisAccessor = require("a1dd31577f603f63");
+var anObject = require("99ffb24f61b8e087");
+var aPossiblePrototype = require("2ade691ad8d871d5");
 // `Object.setPrototypeOf` method
 // https://tc39.es/ecma262/#sec-object.setprototypeof
 // Works with __proto__ only. Old v8 can't work with null proto objects.
-// eslint-disable-next-line es-x/no-object-setprototypeof -- safe
+// eslint-disable-next-line es/no-object-setprototypeof -- safe
 module.exports = Object.setPrototypeOf || ("__proto__" in {} ? function() {
     var CORRECT_SETTER = false;
     var test = {};
     var setter;
     try {
-        // eslint-disable-next-line es-x/no-object-getownpropertydescriptor -- safe
-        setter = uncurryThis(Object.getOwnPropertyDescriptor(Object.prototype, "__proto__").set);
+        setter = uncurryThisAccessor(Object.prototype, "__proto__", "set");
         setter(test, []);
         CORRECT_SETTER = test instanceof Array;
     } catch (error) {}
@@ -4218,8 +4372,18 @@ module.exports = Object.setPrototypeOf || ("__proto__" in {} ? function() {
     };
 }() : undefined);
 
-},{"../internals/function-uncurry-this":"7GlkT","../internals/an-object":"4isCr","../internals/a-possible-prototype":"5X5vY"}],"5X5vY":[function(require,module,exports) {
-var isCallable = require("../internals/is-callable");
+},{"a1dd31577f603f63":"a0huE","99ffb24f61b8e087":"4isCr","2ade691ad8d871d5":"5X5vY"}],"a0huE":[function(require,module,exports) {
+var uncurryThis = require("9779d367f37550b");
+var aCallable = require("3ed090e9e5312311");
+module.exports = function(object, key, method) {
+    try {
+        // eslint-disable-next-line es/no-object-getownpropertydescriptor -- safe
+        return uncurryThis(aCallable(Object.getOwnPropertyDescriptor(object, key)[method]));
+    } catch (error) {}
+};
+
+},{"9779d367f37550b":"7GlkT","3ed090e9e5312311":"gOMir"}],"5X5vY":[function(require,module,exports) {
+var isCallable = require("9b8d213f0bfef510");
 var $String = String;
 var $TypeError = TypeError;
 module.exports = function(argument) {
@@ -4227,82 +4391,152 @@ module.exports = function(argument) {
     throw $TypeError("Can't set " + $String(argument) + " as a prototype");
 };
 
-},{"../internals/is-callable":"l3Kyn"}],"3Uedi":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
-// `Symbol.asyncDispose` well-known symbol
-// https://github.com/tc39/proposal-using-statement
-defineWellKnownSymbol("asyncDispose");
+},{"9b8d213f0bfef510":"l3Kyn"}],"5DJos":[function(require,module,exports) {
+// `CreateIterResultObject` abstract operation
+// https://tc39.es/ecma262/#sec-createiterresultobject
+module.exports = function(value, done) {
+    return {
+        value: value,
+        done: done
+    };
+};
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"b9ez5":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{}],"b9ez5":[function(require,module,exports) {
+var defineWellKnownSymbol = require("a538c2a4e696c404");
 // `Symbol.dispose` well-known symbol
-// https://github.com/tc39/proposal-using-statement
+// https://github.com/tc39/proposal-explicit-resource-management
 defineWellKnownSymbol("dispose");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"dfu2R":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"a538c2a4e696c404":"en5fF"}],"3Uedi":[function(require,module,exports) {
+var defineWellKnownSymbol = require("b29feeef9f315709");
+// `Symbol.asyncDispose` well-known symbol
+// https://github.com/tc39/proposal-async-explicit-resource-management
+defineWellKnownSymbol("asyncDispose");
+
+},{"b29feeef9f315709":"en5fF"}],"i6iX1":[function(require,module,exports) {
+var $ = require("392092e4a7fcb6c1");
+var getBuiltIn = require("1af7d177306a1473");
+var uncurryThis = require("e679ad03b2982bb2");
+var Symbol = getBuiltIn("Symbol");
+var keyFor = Symbol.keyFor;
+var thisSymbolValue = uncurryThis(Symbol.prototype.valueOf);
+// `Symbol.isRegistered` method
+// https://tc39.es/proposal-symbol-predicates/#sec-symbol-isregistered
+$({
+    target: "Symbol",
+    stat: true
+}, {
+    isRegistered: function isRegistered(value) {
+        try {
+            return keyFor(thisSymbolValue(value)) !== undefined;
+        } catch (error) {
+            return false;
+        }
+    }
+});
+
+},{"392092e4a7fcb6c1":"dIGt4","1af7d177306a1473":"6ZUSY","e679ad03b2982bb2":"7GlkT"}],"3cAFB":[function(require,module,exports) {
+var $ = require("7afc0251422afcfe");
+var shared = require("afcc2b2afc36bb7d");
+var getBuiltIn = require("6858b29ca9da8fd5");
+var uncurryThis = require("4027ef6a1f953649");
+var isSymbol = require("5a30aa5d8dc31016");
+var wellKnownSymbol = require("a6c5f7ea71f3c245");
+var Symbol = getBuiltIn("Symbol");
+var $isWellKnown = Symbol.isWellKnown;
+var getOwnPropertyNames = getBuiltIn("Object", "getOwnPropertyNames");
+var thisSymbolValue = uncurryThis(Symbol.prototype.valueOf);
+var WellKnownSymbolsStore = shared("wks");
+for(var i = 0, symbolKeys = getOwnPropertyNames(Symbol), symbolKeysLength = symbolKeys.length; i < symbolKeysLength; i++)// some old engines throws on access to some keys like `arguments` or `caller`
+try {
+    var symbolKey = symbolKeys[i];
+    if (isSymbol(Symbol[symbolKey])) wellKnownSymbol(symbolKey);
+} catch (error) {}
+// `Symbol.isWellKnown` method
+// https://tc39.es/proposal-symbol-predicates/#sec-symbol-iswellknown
+// We should patch it for newly added well-known symbols. If it's not required, this module just will not be injected
+$({
+    target: "Symbol",
+    stat: true,
+    forced: true
+}, {
+    isWellKnown: function isWellKnown(value) {
+        if ($isWellKnown && $isWellKnown(value)) return true;
+        try {
+            var symbol = thisSymbolValue(value);
+            for(var j = 0, keys = getOwnPropertyNames(WellKnownSymbolsStore), keysLength = keys.length; j < keysLength; j++){
+                if (WellKnownSymbolsStore[keys[j]] == symbol) return true;
+            }
+        } catch (error) {}
+        return false;
+    }
+});
+
+},{"7afc0251422afcfe":"dIGt4","afcc2b2afc36bb7d":"i1mHK","6858b29ca9da8fd5":"6ZUSY","4027ef6a1f953649":"7GlkT","5a30aa5d8dc31016":"4aV4F","a6c5f7ea71f3c245":"gTwyA"}],"dfu2R":[function(require,module,exports) {
+var defineWellKnownSymbol = require("fd1849a9f57f53f8");
 // `Symbol.matcher` well-known symbol
 // https://github.com/tc39/proposal-pattern-matching
 defineWellKnownSymbol("matcher");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"cyrVQ":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"fd1849a9f57f53f8":"en5fF"}],"cyrVQ":[function(require,module,exports) {
+var defineWellKnownSymbol = require("f2e3ebfed7ad4438");
 // `Symbol.metadataKey` well-known symbol
 // https://github.com/tc39/proposal-decorator-metadata
 defineWellKnownSymbol("metadataKey");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"bTlfI":[function(require,module,exports) {
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+},{"f2e3ebfed7ad4438":"en5fF"}],"bTlfI":[function(require,module,exports) {
+var defineWellKnownSymbol = require("43cffacc69521744");
 // `Symbol.observable` well-known symbol
 // https://github.com/tc39/proposal-observable
 defineWellKnownSymbol("observable");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"8BO53":[function(require,module,exports) {
+},{"43cffacc69521744":"en5fF"}],"8BO53":[function(require,module,exports) {
 // TODO: Remove from `core-js@4`
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+var defineWellKnownSymbol = require("aa0e291d7d760255");
 // `Symbol.metadata` well-known symbol
 // https://github.com/tc39/proposal-decorators
 defineWellKnownSymbol("metadata");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"dLSVv":[function(require,module,exports) {
+},{"aa0e291d7d760255":"en5fF"}],"dLSVv":[function(require,module,exports) {
 // TODO: remove from `core-js@4`
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+var defineWellKnownSymbol = require("ffa233616fd8de40");
 // `Symbol.patternMatch` well-known symbol
 // https://github.com/tc39/proposal-pattern-matching
 defineWellKnownSymbol("patternMatch");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"aTqKR":[function(require,module,exports) {
+},{"ffa233616fd8de40":"en5fF"}],"aTqKR":[function(require,module,exports) {
 // TODO: remove from `core-js@4`
-var defineWellKnownSymbol = require("../internals/define-well-known-symbol");
+var defineWellKnownSymbol = require("8f5f52bc758643b3");
 defineWellKnownSymbol("replaceAll");
 
-},{"../internals/define-well-known-symbol":"gwaCb"}],"jBOzI":[function(require,module,exports) {
-module.exports = require("../../full/array/from");
+},{"8f5f52bc758643b3":"en5fF"}],"jBOzI":[function(require,module,exports) {
+module.exports = require("35ac9b7376b4a939");
 
-},{"../../full/array/from":"8fMIf"}],"8fMIf":[function(require,module,exports) {
-var parent = require("../../actual/array/from");
+},{"35ac9b7376b4a939":"8fMIf"}],"8fMIf":[function(require,module,exports) {
+var parent = require("8e4a8ca4c6d8ee17");
 module.exports = parent;
 
-},{"../../actual/array/from":"4QBlC"}],"4QBlC":[function(require,module,exports) {
-var parent = require("../../stable/array/from");
+},{"8e4a8ca4c6d8ee17":"4QBlC"}],"4QBlC":[function(require,module,exports) {
+var parent = require("cfa43de1f4bfe6d5");
 module.exports = parent;
 
-},{"../../stable/array/from":"3yyTX"}],"3yyTX":[function(require,module,exports) {
-var parent = require("../../es/array/from");
+},{"cfa43de1f4bfe6d5":"3yyTX"}],"3yyTX":[function(require,module,exports) {
+var parent = require("10631fca30e38564");
 module.exports = parent;
 
-},{"../../es/array/from":"3cbdG"}],"3cbdG":[function(require,module,exports) {
-require("../../modules/es.string.iterator");
-require("../../modules/es.array.from");
-var path = require("../../internals/path");
+},{"10631fca30e38564":"3cbdG"}],"3cbdG":[function(require,module,exports) {
+require("6dba39fde1f3da1f");
+require("c48d537f93a64a2f");
+var path = require("15269901a003dc02");
 module.exports = path.Array.from;
 
-},{"../../modules/es.string.iterator":"ata5h","../../modules/es.array.from":"41cLJ","../../internals/path":"gKjqB"}],"ata5h":[function(require,module,exports) {
+},{"6dba39fde1f3da1f":"ata5h","c48d537f93a64a2f":"41cLJ","15269901a003dc02":"gKjqB"}],"ata5h":[function(require,module,exports) {
 "use strict";
-var charAt = require("../internals/string-multibyte").charAt;
-var toString = require("../internals/to-string");
-var InternalStateModule = require("../internals/internal-state");
-var defineIterator = require("../internals/define-iterator");
+var charAt = require("5393556531e6a716").charAt;
+var toString = require("6cbc12737a129a93");
+var InternalStateModule = require("d95e74e7c45fde05");
+var defineIterator = require("8bcfdab75c25514");
+var createIterResultObject = require("b3bf2e7a048777ca");
 var STRING_ITERATOR = "String Iterator";
 var setInternalState = InternalStateModule.set;
 var getInternalState = InternalStateModule.getterFor(STRING_ITERATOR);
@@ -4321,23 +4555,17 @@ defineIterator(String, "String", function(iterated) {
     var string = state.string;
     var index = state.index;
     var point;
-    if (index >= string.length) return {
-        value: undefined,
-        done: true
-    };
+    if (index >= string.length) return createIterResultObject(undefined, true);
     point = charAt(string, index);
     state.index += point.length;
-    return {
-        value: point,
-        done: false
-    };
+    return createIterResultObject(point, false);
 });
 
-},{"../internals/string-multibyte":"gGTTm","../internals/to-string":"a1yl4","../internals/internal-state":"7AMlF","../internals/define-iterator":"gHDuw"}],"gGTTm":[function(require,module,exports) {
-var uncurryThis = require("../internals/function-uncurry-this");
-var toIntegerOrInfinity = require("../internals/to-integer-or-infinity");
-var toString = require("../internals/to-string");
-var requireObjectCoercible = require("../internals/require-object-coercible");
+},{"5393556531e6a716":"gGTTm","6cbc12737a129a93":"a1yl4","d95e74e7c45fde05":"7AMlF","8bcfdab75c25514":"i2KIH","b3bf2e7a048777ca":"5DJos"}],"gGTTm":[function(require,module,exports) {
+var uncurryThis = require("fc745e85b690ae5e");
+var toIntegerOrInfinity = require("d96d353645c314de");
+var toString = require("2c641755e1b3a433");
+var requireObjectCoercible = require("32a61dc7f46f7f97");
 var charAt = uncurryThis("".charAt);
 var charCodeAt = uncurryThis("".charCodeAt);
 var stringSlice = uncurryThis("".slice);
@@ -4361,12 +4589,12 @@ module.exports = {
     charAt: createMethod(true)
 };
 
-},{"../internals/function-uncurry-this":"7GlkT","../internals/to-integer-or-infinity":"kLXGe","../internals/to-string":"a1yl4","../internals/require-object-coercible":"fOR0B"}],"41cLJ":[function(require,module,exports) {
-var $ = require("../internals/export");
-var from = require("../internals/array-from");
-var checkCorrectnessOfIteration = require("../internals/check-correctness-of-iteration");
+},{"fc745e85b690ae5e":"7GlkT","d96d353645c314de":"kLXGe","2c641755e1b3a433":"a1yl4","32a61dc7f46f7f97":"fOR0B"}],"41cLJ":[function(require,module,exports) {
+var $ = require("35f3d4aa4e87e815");
+var from = require("356e436781d88c9b");
+var checkCorrectnessOfIteration = require("f0756457670dbace");
 var INCORRECT_ITERATION = !checkCorrectnessOfIteration(function(iterable) {
-    // eslint-disable-next-line es-x/no-array-from -- required for testing
+    // eslint-disable-next-line es/no-array-from -- required for testing
     Array.from(iterable);
 });
 // `Array.from` method
@@ -4379,18 +4607,18 @@ $({
     from: from
 });
 
-},{"../internals/export":"dIGt4","../internals/array-from":"4YYzN","../internals/check-correctness-of-iteration":"a6bt4"}],"4YYzN":[function(require,module,exports) {
+},{"35f3d4aa4e87e815":"dIGt4","356e436781d88c9b":"4YYzN","f0756457670dbace":"a6bt4"}],"4YYzN":[function(require,module,exports) {
 "use strict";
-var bind = require("../internals/function-bind-context");
-var call = require("../internals/function-call");
-var toObject = require("../internals/to-object");
-var callWithSafeIterationClosing = require("../internals/call-with-safe-iteration-closing");
-var isArrayIteratorMethod = require("../internals/is-array-iterator-method");
-var isConstructor = require("../internals/is-constructor");
-var lengthOfArrayLike = require("../internals/length-of-array-like");
-var createProperty = require("../internals/create-property");
-var getIterator = require("../internals/get-iterator");
-var getIteratorMethod = require("../internals/get-iterator-method");
+var bind = require("61de406273ff05f4");
+var call = require("f9d9c745b22c6db9");
+var toObject = require("9683470ebd9a86f9");
+var callWithSafeIterationClosing = require("fbaa7369bdcabaff");
+var isArrayIteratorMethod = require("ce8b3ee409bd8c5c");
+var isConstructor = require("78499687b081e9f6");
+var lengthOfArrayLike = require("ddcafa32254da89a");
+var createProperty = require("f6172a850538c9d2");
+var getIterator = require("f4eb31d6a5bf10a1");
+var getIteratorMethod = require("2c7351886ae50eee");
 var $Array = Array;
 // `Array.from` method implementation
 // https://tc39.es/ecma262/#sec-array.from
@@ -4428,9 +4656,9 @@ module.exports = function from(arrayLike /* , mapfn = undefined, thisArg = undef
     return result;
 };
 
-},{"../internals/function-bind-context":"7vpmS","../internals/function-call":"d7JlP","../internals/to-object":"5cb35","../internals/call-with-safe-iteration-closing":"4a0Ax","../internals/is-array-iterator-method":"l33Z9","../internals/is-constructor":"iVgSy","../internals/length-of-array-like":"lY4mS","../internals/create-property":"76HND","../internals/get-iterator":"hjwee","../internals/get-iterator-method":"d8BiC"}],"4a0Ax":[function(require,module,exports) {
-var anObject = require("../internals/an-object");
-var iteratorClose = require("../internals/iterator-close");
+},{"61de406273ff05f4":"7vpmS","f9d9c745b22c6db9":"d7JlP","9683470ebd9a86f9":"5cb35","fbaa7369bdcabaff":"4a0Ax","ce8b3ee409bd8c5c":"l33Z9","78499687b081e9f6":"iVgSy","ddcafa32254da89a":"lY4mS","f6172a850538c9d2":"76HND","f4eb31d6a5bf10a1":"hjwee","2c7351886ae50eee":"d8BiC"}],"4a0Ax":[function(require,module,exports) {
+var anObject = require("19b62ad1475eb9f4");
+var iteratorClose = require("c155120e505b52b2");
 // call something on iterator step with safe closing on error
 module.exports = function(iterator, fn, value, ENTRIES) {
     try {
@@ -4440,10 +4668,10 @@ module.exports = function(iterator, fn, value, ENTRIES) {
     }
 };
 
-},{"../internals/an-object":"4isCr","../internals/iterator-close":"hs7nW"}],"hs7nW":[function(require,module,exports) {
-var call = require("../internals/function-call");
-var anObject = require("../internals/an-object");
-var getMethod = require("../internals/get-method");
+},{"19b62ad1475eb9f4":"4isCr","c155120e505b52b2":"hs7nW"}],"hs7nW":[function(require,module,exports) {
+var call = require("887aefcf9024e6df");
+var anObject = require("367c7fe00365ce7a");
+var getMethod = require("99e81b6173b6fc6b");
 module.exports = function(iterator, kind, value) {
     var innerResult, innerError;
     anObject(iterator);
@@ -4464,9 +4692,9 @@ module.exports = function(iterator, kind, value) {
     return value;
 };
 
-},{"../internals/function-call":"d7JlP","../internals/an-object":"4isCr","../internals/get-method":"9Zfiw"}],"l33Z9":[function(require,module,exports) {
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var Iterators = require("../internals/iterators");
+},{"887aefcf9024e6df":"d7JlP","367c7fe00365ce7a":"4isCr","99e81b6173b6fc6b":"9Zfiw"}],"l33Z9":[function(require,module,exports) {
+var wellKnownSymbol = require("bfce5365d41897cd");
+var Iterators = require("34063b568ecb0af");
 var ITERATOR = wellKnownSymbol("iterator");
 var ArrayPrototype = Array.prototype;
 // check on default Array iterator
@@ -4474,12 +4702,12 @@ module.exports = function(it) {
     return it !== undefined && (Iterators.Array === it || ArrayPrototype[ITERATOR] === it);
 };
 
-},{"../internals/well-known-symbol":"gTwyA","../internals/iterators":"30XHR"}],"hjwee":[function(require,module,exports) {
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var tryToString = require("../internals/try-to-string");
-var getIteratorMethod = require("../internals/get-iterator-method");
+},{"bfce5365d41897cd":"gTwyA","34063b568ecb0af":"30XHR"}],"hjwee":[function(require,module,exports) {
+var call = require("1139911286ca6689");
+var aCallable = require("7cf105dda11d88bd");
+var anObject = require("4d264785f21afea2");
+var tryToString = require("f17c3276f471a2e3");
+var getIteratorMethod = require("91685f245c14ba2c");
 var $TypeError = TypeError;
 module.exports = function(argument, usingIterator) {
     var iteratorMethod = arguments.length < 2 ? getIteratorMethod(argument) : usingIterator;
@@ -4487,18 +4715,19 @@ module.exports = function(argument, usingIterator) {
     throw $TypeError(tryToString(argument) + " is not iterable");
 };
 
-},{"../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/try-to-string":"4O7d7","../internals/get-iterator-method":"d8BiC"}],"d8BiC":[function(require,module,exports) {
-var classof = require("../internals/classof");
-var getMethod = require("../internals/get-method");
-var Iterators = require("../internals/iterators");
-var wellKnownSymbol = require("../internals/well-known-symbol");
+},{"1139911286ca6689":"d7JlP","7cf105dda11d88bd":"gOMir","4d264785f21afea2":"4isCr","f17c3276f471a2e3":"4O7d7","91685f245c14ba2c":"d8BiC"}],"d8BiC":[function(require,module,exports) {
+var classof = require("827f197aeb447c1e");
+var getMethod = require("9a8af5dfd5ee0699");
+var isNullOrUndefined = require("4d3b633011364f78");
+var Iterators = require("a9ae17996e47441a");
+var wellKnownSymbol = require("fa6d724c6d0ee029");
 var ITERATOR = wellKnownSymbol("iterator");
 module.exports = function(it) {
-    if (it != undefined) return getMethod(it, ITERATOR) || getMethod(it, "@@iterator") || Iterators[classof(it)];
+    if (!isNullOrUndefined(it)) return getMethod(it, ITERATOR) || getMethod(it, "@@iterator") || Iterators[classof(it)];
 };
 
-},{"../internals/classof":"dKT7A","../internals/get-method":"9Zfiw","../internals/iterators":"30XHR","../internals/well-known-symbol":"gTwyA"}],"a6bt4":[function(require,module,exports) {
-var wellKnownSymbol = require("../internals/well-known-symbol");
+},{"827f197aeb447c1e":"dKT7A","9a8af5dfd5ee0699":"9Zfiw","4d3b633011364f78":"gM5ar","a9ae17996e47441a":"30XHR","fa6d724c6d0ee029":"gTwyA"}],"a6bt4":[function(require,module,exports) {
+var wellKnownSymbol = require("aeaf575e705478e2");
 var ITERATOR = wellKnownSymbol("iterator");
 var SAFE_CLOSING = false;
 try {
@@ -4516,7 +4745,7 @@ try {
     iteratorWithReturn[ITERATOR] = function() {
         return this;
     };
-    // eslint-disable-next-line es-x/no-array-from, no-throw-literal -- required for testing
+    // eslint-disable-next-line es/no-array-from, no-throw-literal -- required for testing
     Array.from(iteratorWithReturn, function() {
         throw 2;
     });
@@ -4540,73 +4769,73 @@ module.exports = function(exec, SKIP_CLOSING) {
     return ITERATION_SUPPORT;
 };
 
-},{"../internals/well-known-symbol":"gTwyA"}],"edce3":[function(require,module,exports) {
+},{"aeaf575e705478e2":"gTwyA"}],"edce3":[function(require,module,exports) {
 /**
  * Copyright (c) 2015-present, Facebook, Inc.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */ "use strict";
-require("./ie11");
+require("b3571e08e5c93d81");
 // React 16+ relies on Map, Set, and requestAnimationFrame
-require("core-js/features/map");
-require("core-js/features/set");
-require("raf").polyfill();
+require("f95c335285cfc2f4");
+require("d9eaf85ad6fae87d");
+require("513174abdaeedf91").polyfill();
 
-},{"./ie11":"1ALbI","core-js/features/map":"5aRkK","core-js/features/set":"bD75O","raf":"ba7ov"}],"5aRkK":[function(require,module,exports) {
-module.exports = require("../../full/map");
+},{"b3571e08e5c93d81":"1ALbI","f95c335285cfc2f4":"5aRkK","d9eaf85ad6fae87d":"bD75O","513174abdaeedf91":"ba7ov"}],"5aRkK":[function(require,module,exports) {
+module.exports = require("e0f669574a452997");
 
-},{"../../full/map":"egVsQ"}],"egVsQ":[function(require,module,exports) {
-var parent = require("../../actual/map");
-require("../../modules/esnext.map.from");
-require("../../modules/esnext.map.of");
-require("../../modules/esnext.map.delete-all");
-require("../../modules/esnext.map.emplace");
-require("../../modules/esnext.map.every");
-require("../../modules/esnext.map.filter");
-require("../../modules/esnext.map.find");
-require("../../modules/esnext.map.find-key");
-require("../../modules/esnext.map.group-by");
-require("../../modules/esnext.map.includes");
-require("../../modules/esnext.map.key-by");
-require("../../modules/esnext.map.key-of");
-require("../../modules/esnext.map.map-keys");
-require("../../modules/esnext.map.map-values");
-require("../../modules/esnext.map.merge");
-require("../../modules/esnext.map.reduce");
-require("../../modules/esnext.map.some");
-require("../../modules/esnext.map.update");
+},{"e0f669574a452997":"egVsQ"}],"egVsQ":[function(require,module,exports) {
+var parent = require("522ef4288581db6b");
+require("7f9171a7d99ecfef");
+require("cd1280d8a08e115c");
+require("e1d428400fcec9de");
+require("c8d7d70ce9639180");
+require("30412a65122008a2");
+require("c72fda09be57242b");
+require("697beb24ab6e4b3");
+require("70840a34d83bc2cd");
+require("f9a36e1fc66b165d");
+require("fca8a3525a495ce");
+require("9a9f507390abc2e3");
+require("c8dbf5fa3f408242");
+require("a655c3f4798ba187");
+require("1e75d3ba0edcabaf");
+require("7fc70f61f4adc6ab");
+require("6de8d2ffeda0abaa");
+require("1f99ad3de46fda2b");
+require("d76e990e139a9145");
 // TODO: remove from `core-js@4`
-require("../../modules/esnext.map.upsert");
+require("991ee4f2d7659a40");
 // TODO: remove from `core-js@4`
-require("../../modules/esnext.map.update-or-insert");
+require("ee0f240aaba2bdf2");
 module.exports = parent;
 
-},{"../../actual/map":"9P6U6","../../modules/esnext.map.from":"aMX7r","../../modules/esnext.map.of":"3WfcG","../../modules/esnext.map.delete-all":"84I4a","../../modules/esnext.map.emplace":"8OuZD","../../modules/esnext.map.every":"a0ie9","../../modules/esnext.map.filter":"8EHBg","../../modules/esnext.map.find":"kzunK","../../modules/esnext.map.find-key":"ipfV1","../../modules/esnext.map.group-by":"3AR1K","../../modules/esnext.map.includes":"3cPf4","../../modules/esnext.map.key-by":"czzPK","../../modules/esnext.map.key-of":"la1gU","../../modules/esnext.map.map-keys":"12CRV","../../modules/esnext.map.map-values":"fQehs","../../modules/esnext.map.merge":"5Qvm2","../../modules/esnext.map.reduce":"8ampn","../../modules/esnext.map.some":"eVX7K","../../modules/esnext.map.update":"agmCJ","../../modules/esnext.map.upsert":"d9AJ5","../../modules/esnext.map.update-or-insert":"kYZaO"}],"9P6U6":[function(require,module,exports) {
-var parent = require("../../stable/map");
+},{"522ef4288581db6b":"9P6U6","7f9171a7d99ecfef":"aMX7r","cd1280d8a08e115c":"3WfcG","e1d428400fcec9de":"84I4a","c8d7d70ce9639180":"8OuZD","30412a65122008a2":"a0ie9","c72fda09be57242b":"8EHBg","697beb24ab6e4b3":"kzunK","70840a34d83bc2cd":"ipfV1","f9a36e1fc66b165d":"3AR1K","fca8a3525a495ce":"3cPf4","9a9f507390abc2e3":"czzPK","c8dbf5fa3f408242":"la1gU","a655c3f4798ba187":"12CRV","1e75d3ba0edcabaf":"fQehs","7fc70f61f4adc6ab":"5Qvm2","6de8d2ffeda0abaa":"8ampn","1f99ad3de46fda2b":"eVX7K","d76e990e139a9145":"agmCJ","991ee4f2d7659a40":"d9AJ5","ee0f240aaba2bdf2":"kYZaO"}],"9P6U6":[function(require,module,exports) {
+var parent = require("2b8ea623dd41c040");
 module.exports = parent;
 
-},{"../../stable/map":"cYZdc"}],"cYZdc":[function(require,module,exports) {
-var parent = require("../../es/map");
-require("../../modules/web.dom-collections.iterator");
+},{"2b8ea623dd41c040":"cYZdc"}],"cYZdc":[function(require,module,exports) {
+var parent = require("c1dfb7758793e03a");
+require("dddb5bcfc8fa1801");
 module.exports = parent;
 
-},{"../../es/map":"7uYPY","../../modules/web.dom-collections.iterator":"3YhYU"}],"7uYPY":[function(require,module,exports) {
-require("../../modules/es.array.iterator");
-require("../../modules/es.map");
-require("../../modules/es.object.to-string");
-require("../../modules/es.string.iterator");
-var path = require("../../internals/path");
+},{"c1dfb7758793e03a":"7uYPY","dddb5bcfc8fa1801":"3YhYU"}],"7uYPY":[function(require,module,exports) {
+require("b19202f74e20ed5c");
+require("8e732c90c31463e");
+require("8b2df73690c8b4f8");
+require("7065d1c4f9c730aa");
+var path = require("a72377dd8b7b14ac");
 module.exports = path.Map;
 
-},{"../../modules/es.array.iterator":"dFlRN","../../modules/es.map":"4jt9K","../../modules/es.object.to-string":"9XvHS","../../modules/es.string.iterator":"ata5h","../../internals/path":"gKjqB"}],"4jt9K":[function(require,module,exports) {
+},{"b19202f74e20ed5c":"dFlRN","8e732c90c31463e":"4jt9K","8b2df73690c8b4f8":"9XvHS","7065d1c4f9c730aa":"ata5h","a72377dd8b7b14ac":"gKjqB"}],"4jt9K":[function(require,module,exports) {
 // TODO: Remove this module from `core-js@4` since it's replaced to module below
-require("../modules/es.map.constructor");
+require("f267036c2ac4c35c");
 
-},{"../modules/es.map.constructor":"h5Drx"}],"h5Drx":[function(require,module,exports) {
+},{"f267036c2ac4c35c":"h5Drx"}],"h5Drx":[function(require,module,exports) {
 "use strict";
-var collection = require("../internals/collection");
-var collectionStrong = require("../internals/collection-strong");
+var collection = require("8c7494afaaea27f2");
+var collectionStrong = require("414ba33c83d30f3e");
 // `Map` constructor
 // https://tc39.es/ecma262/#sec-map-objects
 collection("Map", function(init) {
@@ -4615,22 +4844,23 @@ collection("Map", function(init) {
     };
 }, collectionStrong);
 
-},{"../internals/collection":"kGyiP","../internals/collection-strong":"fPzdI"}],"kGyiP":[function(require,module,exports) {
+},{"8c7494afaaea27f2":"kGyiP","414ba33c83d30f3e":"fPzdI"}],"kGyiP":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var global = require("../internals/global");
-var uncurryThis = require("../internals/function-uncurry-this");
-var isForced = require("../internals/is-forced");
-var defineBuiltIn = require("../internals/define-built-in");
-var InternalMetadataModule = require("../internals/internal-metadata");
-var iterate = require("../internals/iterate");
-var anInstance = require("../internals/an-instance");
-var isCallable = require("../internals/is-callable");
-var isObject = require("../internals/is-object");
-var fails = require("../internals/fails");
-var checkCorrectnessOfIteration = require("../internals/check-correctness-of-iteration");
-var setToStringTag = require("../internals/set-to-string-tag");
-var inheritIfRequired = require("../internals/inherit-if-required");
+var $ = require("3b26075841ef58f7");
+var global = require("75403b156697ccfd");
+var uncurryThis = require("d57091e0cf6a960f");
+var isForced = require("6a673bdc4ef71e54");
+var defineBuiltIn = require("c435767359e0f3bb");
+var InternalMetadataModule = require("389110f9febda8ec");
+var iterate = require("7c7cc4bb0f8f654c");
+var anInstance = require("a5c9d565a6d8d24");
+var isCallable = require("4fc3987eb4d97c88");
+var isNullOrUndefined = require("d003f4a5e73f3108");
+var isObject = require("562ceec3b7819c30");
+var fails = require("a5bbf658b3993a09");
+var checkCorrectnessOfIteration = require("558d673a55268f43");
+var setToStringTag = require("ba2ff3763a4bc85f");
+var inheritIfRequired = require("f6fb660251ef3d51");
 module.exports = function(CONSTRUCTOR_NAME, wrapper, common) {
     var IS_MAP = CONSTRUCTOR_NAME.indexOf("Map") !== -1;
     var IS_WEAK = CONSTRUCTOR_NAME.indexOf("Weak") !== -1;
@@ -4687,7 +4917,7 @@ module.exports = function(CONSTRUCTOR_NAME, wrapper, common) {
             Constructor = wrapper(function(dummy, iterable) {
                 anInstance(dummy, NativePrototype);
                 var that = inheritIfRequired(new NativeConstructor(), dummy, Constructor);
-                if (iterable != undefined) iterate(iterable, that[ADDER], {
+                if (!isNullOrUndefined(iterable)) iterate(iterable, that[ADDER], {
                     that: that,
                     AS_ENTRIES: IS_MAP
                 });
@@ -4716,18 +4946,18 @@ module.exports = function(CONSTRUCTOR_NAME, wrapper, common) {
     return Constructor;
 };
 
-},{"../internals/export":"dIGt4","../internals/global":"i8HOC","../internals/function-uncurry-this":"7GlkT","../internals/is-forced":"6uTCZ","../internals/define-built-in":"6XwEX","../internals/internal-metadata":"iITYU","../internals/iterate":"4OXGm","../internals/an-instance":"6Eoyt","../internals/is-callable":"l3Kyn","../internals/is-object":"Z0pBo","../internals/fails":"hL6D2","../internals/check-correctness-of-iteration":"a6bt4","../internals/set-to-string-tag":"ffT5i","../internals/inherit-if-required":"6UnCZ"}],"iITYU":[function(require,module,exports) {
-var $ = require("../internals/export");
-var uncurryThis = require("../internals/function-uncurry-this");
-var hiddenKeys = require("../internals/hidden-keys");
-var isObject = require("../internals/is-object");
-var hasOwn = require("../internals/has-own-property");
-var defineProperty = require("../internals/object-define-property").f;
-var getOwnPropertyNamesModule = require("../internals/object-get-own-property-names");
-var getOwnPropertyNamesExternalModule = require("../internals/object-get-own-property-names-external");
-var isExtensible = require("../internals/object-is-extensible");
-var uid = require("../internals/uid");
-var FREEZING = require("../internals/freezing");
+},{"3b26075841ef58f7":"dIGt4","75403b156697ccfd":"i8HOC","d57091e0cf6a960f":"7GlkT","6a673bdc4ef71e54":"6uTCZ","c435767359e0f3bb":"6XwEX","389110f9febda8ec":"iITYU","7c7cc4bb0f8f654c":"4OXGm","a5c9d565a6d8d24":"6Eoyt","4fc3987eb4d97c88":"l3Kyn","d003f4a5e73f3108":"gM5ar","562ceec3b7819c30":"Z0pBo","a5bbf658b3993a09":"hL6D2","558d673a55268f43":"a6bt4","ba2ff3763a4bc85f":"ffT5i","f6fb660251ef3d51":"6UnCZ"}],"iITYU":[function(require,module,exports) {
+var $ = require("b471d8b3e52138ca");
+var uncurryThis = require("b915b1db3eec3c64");
+var hiddenKeys = require("b3c9a774b66c16b1");
+var isObject = require("cf86215c01f131d8");
+var hasOwn = require("ace0716f85bb040c");
+var defineProperty = require("35c3b252ab3a7dd5").f;
+var getOwnPropertyNamesModule = require("24399e62ccd046c5");
+var getOwnPropertyNamesExternalModule = require("7809d49da2d5450e");
+var isExtensible = require("499ea6ace3284dc7");
+var uid = require("e486e1f8598f6b1f");
+var FREEZING = require("9d5aad3a0e1db98b");
 var REQUIRED = false;
 var METADATA = uid("meta");
 var id = 0;
@@ -4804,12 +5034,12 @@ var meta = module.exports = {
 };
 hiddenKeys[METADATA] = true;
 
-},{"../internals/export":"dIGt4","../internals/function-uncurry-this":"7GlkT","../internals/hidden-keys":"661m4","../internals/is-object":"Z0pBo","../internals/has-own-property":"gC2Q5","../internals/object-define-property":"iJR4w","../internals/object-get-own-property-names":"fjY04","../internals/object-get-own-property-names-external":"1bojN","../internals/object-is-extensible":"aD3Yc","../internals/uid":"a3SEE","../internals/freezing":"kyZDF"}],"aD3Yc":[function(require,module,exports) {
-var fails = require("../internals/fails");
-var isObject = require("../internals/is-object");
-var classof = require("../internals/classof-raw");
-var ARRAY_BUFFER_NON_EXTENSIBLE = require("../internals/array-buffer-non-extensible");
-// eslint-disable-next-line es-x/no-object-isextensible -- safe
+},{"b471d8b3e52138ca":"dIGt4","b915b1db3eec3c64":"7GlkT","b3c9a774b66c16b1":"661m4","cf86215c01f131d8":"Z0pBo","ace0716f85bb040c":"gC2Q5","35c3b252ab3a7dd5":"iJR4w","24399e62ccd046c5":"fjY04","7809d49da2d5450e":"1bojN","499ea6ace3284dc7":"aD3Yc","e486e1f8598f6b1f":"a3SEE","9d5aad3a0e1db98b":"kyZDF"}],"aD3Yc":[function(require,module,exports) {
+var fails = require("f61b837e5683f19");
+var isObject = require("f186bcb8b4c00ddd");
+var classof = require("ac70ee1bf228fa7a");
+var ARRAY_BUFFER_NON_EXTENSIBLE = require("33b90dd61c06ce95");
+// eslint-disable-next-line es/no-object-isextensible -- safe
 var $isExtensible = Object.isExtensible;
 var FAILS_ON_PRIMITIVES = fails(function() {
     $isExtensible(1);
@@ -4822,37 +5052,37 @@ module.exports = FAILS_ON_PRIMITIVES || ARRAY_BUFFER_NON_EXTENSIBLE ? function i
     return $isExtensible ? $isExtensible(it) : true;
 } : $isExtensible;
 
-},{"../internals/fails":"hL6D2","../internals/is-object":"Z0pBo","../internals/classof-raw":"bdfmm","../internals/array-buffer-non-extensible":"8jrsr"}],"8jrsr":[function(require,module,exports) {
+},{"f61b837e5683f19":"hL6D2","f186bcb8b4c00ddd":"Z0pBo","ac70ee1bf228fa7a":"bdfmm","33b90dd61c06ce95":"8jrsr"}],"8jrsr":[function(require,module,exports) {
 // FF26- bug: ArrayBuffers are non-extensible, but Object.isExtensible does not report it
-var fails = require("../internals/fails");
+var fails = require("2df8ecd7dbc52de");
 module.exports = fails(function() {
     if (typeof ArrayBuffer == "function") {
         var buffer = new ArrayBuffer(8);
-        // eslint-disable-next-line es-x/no-object-isextensible, es-x/no-object-defineproperty -- safe
+        // eslint-disable-next-line es/no-object-isextensible, es/no-object-defineproperty -- safe
         if (Object.isExtensible(buffer)) Object.defineProperty(buffer, "a", {
             value: 8
         });
     }
 });
 
-},{"../internals/fails":"hL6D2"}],"kyZDF":[function(require,module,exports) {
-var fails = require("../internals/fails");
+},{"2df8ecd7dbc52de":"hL6D2"}],"kyZDF":[function(require,module,exports) {
+var fails = require("1517df349bca95c3");
 module.exports = !fails(function() {
-    // eslint-disable-next-line es-x/no-object-isextensible, es-x/no-object-preventextensions -- required for testing
+    // eslint-disable-next-line es/no-object-isextensible, es/no-object-preventextensions -- required for testing
     return Object.isExtensible(Object.preventExtensions({}));
 });
 
-},{"../internals/fails":"hL6D2"}],"4OXGm":[function(require,module,exports) {
-var bind = require("../internals/function-bind-context");
-var call = require("../internals/function-call");
-var anObject = require("../internals/an-object");
-var tryToString = require("../internals/try-to-string");
-var isArrayIteratorMethod = require("../internals/is-array-iterator-method");
-var lengthOfArrayLike = require("../internals/length-of-array-like");
-var isPrototypeOf = require("../internals/object-is-prototype-of");
-var getIterator = require("../internals/get-iterator");
-var getIteratorMethod = require("../internals/get-iterator-method");
-var iteratorClose = require("../internals/iterator-close");
+},{"1517df349bca95c3":"hL6D2"}],"4OXGm":[function(require,module,exports) {
+var bind = require("1ce6e5856a49c544");
+var call = require("4e5a3a178a2efe14");
+var anObject = require("12df1224b4e90892");
+var tryToString = require("8adebc0a1d270069");
+var isArrayIteratorMethod = require("9032e165d6093fce");
+var lengthOfArrayLike = require("d798ccfb9131b9e3");
+var isPrototypeOf = require("dced2dad9f007636");
+var getIterator = require("4ff94145b3376f27");
+var getIteratorMethod = require("6e847ffbb2dc61c9");
+var iteratorClose = require("7d5802cc10f57948");
 var $TypeError = TypeError;
 var Result = function(stopped, result) {
     this.stopped = stopped;
@@ -4862,6 +5092,7 @@ var ResultPrototype = Result.prototype;
 module.exports = function(iterable, unboundFunction, options) {
     var that = options && options.that;
     var AS_ENTRIES = !!(options && options.AS_ENTRIES);
+    var IS_RECORD = !!(options && options.IS_RECORD);
     var IS_ITERATOR = !!(options && options.IS_ITERATOR);
     var INTERRUPTED = !!(options && options.INTERRUPTED);
     var fn = bind(unboundFunction, that);
@@ -4877,7 +5108,8 @@ module.exports = function(iterable, unboundFunction, options) {
         }
         return INTERRUPTED ? fn(value, stop) : fn(value);
     };
-    if (IS_ITERATOR) iterator = iterable;
+    if (IS_RECORD) iterator = iterable.iterator;
+    else if (IS_ITERATOR) iterator = iterable;
     else {
         iterFn = getIteratorMethod(iterable);
         if (!iterFn) throw $TypeError(tryToString(iterable) + " is not iterable");
@@ -4891,7 +5123,7 @@ module.exports = function(iterable, unboundFunction, options) {
         }
         iterator = getIterator(iterable, iterFn);
     }
-    next = iterator.next;
+    next = IS_RECORD ? iterable.next : iterator.next;
     while(!(step = call(next, iterator)).done){
         try {
             result = callFn(step.value);
@@ -4903,18 +5135,18 @@ module.exports = function(iterable, unboundFunction, options) {
     return new Result(false);
 };
 
-},{"../internals/function-bind-context":"7vpmS","../internals/function-call":"d7JlP","../internals/an-object":"4isCr","../internals/try-to-string":"4O7d7","../internals/is-array-iterator-method":"l33Z9","../internals/length-of-array-like":"lY4mS","../internals/object-is-prototype-of":"3jtKQ","../internals/get-iterator":"hjwee","../internals/get-iterator-method":"d8BiC","../internals/iterator-close":"hs7nW"}],"6Eoyt":[function(require,module,exports) {
-var isPrototypeOf = require("../internals/object-is-prototype-of");
+},{"1ce6e5856a49c544":"7vpmS","4e5a3a178a2efe14":"d7JlP","12df1224b4e90892":"4isCr","8adebc0a1d270069":"4O7d7","9032e165d6093fce":"l33Z9","d798ccfb9131b9e3":"lY4mS","dced2dad9f007636":"3jtKQ","4ff94145b3376f27":"hjwee","6e847ffbb2dc61c9":"d8BiC","7d5802cc10f57948":"hs7nW"}],"6Eoyt":[function(require,module,exports) {
+var isPrototypeOf = require("7076d3167cfd05be");
 var $TypeError = TypeError;
 module.exports = function(it, Prototype) {
     if (isPrototypeOf(Prototype, it)) return it;
     throw $TypeError("Incorrect invocation");
 };
 
-},{"../internals/object-is-prototype-of":"3jtKQ"}],"6UnCZ":[function(require,module,exports) {
-var isCallable = require("../internals/is-callable");
-var isObject = require("../internals/is-object");
-var setPrototypeOf = require("../internals/object-set-prototype-of");
+},{"7076d3167cfd05be":"3jtKQ"}],"6UnCZ":[function(require,module,exports) {
+var isCallable = require("3ccdecfe4dffc02b");
+var isObject = require("6777c1b927813e2e");
+var setPrototypeOf = require("1e0084142a8b9d7e");
 // makes subclassing work correct for wrapped built-ins
 module.exports = function($this, dummy, Wrapper) {
     var NewTarget, NewTargetPrototype;
@@ -4924,19 +5156,21 @@ module.exports = function($this, dummy, Wrapper) {
     return $this;
 };
 
-},{"../internals/is-callable":"l3Kyn","../internals/is-object":"Z0pBo","../internals/object-set-prototype-of":"2EnFi"}],"fPzdI":[function(require,module,exports) {
+},{"3ccdecfe4dffc02b":"l3Kyn","6777c1b927813e2e":"Z0pBo","1e0084142a8b9d7e":"2EnFi"}],"fPzdI":[function(require,module,exports) {
 "use strict";
-var defineProperty = require("../internals/object-define-property").f;
-var create = require("../internals/object-create");
-var defineBuiltIns = require("../internals/define-built-ins");
-var bind = require("../internals/function-bind-context");
-var anInstance = require("../internals/an-instance");
-var iterate = require("../internals/iterate");
-var defineIterator = require("../internals/define-iterator");
-var setSpecies = require("../internals/set-species");
-var DESCRIPTORS = require("../internals/descriptors");
-var fastKey = require("../internals/internal-metadata").fastKey;
-var InternalStateModule = require("../internals/internal-state");
+var create = require("8f97901cf3dde58d");
+var defineBuiltInAccessor = require("a47d60d55b1ca2e");
+var defineBuiltIns = require("20d1e000477d1ed6");
+var bind = require("e0b4a393d07315b5");
+var anInstance = require("9faf5f8c7bc588a8");
+var isNullOrUndefined = require("3b166b38e712aeee");
+var iterate = require("12c2be52e54dc171");
+var defineIterator = require("cf84cf2b3dc42f42");
+var createIterResultObject = require("5c73ed3d7b99385c");
+var setSpecies = require("ff7d3eb9acc8f242");
+var DESCRIPTORS = require("aac51dbcb417e315");
+var fastKey = require("d52e6ec6e51e4aa7").fastKey;
+var InternalStateModule = require("66cac0bee5341252");
 var setInternalState = InternalStateModule.set;
 var internalStateGetterFor = InternalStateModule.getterFor;
 module.exports = {
@@ -4951,7 +5185,7 @@ module.exports = {
                 size: 0
             });
             if (!DESCRIPTORS) that.size = 0;
-            if (iterable != undefined) iterate(iterable, that[ADDER], {
+            if (!isNullOrUndefined(iterable)) iterate(iterable, that[ADDER], {
                 that: that,
                 AS_ENTRIES: IS_MAP
             });
@@ -5072,7 +5306,8 @@ module.exports = {
                 return define(this, value = value === 0 ? 0 : value, value);
             }
         });
-        if (DESCRIPTORS) defineProperty(Prototype, "size", {
+        if (DESCRIPTORS) defineBuiltInAccessor(Prototype, "size", {
+            configurable: true,
             get: function() {
                 return getInternalState(this).size;
             }
@@ -5110,27 +5345,15 @@ module.exports = {
             if (!state.target || !(state.last = entry = entry ? entry.next : state.state.first)) {
                 // or finish the iteration
                 state.target = undefined;
-                return {
-                    value: undefined,
-                    done: true
-                };
+                return createIterResultObject(undefined, true);
             }
             // return step by kind
-            if (kind == "keys") return {
-                value: entry.key,
-                done: false
-            };
-            if (kind == "values") return {
-                value: entry.value,
-                done: false
-            };
-            return {
-                value: [
-                    entry.key,
-                    entry.value
-                ],
-                done: false
-            };
+            if (kind == "keys") return createIterResultObject(entry.key, false);
+            if (kind == "values") return createIterResultObject(entry.value, false);
+            return createIterResultObject([
+                entry.key,
+                entry.value
+            ], false);
         }, IS_MAP ? "entries" : "values", !IS_MAP, true);
         // `{ Map, Set }.prototype[@@species]` accessors
         // https://tc39.es/ecma262/#sec-get-map-@@species
@@ -5139,24 +5362,23 @@ module.exports = {
     }
 };
 
-},{"../internals/object-define-property":"iJR4w","../internals/object-create":"duSQE","../internals/define-built-ins":"4PapE","../internals/function-bind-context":"7vpmS","../internals/an-instance":"6Eoyt","../internals/iterate":"4OXGm","../internals/define-iterator":"gHDuw","../internals/set-species":"5UUiu","../internals/descriptors":"92ZIi","../internals/internal-metadata":"iITYU","../internals/internal-state":"7AMlF"}],"4PapE":[function(require,module,exports) {
-var defineBuiltIn = require("../internals/define-built-in");
+},{"8f97901cf3dde58d":"duSQE","a47d60d55b1ca2e":"592rH","20d1e000477d1ed6":"4PapE","e0b4a393d07315b5":"7vpmS","9faf5f8c7bc588a8":"6Eoyt","3b166b38e712aeee":"gM5ar","12c2be52e54dc171":"4OXGm","cf84cf2b3dc42f42":"i2KIH","5c73ed3d7b99385c":"5DJos","ff7d3eb9acc8f242":"5UUiu","aac51dbcb417e315":"92ZIi","d52e6ec6e51e4aa7":"iITYU","66cac0bee5341252":"7AMlF"}],"4PapE":[function(require,module,exports) {
+var defineBuiltIn = require("9e16d83a572f234f");
 module.exports = function(target, src, options) {
     for(var key in src)defineBuiltIn(target, key, src[key], options);
     return target;
 };
 
-},{"../internals/define-built-in":"6XwEX"}],"5UUiu":[function(require,module,exports) {
+},{"9e16d83a572f234f":"6XwEX"}],"5UUiu":[function(require,module,exports) {
 "use strict";
-var getBuiltIn = require("../internals/get-built-in");
-var definePropertyModule = require("../internals/object-define-property");
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var DESCRIPTORS = require("../internals/descriptors");
+var getBuiltIn = require("d124e87efda54ef4");
+var defineBuiltInAccessor = require("5af14e6d9711da2a");
+var wellKnownSymbol = require("8d369b2abee78dc7");
+var DESCRIPTORS = require("a332bf292b5e2bd");
 var SPECIES = wellKnownSymbol("species");
 module.exports = function(CONSTRUCTOR_NAME) {
     var Constructor = getBuiltIn(CONSTRUCTOR_NAME);
-    var defineProperty = definePropertyModule.f;
-    if (DESCRIPTORS && Constructor && !Constructor[SPECIES]) defineProperty(Constructor, SPECIES, {
+    if (DESCRIPTORS && Constructor && !Constructor[SPECIES]) defineBuiltInAccessor(Constructor, SPECIES, {
         configurable: true,
         get: function() {
             return this;
@@ -5164,9 +5386,9 @@ module.exports = function(CONSTRUCTOR_NAME) {
     });
 };
 
-},{"../internals/get-built-in":"6ZUSY","../internals/object-define-property":"iJR4w","../internals/well-known-symbol":"gTwyA","../internals/descriptors":"92ZIi"}],"aMX7r":[function(require,module,exports) {
-var $ = require("../internals/export");
-var from = require("../internals/collection-from");
+},{"d124e87efda54ef4":"6ZUSY","5af14e6d9711da2a":"592rH","8d369b2abee78dc7":"gTwyA","a332bf292b5e2bd":"92ZIi"}],"aMX7r":[function(require,module,exports) {
+var $ = require("fd3fe5089c12cfcd");
+var from = require("3932a3a1875880e");
 // `Map.from` method
 // https://tc39.github.io/proposal-setmap-offrom/#sec-map.from
 $({
@@ -5177,14 +5399,15 @@ $({
     from: from
 });
 
-},{"../internals/export":"dIGt4","../internals/collection-from":"4QgyK"}],"4QgyK":[function(require,module,exports) {
+},{"fd3fe5089c12cfcd":"dIGt4","3932a3a1875880e":"4QgyK"}],"4QgyK":[function(require,module,exports) {
 "use strict";
 // https://tc39.github.io/proposal-setmap-offrom/
-var bind = require("../internals/function-bind-context");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var aConstructor = require("../internals/a-constructor");
-var iterate = require("../internals/iterate");
+var bind = require("80a7d057139a5496");
+var call = require("40bc2bdd39f54b81");
+var aCallable = require("24d89f313a41344e");
+var aConstructor = require("6cfd5394b43b103d");
+var isNullOrUndefined = require("ed9440df2a16c7b3");
+var iterate = require("2208ef92016d5b7d");
 var push = [].push;
 module.exports = function from(source /* , mapFn, thisArg */ ) {
     var length = arguments.length;
@@ -5193,7 +5416,7 @@ module.exports = function from(source /* , mapFn, thisArg */ ) {
     aConstructor(this);
     mapping = mapFn !== undefined;
     if (mapping) aCallable(mapFn);
-    if (source == undefined) return new this();
+    if (isNullOrUndefined(source)) return new this();
     array = [];
     if (mapping) {
         n = 0;
@@ -5207,9 +5430,9 @@ module.exports = function from(source /* , mapFn, thisArg */ ) {
     return new this(array);
 };
 
-},{"../internals/function-bind-context":"7vpmS","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/a-constructor":"laU2E","../internals/iterate":"4OXGm"}],"laU2E":[function(require,module,exports) {
-var isConstructor = require("../internals/is-constructor");
-var tryToString = require("../internals/try-to-string");
+},{"80a7d057139a5496":"7vpmS","40bc2bdd39f54b81":"d7JlP","24d89f313a41344e":"gOMir","6cfd5394b43b103d":"laU2E","ed9440df2a16c7b3":"gM5ar","2208ef92016d5b7d":"4OXGm"}],"laU2E":[function(require,module,exports) {
+var isConstructor = require("6d4faf4e2483b5f3");
+var tryToString = require("17cdd3a5866af59");
 var $TypeError = TypeError;
 // `Assert: IsConstructor(argument) is true`
 module.exports = function(argument) {
@@ -5217,9 +5440,9 @@ module.exports = function(argument) {
     throw $TypeError(tryToString(argument) + " is not a constructor");
 };
 
-},{"../internals/is-constructor":"iVgSy","../internals/try-to-string":"4O7d7"}],"3WfcG":[function(require,module,exports) {
-var $ = require("../internals/export");
-var of = require("../internals/collection-of");
+},{"6d4faf4e2483b5f3":"iVgSy","17cdd3a5866af59":"4O7d7"}],"3WfcG":[function(require,module,exports) {
+var $ = require("9240b6ba05b14804");
+var of = require("32fdb83e0a5a073b");
 // `Map.of` method
 // https://tc39.github.io/proposal-setmap-offrom/#sec-map.of
 $({
@@ -5230,18 +5453,19 @@ $({
     of: of
 });
 
-},{"../internals/export":"dIGt4","../internals/collection-of":"eN5Ir"}],"eN5Ir":[function(require,module,exports) {
+},{"9240b6ba05b14804":"dIGt4","32fdb83e0a5a073b":"eN5Ir"}],"eN5Ir":[function(require,module,exports) {
 "use strict";
-var arraySlice = require("../internals/array-slice");
+var arraySlice = require("fb3929c16e654ad5");
 // https://tc39.github.io/proposal-setmap-offrom/
 module.exports = function of() {
     return new this(arraySlice(arguments));
 };
 
-},{"../internals/array-slice":"RsFXo"}],"84I4a":[function(require,module,exports) {
+},{"fb3929c16e654ad5":"RsFXo"}],"84I4a":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var deleteAll = require("../internals/collection-delete-all");
+var $ = require("38dc8885617bd612");
+var aMap = require("ff2ef3fde43b21f7");
+var remove = require("d9acaaec1da660ae").remove;
 // `Map.prototype.deleteAll` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5250,66 +5474,79 @@ $({
     real: true,
     forced: true
 }, {
-    deleteAll: deleteAll
+    deleteAll: function deleteAll() {
+        var collection = aMap(this);
+        var allDeleted = true;
+        var wasDeleted;
+        for(var k = 0, len = arguments.length; k < len; k++){
+            wasDeleted = remove(collection, arguments[k]);
+            allDeleted = allDeleted && wasDeleted;
+        }
+        return !!allDeleted;
+    }
 });
 
-},{"../internals/export":"dIGt4","../internals/collection-delete-all":"gWYS7"}],"gWYS7":[function(require,module,exports) {
-"use strict";
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-// https://github.com/tc39/collection-methods
-module.exports = function deleteAll() {
-    var collection = anObject(this);
-    var remover = aCallable(collection["delete"]);
-    var allDeleted = true;
-    var wasDeleted;
-    for(var k = 0, len = arguments.length; k < len; k++){
-        wasDeleted = call(remover, collection, arguments[k]);
-        allDeleted = allDeleted && wasDeleted;
-    }
-    return !!allDeleted;
+},{"38dc8885617bd612":"dIGt4","ff2ef3fde43b21f7":"65DQ6","d9acaaec1da660ae":"f9Wim"}],"65DQ6":[function(require,module,exports) {
+var has = require("5cb969560d8ee731").has;
+// Perform ? RequireInternalSlot(M, [[MapData]])
+module.exports = function(it) {
+    has(it);
+    return it;
 };
 
-},{"../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr"}],"8OuZD":[function(require,module,exports) {
+},{"5cb969560d8ee731":"f9Wim"}],"f9Wim":[function(require,module,exports) {
+var uncurryThis = require("88ffe40e32ed6528");
+// eslint-disable-next-line es/no-map -- safe
+var MapPrototype = Map.prototype;
+module.exports = {
+    // eslint-disable-next-line es/no-map -- safe
+    Map: Map,
+    set: uncurryThis(MapPrototype.set),
+    get: uncurryThis(MapPrototype.get),
+    has: uncurryThis(MapPrototype.has),
+    remove: uncurryThis(MapPrototype["delete"]),
+    proto: MapPrototype
+};
+
+},{"88ffe40e32ed6528":"7GlkT"}],"8OuZD":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var emplace = require("../internals/map-emplace");
+var $ = require("95b026fb8d91dc31");
+var aMap = require("5653fe768de8fe96");
+var MapHelpers = require("356ad4413d790c57");
+var get = MapHelpers.get;
+var has = MapHelpers.has;
+var set = MapHelpers.set;
 // `Map.prototype.emplace` method
-// https://github.com/thumbsupep/proposal-upsert
+// https://github.com/tc39/proposal-upsert
 $({
     target: "Map",
     proto: true,
     real: true,
     forced: true
 }, {
-    emplace: emplace
+    emplace: function emplace(key, handler) {
+        var map = aMap(this);
+        var value, inserted;
+        if (has(map, key)) {
+            value = get(map, key);
+            if ("update" in handler) {
+                value = handler.update(value, key, map);
+                set(map, key, value);
+            }
+            return value;
+        }
+        inserted = handler.insert(key, map);
+        set(map, key, inserted);
+        return inserted;
+    }
 });
 
-},{"../internals/export":"dIGt4","../internals/map-emplace":"bXCOb"}],"bXCOb":[function(require,module,exports) {
+},{"95b026fb8d91dc31":"dIGt4","5653fe768de8fe96":"65DQ6","356ad4413d790c57":"f9Wim"}],"a0ie9":[function(require,module,exports) {
 "use strict";
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-// `Map.prototype.emplace` method
-// https://github.com/thumbsupep/proposal-upsert
-module.exports = function emplace(key, handler) {
-    var map = anObject(this);
-    var get = aCallable(map.get);
-    var has = aCallable(map.has);
-    var set = aCallable(map.set);
-    var value = call(has, map, key) && "update" in handler ? handler.update(call(get, map, key), key, map) : handler.insert(key, map);
-    call(set, map, key, value);
-    return value;
-};
-
-},{"../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr"}],"a0ie9":[function(require,module,exports) {
-"use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var bind = require("../internals/function-bind-context");
-var getMapIterator = require("../internals/get-map-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("5bc6a250b717e460");
+var bind = require("f930addb536515b1");
+var aMap = require("3da861167f4d20eb");
+var iterate = require("203c4efa11647864");
 // `Map.prototype.every` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5319,37 +5556,49 @@ $({
     forced: true
 }, {
     every: function every(callbackfn /* , thisArg */ ) {
-        var map = anObject(this);
-        var iterator = getMapIterator(map);
+        var map = aMap(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        return !iterate(iterator, function(key, value, stop) {
-            if (!boundFunction(value, key, map)) return stop();
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).stopped;
+        return iterate(map, function(value, key) {
+            if (!boundFunction(value, key, map)) return false;
+        }, true) !== false;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/function-bind-context":"7vpmS","../internals/get-map-iterator":"1gclz","../internals/iterate":"4OXGm"}],"1gclz":[function(require,module,exports) {
-var call = require("../internals/function-call");
-module.exports = function(it) {
-    // eslint-disable-next-line es-x/no-map -- safe
-    return call(Map.prototype.entries, it);
+},{"5bc6a250b717e460":"dIGt4","f930addb536515b1":"7vpmS","3da861167f4d20eb":"65DQ6","203c4efa11647864":"i3dL0"}],"i3dL0":[function(require,module,exports) {
+var uncurryThis = require("8330db03a5273a28");
+var iterateSimple = require("93569bd5c1b7079f");
+var MapHelpers = require("a4ec0ec737c02a0a");
+var Map = MapHelpers.Map;
+var MapPrototype = MapHelpers.proto;
+var forEach = uncurryThis(MapPrototype.forEach);
+var entries = uncurryThis(MapPrototype.entries);
+var next = entries(new Map()).next;
+module.exports = function(map, fn, interruptible) {
+    return interruptible ? iterateSimple(entries(map), function(entry) {
+        return fn(entry[1], entry[0]);
+    }, next) : forEach(map, fn);
 };
 
-},{"../internals/function-call":"d7JlP"}],"8EHBg":[function(require,module,exports) {
+},{"8330db03a5273a28":"7GlkT","93569bd5c1b7079f":"bplR8","a4ec0ec737c02a0a":"f9Wim"}],"bplR8":[function(require,module,exports) {
+var call = require("9fb67c74c94280af");
+module.exports = function(iterator, fn, $next) {
+    var next = $next || iterator.next;
+    var step, result;
+    while(!(step = call(next, iterator)).done){
+        result = fn(step.value);
+        if (result !== undefined) return result;
+    }
+};
+
+},{"9fb67c74c94280af":"d7JlP"}],"8EHBg":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var bind = require("../internals/function-bind-context");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var speciesConstructor = require("../internals/species-constructor");
-var getMapIterator = require("../internals/get-map-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("f0d61c00bd5fcd65");
+var bind = require("a3299dfd94f40306");
+var aMap = require("dbeb180a72b9ed9d");
+var MapHelpers = require("8f90ee5db8456b9c");
+var iterate = require("4841a1b9cd05b40b");
+var Map = MapHelpers.Map;
+var set = MapHelpers.set;
 // `Map.prototype.filter` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5359,41 +5608,22 @@ $({
     forced: true
 }, {
     filter: function filter(callbackfn /* , thisArg */ ) {
-        var map = anObject(this);
-        var iterator = getMapIterator(map);
+        var map = aMap(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        var newMap = new (speciesConstructor(map, getBuiltIn("Map")))();
-        var setter = aCallable(newMap.set);
-        iterate(iterator, function(key, value) {
-            if (boundFunction(value, key, map)) call(setter, newMap, key, value);
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true
+        var newMap = new Map();
+        iterate(map, function(value, key) {
+            if (boundFunction(value, key, map)) set(newMap, key, value);
         });
         return newMap;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-bind-context":"7vpmS","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/species-constructor":"cIK3T","../internals/get-map-iterator":"1gclz","../internals/iterate":"4OXGm"}],"cIK3T":[function(require,module,exports) {
-var anObject = require("../internals/an-object");
-var aConstructor = require("../internals/a-constructor");
-var wellKnownSymbol = require("../internals/well-known-symbol");
-var SPECIES = wellKnownSymbol("species");
-// `SpeciesConstructor` abstract operation
-// https://tc39.es/ecma262/#sec-speciesconstructor
-module.exports = function(O, defaultConstructor) {
-    var C = anObject(O).constructor;
-    var S;
-    return C === undefined || (S = anObject(C)[SPECIES]) == undefined ? defaultConstructor : aConstructor(S);
-};
-
-},{"../internals/an-object":"4isCr","../internals/a-constructor":"laU2E","../internals/well-known-symbol":"gTwyA"}],"kzunK":[function(require,module,exports) {
+},{"f0d61c00bd5fcd65":"dIGt4","a3299dfd94f40306":"7vpmS","dbeb180a72b9ed9d":"65DQ6","8f90ee5db8456b9c":"f9Wim","4841a1b9cd05b40b":"i3dL0"}],"kzunK":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var bind = require("../internals/function-bind-context");
-var getMapIterator = require("../internals/get-map-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("f36d5f5bbc023cb4");
+var bind = require("e81055cedc3eeeab");
+var aMap = require("4a2b6751cba9ccac");
+var iterate = require("919e0911a5c7a71f");
 // `Map.prototype.find` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5403,26 +5633,23 @@ $({
     forced: true
 }, {
     find: function find(callbackfn /* , thisArg */ ) {
-        var map = anObject(this);
-        var iterator = getMapIterator(map);
+        var map = aMap(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        return iterate(iterator, function(key, value, stop) {
-            if (boundFunction(value, key, map)) return stop(value);
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).result;
+        var result = iterate(map, function(value, key) {
+            if (boundFunction(value, key, map)) return {
+                value: value
+            };
+        }, true);
+        return result && result.value;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/function-bind-context":"7vpmS","../internals/get-map-iterator":"1gclz","../internals/iterate":"4OXGm"}],"ipfV1":[function(require,module,exports) {
+},{"f36d5f5bbc023cb4":"dIGt4","e81055cedc3eeeab":"7vpmS","4a2b6751cba9ccac":"65DQ6","919e0911a5c7a71f":"i3dL0"}],"ipfV1":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var bind = require("../internals/function-bind-context");
-var getMapIterator = require("../internals/get-map-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("1aaa3ce2ab19e42a");
+var bind = require("901b5b4085d43bff");
+var aMap = require("bee8e914fecb99b9");
+var iterate = require("d25c81b703a959eb");
 // `Map.prototype.findKey` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5432,27 +5659,26 @@ $({
     forced: true
 }, {
     findKey: function findKey(callbackfn /* , thisArg */ ) {
-        var map = anObject(this);
-        var iterator = getMapIterator(map);
+        var map = aMap(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        return iterate(iterator, function(key, value, stop) {
-            if (boundFunction(value, key, map)) return stop(key);
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).result;
+        var result = iterate(map, function(value, key) {
+            if (boundFunction(value, key, map)) return {
+                key: key
+            };
+        }, true);
+        return result && result.key;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/function-bind-context":"7vpmS","../internals/get-map-iterator":"1gclz","../internals/iterate":"4OXGm"}],"3AR1K":[function(require,module,exports) {
+},{"1aaa3ce2ab19e42a":"dIGt4","901b5b4085d43bff":"7vpmS","bee8e914fecb99b9":"65DQ6","d25c81b703a959eb":"i3dL0"}],"3AR1K":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var call = require("../internals/function-call");
-var uncurryThis = require("../internals/function-uncurry-this");
-var aCallable = require("../internals/a-callable");
-var getIterator = require("../internals/get-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("9e4ae846509ba22b");
+var call = require("d9ea3be22badb15a");
+var uncurryThis = require("8d0d3f3d08e028f9");
+var isCallable = require("1d430422d0c8a0d4");
+var aCallable = require("ac9b256de242a15b");
+var iterate = require("f98bbf0e1d520a5c");
+var Map = require("1ede5da8b04218bf").Map;
 var push = uncurryThis([].push);
 // `Map.groupBy` method
 // https://github.com/tc39/proposal-collection-methods
@@ -5462,32 +5688,29 @@ $({
     forced: true
 }, {
     groupBy: function groupBy(iterable, keyDerivative) {
+        var C = isCallable(this) ? this : Map;
+        var newMap = new C();
         aCallable(keyDerivative);
-        var iterator = getIterator(iterable);
-        var newMap = new this();
         var has = aCallable(newMap.has);
         var get = aCallable(newMap.get);
         var set = aCallable(newMap.set);
-        iterate(iterator, function(element) {
+        iterate(iterable, function(element) {
             var derivedKey = keyDerivative(element);
             if (!call(has, newMap, derivedKey)) call(set, newMap, derivedKey, [
                 element
             ]);
             else push(call(get, newMap, derivedKey), element);
-        }, {
-            IS_ITERATOR: true
         });
         return newMap;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/function-call":"d7JlP","../internals/function-uncurry-this":"7GlkT","../internals/a-callable":"gOMir","../internals/get-iterator":"hjwee","../internals/iterate":"4OXGm"}],"3cPf4":[function(require,module,exports) {
+},{"9e4ae846509ba22b":"dIGt4","d9ea3be22badb15a":"d7JlP","8d0d3f3d08e028f9":"7GlkT","1d430422d0c8a0d4":"l3Kyn","ac9b256de242a15b":"gOMir","f98bbf0e1d520a5c":"4OXGm","1ede5da8b04218bf":"f9Wim"}],"3cPf4":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var getMapIterator = require("../internals/get-map-iterator");
-var sameValueZero = require("../internals/same-value-zero");
-var iterate = require("../internals/iterate");
+var $ = require("f2ec2c5c17a96797");
+var sameValueZero = require("cc2d8e3e2a32cc98");
+var aMap = require("6d5db09a4c62379f");
+var iterate = require("a831cf72cc44aba");
 // `Map.prototype.includes` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5497,17 +5720,13 @@ $({
     forced: true
 }, {
     includes: function includes(searchElement) {
-        return iterate(getMapIterator(anObject(this)), function(key, value, stop) {
-            if (sameValueZero(value, searchElement)) return stop();
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).stopped;
+        return iterate(aMap(this), function(value) {
+            if (sameValueZero(value, searchElement)) return true;
+        }, true) === true;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/get-map-iterator":"1gclz","../internals/same-value-zero":"kmXP5","../internals/iterate":"4OXGm"}],"kmXP5":[function(require,module,exports) {
+},{"f2ec2c5c17a96797":"dIGt4","cc2d8e3e2a32cc98":"kmXP5","6d5db09a4c62379f":"65DQ6","a831cf72cc44aba":"i3dL0"}],"kmXP5":[function(require,module,exports) {
 // `SameValueZero` abstract operation
 // https://tc39.es/ecma262/#sec-samevaluezero
 module.exports = function(x, y) {
@@ -5517,10 +5736,12 @@ module.exports = function(x, y) {
 
 },{}],"czzPK":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var call = require("../internals/function-call");
-var iterate = require("../internals/iterate");
-var aCallable = require("../internals/a-callable");
+var $ = require("8160568764555bd0");
+var call = require("ac159987e807a4d8");
+var iterate = require("9abbcd8a861d76fb");
+var isCallable = require("71ea253b6936a5ee");
+var aCallable = require("d9efabaf16247d78");
+var Map = require("187cf02dd31d64d4").Map;
 // `Map.keyBy` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5529,7 +5750,8 @@ $({
     forced: true
 }, {
     keyBy: function keyBy(iterable, keyDerivative) {
-        var newMap = new this();
+        var C = isCallable(this) ? this : Map;
+        var newMap = new C();
         aCallable(keyDerivative);
         var setter = aCallable(newMap.set);
         iterate(iterable, function(element) {
@@ -5539,12 +5761,11 @@ $({
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/function-call":"d7JlP","../internals/iterate":"4OXGm","../internals/a-callable":"gOMir"}],"la1gU":[function(require,module,exports) {
+},{"8160568764555bd0":"dIGt4","ac159987e807a4d8":"d7JlP","9abbcd8a861d76fb":"4OXGm","71ea253b6936a5ee":"l3Kyn","d9efabaf16247d78":"gOMir","187cf02dd31d64d4":"f9Wim"}],"la1gU":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var getMapIterator = require("../internals/get-map-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("9c59f95d6b8fd2e3");
+var aMap = require("ba399af119331083");
+var iterate = require("fd232d8f510ca4b8");
 // `Map.prototype.keyOf` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5554,27 +5775,24 @@ $({
     forced: true
 }, {
     keyOf: function keyOf(searchElement) {
-        return iterate(getMapIterator(anObject(this)), function(key, value, stop) {
-            if (value === searchElement) return stop(key);
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).result;
+        var result = iterate(aMap(this), function(value, key) {
+            if (value === searchElement) return {
+                key: key
+            };
+        }, true);
+        return result && result.key;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/get-map-iterator":"1gclz","../internals/iterate":"4OXGm"}],"12CRV":[function(require,module,exports) {
+},{"9c59f95d6b8fd2e3":"dIGt4","ba399af119331083":"65DQ6","fd232d8f510ca4b8":"i3dL0"}],"12CRV":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var bind = require("../internals/function-bind-context");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var speciesConstructor = require("../internals/species-constructor");
-var getMapIterator = require("../internals/get-map-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("171cd0106660c66a");
+var bind = require("71840426aa570e7c");
+var aMap = require("f686e3f4dfaba54f");
+var MapHelpers = require("dd236cdec5a21915");
+var iterate = require("f49babfeb9f81f2");
+var Map = MapHelpers.Map;
+var set = MapHelpers.set;
 // `Map.prototype.mapKeys` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5584,32 +5802,25 @@ $({
     forced: true
 }, {
     mapKeys: function mapKeys(callbackfn /* , thisArg */ ) {
-        var map = anObject(this);
-        var iterator = getMapIterator(map);
+        var map = aMap(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        var newMap = new (speciesConstructor(map, getBuiltIn("Map")))();
-        var setter = aCallable(newMap.set);
-        iterate(iterator, function(key, value) {
-            call(setter, newMap, boundFunction(value, key, map), value);
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true
+        var newMap = new Map();
+        iterate(map, function(value, key) {
+            set(newMap, boundFunction(value, key, map), value);
         });
         return newMap;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-bind-context":"7vpmS","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/species-constructor":"cIK3T","../internals/get-map-iterator":"1gclz","../internals/iterate":"4OXGm"}],"fQehs":[function(require,module,exports) {
+},{"171cd0106660c66a":"dIGt4","71840426aa570e7c":"7vpmS","f686e3f4dfaba54f":"65DQ6","dd236cdec5a21915":"f9Wim","f49babfeb9f81f2":"i3dL0"}],"fQehs":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var bind = require("../internals/function-bind-context");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var speciesConstructor = require("../internals/species-constructor");
-var getMapIterator = require("../internals/get-map-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("1e32cafba475ef4f");
+var bind = require("ab6c4bfffedb89b7");
+var aMap = require("1c8cdc313c367058");
+var MapHelpers = require("672c14b5a9bbee00");
+var iterate = require("4968348005e0a187");
+var Map = MapHelpers.Map;
+var set = MapHelpers.set;
 // `Map.prototype.mapValues` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5619,27 +5830,22 @@ $({
     forced: true
 }, {
     mapValues: function mapValues(callbackfn /* , thisArg */ ) {
-        var map = anObject(this);
-        var iterator = getMapIterator(map);
+        var map = aMap(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        var newMap = new (speciesConstructor(map, getBuiltIn("Map")))();
-        var setter = aCallable(newMap.set);
-        iterate(iterator, function(key, value) {
-            call(setter, newMap, key, boundFunction(value, key, map));
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true
+        var newMap = new Map();
+        iterate(map, function(value, key) {
+            set(newMap, key, boundFunction(value, key, map));
         });
         return newMap;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-bind-context":"7vpmS","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/species-constructor":"cIK3T","../internals/get-map-iterator":"1gclz","../internals/iterate":"4OXGm"}],"5Qvm2":[function(require,module,exports) {
+},{"1e32cafba475ef4f":"dIGt4","ab6c4bfffedb89b7":"7vpmS","1c8cdc313c367058":"65DQ6","672c14b5a9bbee00":"f9Wim","4968348005e0a187":"i3dL0"}],"5Qvm2":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var iterate = require("../internals/iterate");
+var $ = require("9d91301d325ad610");
+var aMap = require("2dd3e99cadb131b2");
+var iterate = require("8f6d5d8ee1afc3f5");
+var set = require("419e621a5c55e23e").set;
 // `Map.prototype.merge` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5651,25 +5857,24 @@ $({
 }, {
     // eslint-disable-next-line no-unused-vars -- required for `.length`
     merge: function merge(iterable /* ...iterables */ ) {
-        var map = anObject(this);
-        var setter = aCallable(map.set);
+        var map = aMap(this);
         var argumentsLength = arguments.length;
         var i = 0;
-        while(i < argumentsLength)iterate(arguments[i++], setter, {
-            that: map,
+        while(i < argumentsLength)iterate(arguments[i++], function(key, value) {
+            set(map, key, value);
+        }, {
             AS_ENTRIES: true
         });
         return map;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/iterate":"4OXGm"}],"8ampn":[function(require,module,exports) {
+},{"9d91301d325ad610":"dIGt4","2dd3e99cadb131b2":"65DQ6","8f6d5d8ee1afc3f5":"4OXGm","419e621a5c55e23e":"f9Wim"}],"8ampn":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var aCallable = require("../internals/a-callable");
-var getMapIterator = require("../internals/get-map-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("b6cbbfb6f23b5c3a");
+var aCallable = require("848f84bd3bf1d08");
+var aMap = require("835e39783f45f6ba");
+var iterate = require("743441a2f6cfc156");
 var $TypeError = TypeError;
 // `Map.prototype.reduce` method
 // https://github.com/tc39/proposal-collection-methods
@@ -5680,33 +5885,28 @@ $({
     forced: true
 }, {
     reduce: function reduce(callbackfn /* , initialValue */ ) {
-        var map = anObject(this);
-        var iterator = getMapIterator(map);
+        var map = aMap(this);
         var noInitial = arguments.length < 2;
         var accumulator = noInitial ? undefined : arguments[1];
         aCallable(callbackfn);
-        iterate(iterator, function(key, value) {
+        iterate(map, function(value, key) {
             if (noInitial) {
                 noInitial = false;
                 accumulator = value;
             } else accumulator = callbackfn(accumulator, value, key, map);
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true
         });
         if (noInitial) throw $TypeError("Reduce of empty map with no initial value");
         return accumulator;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/a-callable":"gOMir","../internals/get-map-iterator":"1gclz","../internals/iterate":"4OXGm"}],"eVX7K":[function(require,module,exports) {
+},{"b6cbbfb6f23b5c3a":"dIGt4","848f84bd3bf1d08":"gOMir","835e39783f45f6ba":"65DQ6","743441a2f6cfc156":"i3dL0"}],"eVX7K":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var bind = require("../internals/function-bind-context");
-var getMapIterator = require("../internals/get-map-iterator");
-var iterate = require("../internals/iterate");
-// `Set.prototype.some` method
+var $ = require("2b109d3791dd70e5");
+var bind = require("8e1f4e232a22a3b4");
+var aMap = require("9b935f7e90b2082c");
+var iterate = require("b7db496e80091c70");
+// `Map.prototype.some` method
 // https://github.com/tc39/proposal-collection-methods
 $({
     target: "Map",
@@ -5715,27 +5915,25 @@ $({
     forced: true
 }, {
     some: function some(callbackfn /* , thisArg */ ) {
-        var map = anObject(this);
-        var iterator = getMapIterator(map);
+        var map = aMap(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        return iterate(iterator, function(key, value, stop) {
-            if (boundFunction(value, key, map)) return stop();
-        }, {
-            AS_ENTRIES: true,
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).stopped;
+        return iterate(map, function(value, key) {
+            if (boundFunction(value, key, map)) return true;
+        }, true) === true;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/function-bind-context":"7vpmS","../internals/get-map-iterator":"1gclz","../internals/iterate":"4OXGm"}],"agmCJ":[function(require,module,exports) {
+},{"2b109d3791dd70e5":"dIGt4","8e1f4e232a22a3b4":"7vpmS","9b935f7e90b2082c":"65DQ6","b7db496e80091c70":"i3dL0"}],"agmCJ":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var call = require("../internals/function-call");
-var anObject = require("../internals/an-object");
-var aCallable = require("../internals/a-callable");
+var $ = require("e4fbed8e1c83b7fe");
+var aCallable = require("bbe17bbf2faaf366");
+var aMap = require("5db345f789d20a9f");
+var MapHelpers = require("f245a67d64247d63");
 var $TypeError = TypeError;
-// `Set.prototype.update` method
+var get = MapHelpers.get;
+var has = MapHelpers.has;
+var set = MapHelpers.set;
+// `Map.prototype.update` method
 // https://github.com/tc39/proposal-collection-methods
 $({
     target: "Map",
@@ -5744,25 +5942,22 @@ $({
     forced: true
 }, {
     update: function update(key, callback /* , thunk */ ) {
-        var map = anObject(this);
-        var get = aCallable(map.get);
-        var has = aCallable(map.has);
-        var set = aCallable(map.set);
+        var map = aMap(this);
         var length = arguments.length;
         aCallable(callback);
-        var isPresentInMap = call(has, map, key);
+        var isPresentInMap = has(map, key);
         if (!isPresentInMap && length < 3) throw $TypeError("Updating absent value");
-        var value = isPresentInMap ? call(get, map, key) : aCallable(length > 2 ? arguments[2] : undefined)(key, map);
-        call(set, map, key, callback(value, key, map));
+        var value = isPresentInMap ? get(map, key) : aCallable(length > 2 ? arguments[2] : undefined)(key, map);
+        set(map, key, callback(value, key, map));
         return map;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/function-call":"d7JlP","../internals/an-object":"4isCr","../internals/a-callable":"gOMir"}],"d9AJ5":[function(require,module,exports) {
+},{"e4fbed8e1c83b7fe":"dIGt4","bbe17bbf2faaf366":"gOMir","5db345f789d20a9f":"65DQ6","f245a67d64247d63":"f9Wim"}],"d9AJ5":[function(require,module,exports) {
 "use strict";
 // TODO: remove from `core-js@4`
-var $ = require("../internals/export");
-var upsert = require("../internals/map-upsert");
+var $ = require("df61394b84305c4f");
+var upsert = require("e86a81d08b3f0d8d");
 // `Map.prototype.upsert` method (replaced by `Map.prototype.emplace`)
 // https://github.com/thumbsupep/proposal-upsert
 $({
@@ -5774,15 +5969,15 @@ $({
     upsert: upsert
 });
 
-},{"../internals/export":"dIGt4","../internals/map-upsert":"8uOIg"}],"8uOIg":[function(require,module,exports) {
+},{"df61394b84305c4f":"dIGt4","e86a81d08b3f0d8d":"8uOIg"}],"8uOIg":[function(require,module,exports) {
 "use strict";
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var isCallable = require("../internals/is-callable");
-var anObject = require("../internals/an-object");
+var call = require("f55ed61566f8584");
+var aCallable = require("7702a684f0d15e45");
+var isCallable = require("dc5bcd69f486c4a3");
+var anObject = require("6226b3523c992e7b");
 var $TypeError = TypeError;
 // `Map.prototype.upsert` method
-// https://github.com/thumbsupep/proposal-upsert
+// https://github.com/tc39/proposal-upsert
 module.exports = function upsert(key, updateFn /* , insertFn */ ) {
     var map = anObject(this);
     var get = aCallable(map.get);
@@ -5804,11 +5999,11 @@ module.exports = function upsert(key, updateFn /* , insertFn */ ) {
     return value;
 };
 
-},{"../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/is-callable":"l3Kyn","../internals/an-object":"4isCr"}],"kYZaO":[function(require,module,exports) {
+},{"f55ed61566f8584":"d7JlP","7702a684f0d15e45":"gOMir","dc5bcd69f486c4a3":"l3Kyn","6226b3523c992e7b":"4isCr"}],"kYZaO":[function(require,module,exports) {
 "use strict";
 // TODO: remove from `core-js@4`
-var $ = require("../internals/export");
-var upsert = require("../internals/map-upsert");
+var $ = require("cbdb847c36523eba");
+var upsert = require("c4223d61f036df8c");
 // `Map.prototype.updateOrInsert` method (replaced by `Map.prototype.emplace`)
 // https://github.com/thumbsupep/proposal-upsert
 $({
@@ -5821,56 +6016,63 @@ $({
     updateOrInsert: upsert
 });
 
-},{"../internals/export":"dIGt4","../internals/map-upsert":"8uOIg"}],"bD75O":[function(require,module,exports) {
-module.exports = require("../../full/set");
+},{"cbdb847c36523eba":"dIGt4","c4223d61f036df8c":"8uOIg"}],"bD75O":[function(require,module,exports) {
+module.exports = require("c778dc2d101e6f36");
 
-},{"../../full/set":"jFpj7"}],"jFpj7":[function(require,module,exports) {
-var parent = require("../../actual/set");
-require("../../modules/esnext.set.from");
-require("../../modules/esnext.set.of");
-require("../../modules/esnext.set.add-all");
-require("../../modules/esnext.set.delete-all");
-require("../../modules/esnext.set.every");
-require("../../modules/esnext.set.difference");
-require("../../modules/esnext.set.filter");
-require("../../modules/esnext.set.find");
-require("../../modules/esnext.set.intersection");
-require("../../modules/esnext.set.is-disjoint-from");
-require("../../modules/esnext.set.is-subset-of");
-require("../../modules/esnext.set.is-superset-of");
-require("../../modules/esnext.set.join");
-require("../../modules/esnext.set.map");
-require("../../modules/esnext.set.reduce");
-require("../../modules/esnext.set.some");
-require("../../modules/esnext.set.symmetric-difference");
-require("../../modules/esnext.set.union");
+},{"c778dc2d101e6f36":"jFpj7"}],"jFpj7":[function(require,module,exports) {
+var parent = require("7f757c928b6d0464");
+require("9dfd28a5cbfb6bf8");
+require("3c3cd289f7cc09a");
+require("48413d8601e76f5e");
+require("3bd8225fe530966c");
+require("ce5a7e4707e536b4");
+require("1740d02a3dfb8bd5");
+require("e5d7336b7e526796");
+require("c0ebe77a3f3d275f");
+require("b99e8b8b286acd7a");
+require("cc6c8201dd3ff7d4");
+require("e60d246794f7bb67");
+require("1065c91796f0c5f");
+require("f7e47f100a2b949b");
+require("cd29b66bdbdb4b3");
+require("77980442acb28e54");
+require("60f1348b3dd722e8");
+require("e22e33debc263aaf");
+require("201502328f545c4");
 module.exports = parent;
 
-},{"../../actual/set":"iDju7","../../modules/esnext.set.from":"fFjm0","../../modules/esnext.set.of":"h11gG","../../modules/esnext.set.add-all":"7qoXf","../../modules/esnext.set.delete-all":"79fB3","../../modules/esnext.set.every":"4X7Cu","../../modules/esnext.set.difference":"773AO","../../modules/esnext.set.filter":"a8QMe","../../modules/esnext.set.find":"44hBz","../../modules/esnext.set.intersection":"5PUFy","../../modules/esnext.set.is-disjoint-from":"b3q3i","../../modules/esnext.set.is-subset-of":"5igXN","../../modules/esnext.set.is-superset-of":"1amm1","../../modules/esnext.set.join":"bMl6L","../../modules/esnext.set.map":"g65Jk","../../modules/esnext.set.reduce":"gtD5C","../../modules/esnext.set.some":"aYdPy","../../modules/esnext.set.symmetric-difference":"lsopM","../../modules/esnext.set.union":"3nyPK"}],"iDju7":[function(require,module,exports) {
-var parent = require("../../stable/set");
+},{"7f757c928b6d0464":"iDju7","9dfd28a5cbfb6bf8":"fFjm0","3c3cd289f7cc09a":"h11gG","48413d8601e76f5e":"7qoXf","3bd8225fe530966c":"79fB3","ce5a7e4707e536b4":"4X7Cu","1740d02a3dfb8bd5":"773AO","e5d7336b7e526796":"a8QMe","c0ebe77a3f3d275f":"44hBz","b99e8b8b286acd7a":"5PUFy","cc6c8201dd3ff7d4":"b3q3i","e60d246794f7bb67":"5igXN","1065c91796f0c5f":"1amm1","f7e47f100a2b949b":"bMl6L","cd29b66bdbdb4b3":"g65Jk","77980442acb28e54":"gtD5C","60f1348b3dd722e8":"aYdPy","e22e33debc263aaf":"lsopM","201502328f545c4":"3nyPK"}],"iDju7":[function(require,module,exports) {
+var parent = require("2e3d7dd6317c639b");
+require("e76bbf22a955731c");
+require("27f1fafcf857c417");
+require("50a7c47bb38880bc");
+require("fa1809b5190a64ec");
+require("c435f8843fad3ef3");
+require("d9b019512c189ad5");
+require("dc84ca7358bc09c2");
 module.exports = parent;
 
-},{"../../stable/set":"ikP0m"}],"ikP0m":[function(require,module,exports) {
-var parent = require("../../es/set");
-require("../../modules/web.dom-collections.iterator");
+},{"2e3d7dd6317c639b":"ikP0m","e76bbf22a955731c":"DHnDE","27f1fafcf857c417":"hKIGC","50a7c47bb38880bc":"iWYYJ","fa1809b5190a64ec":"1CHVf","c435f8843fad3ef3":"NpLoM","d9b019512c189ad5":"6uQXT","dc84ca7358bc09c2":"eLNhN"}],"ikP0m":[function(require,module,exports) {
+var parent = require("764617c39192a90");
+require("8d95a31f2589e0f1");
 module.exports = parent;
 
-},{"../../es/set":"i8hfX","../../modules/web.dom-collections.iterator":"3YhYU"}],"i8hfX":[function(require,module,exports) {
-require("../../modules/es.array.iterator");
-require("../../modules/es.object.to-string");
-require("../../modules/es.set");
-require("../../modules/es.string.iterator");
-var path = require("../../internals/path");
+},{"764617c39192a90":"i8hfX","8d95a31f2589e0f1":"3YhYU"}],"i8hfX":[function(require,module,exports) {
+require("4ced0192b6a04467");
+require("c50e8a273b6c5ffe");
+require("c29048b1705481ad");
+require("21009d25c6a65e51");
+var path = require("697243c184a8f839");
 module.exports = path.Set;
 
-},{"../../modules/es.array.iterator":"dFlRN","../../modules/es.object.to-string":"9XvHS","../../modules/es.set":"aLVyo","../../modules/es.string.iterator":"ata5h","../../internals/path":"gKjqB"}],"aLVyo":[function(require,module,exports) {
+},{"4ced0192b6a04467":"dFlRN","c50e8a273b6c5ffe":"9XvHS","c29048b1705481ad":"aLVyo","21009d25c6a65e51":"ata5h","697243c184a8f839":"gKjqB"}],"aLVyo":[function(require,module,exports) {
 // TODO: Remove this module from `core-js@4` since it's replaced to module below
-require("../modules/es.set.constructor");
+require("f3e6b6556df9e5f6");
 
-},{"../modules/es.set.constructor":"65Zsg"}],"65Zsg":[function(require,module,exports) {
+},{"f3e6b6556df9e5f6":"65Zsg"}],"65Zsg":[function(require,module,exports) {
 "use strict";
-var collection = require("../internals/collection");
-var collectionStrong = require("../internals/collection-strong");
+var collection = require("2635ddcbfea1d7e3");
+var collectionStrong = require("394975ae8252c676");
 // `Set` constructor
 // https://tc39.es/ecma262/#sec-set-objects
 collection("Set", function(init) {
@@ -5879,9 +6081,395 @@ collection("Set", function(init) {
     };
 }, collectionStrong);
 
-},{"../internals/collection":"kGyiP","../internals/collection-strong":"fPzdI"}],"fFjm0":[function(require,module,exports) {
-var $ = require("../internals/export");
-var from = require("../internals/collection-from");
+},{"2635ddcbfea1d7e3":"kGyiP","394975ae8252c676":"fPzdI"}],"DHnDE":[function(require,module,exports) {
+var $ = require("9c0eced70bb2950d");
+var difference = require("5972b032d58597cb");
+var setMethodAcceptSetLike = require("96e3e271b71de5d7");
+// `Set.prototype.difference` method
+// https://github.com/tc39/proposal-set-methods
+$({
+    target: "Set",
+    proto: true,
+    real: true,
+    forced: !setMethodAcceptSetLike("difference")
+}, {
+    difference: difference
+});
+
+},{"9c0eced70bb2950d":"dIGt4","5972b032d58597cb":"8E2Q4","96e3e271b71de5d7":"f4W6Z"}],"8E2Q4":[function(require,module,exports) {
+"use strict";
+var aSet = require("75d09bbadef0335d");
+var SetHelpers = require("d8ad626d2c2434ad");
+var clone = require("2fcbad2173c83e3d");
+var size = require("ecf4d393384233db");
+var getSetRecord = require("d484a080b2b6b792");
+var iterateSet = require("6c48cc6caff5f554");
+var iterateSimple = require("80e84e5609fcaba4");
+var has = SetHelpers.has;
+var remove = SetHelpers.remove;
+// `Set.prototype.difference` method
+// https://github.com/tc39/proposal-set-methods
+module.exports = function difference(other) {
+    var O = aSet(this);
+    var otherRec = getSetRecord(other);
+    var result = clone(O);
+    if (size(O) <= otherRec.size) iterateSet(O, function(e) {
+        if (otherRec.includes(e)) remove(result, e);
+    });
+    else iterateSimple(otherRec.getIterator(), function(e) {
+        if (has(O, e)) remove(result, e);
+    });
+    return result;
+};
+
+},{"75d09bbadef0335d":"ksk6r","d8ad626d2c2434ad":"anFzm","2fcbad2173c83e3d":"8JDsR","ecf4d393384233db":"jVilI","d484a080b2b6b792":"8tThq","6c48cc6caff5f554":"e9Nqz","80e84e5609fcaba4":"bplR8"}],"ksk6r":[function(require,module,exports) {
+var has = require("5f3a72666466b533").has;
+// Perform ? RequireInternalSlot(M, [[SetData]])
+module.exports = function(it) {
+    has(it);
+    return it;
+};
+
+},{"5f3a72666466b533":"anFzm"}],"anFzm":[function(require,module,exports) {
+var uncurryThis = require("8169120a9705b033");
+// eslint-disable-next-line es/no-set -- safe
+var SetPrototype = Set.prototype;
+module.exports = {
+    // eslint-disable-next-line es/no-set -- safe
+    Set: Set,
+    add: uncurryThis(SetPrototype.add),
+    has: uncurryThis(SetPrototype.has),
+    remove: uncurryThis(SetPrototype["delete"]),
+    proto: SetPrototype
+};
+
+},{"8169120a9705b033":"7GlkT"}],"8JDsR":[function(require,module,exports) {
+var SetHelpers = require("31eec53d387260a5");
+var iterate = require("3c081e8184f518c3");
+var Set = SetHelpers.Set;
+var add = SetHelpers.add;
+module.exports = function(set) {
+    var result = new Set();
+    iterate(set, function(it) {
+        add(result, it);
+    });
+    return result;
+};
+
+},{"31eec53d387260a5":"anFzm","3c081e8184f518c3":"e9Nqz"}],"e9Nqz":[function(require,module,exports) {
+var uncurryThis = require("703876d80c81f3aa");
+var iterateSimple = require("eca2b3913416235a");
+var SetHelpers = require("6de9f7cf0ab10a65");
+var Set = SetHelpers.Set;
+var SetPrototype = SetHelpers.proto;
+var forEach = uncurryThis(SetPrototype.forEach);
+var keys = uncurryThis(SetPrototype.keys);
+var next = keys(new Set()).next;
+module.exports = function(set, fn, interruptible) {
+    return interruptible ? iterateSimple(keys(set), fn, next) : forEach(set, fn);
+};
+
+},{"703876d80c81f3aa":"7GlkT","eca2b3913416235a":"bplR8","6de9f7cf0ab10a65":"anFzm"}],"jVilI":[function(require,module,exports) {
+var uncurryThisAccessor = require("1f52209afa720565");
+var SetHelpers = require("39e38938126f4c52");
+module.exports = uncurryThisAccessor(SetHelpers.proto, "size", "get") || function(set) {
+    return set.size;
+};
+
+},{"1f52209afa720565":"a0huE","39e38938126f4c52":"anFzm"}],"8tThq":[function(require,module,exports) {
+var aCallable = require("b340de62878fda30");
+var anObject = require("dd2883d664513ec3");
+var call = require("9db4219f6b37a133");
+var toIntegerOrInfinity = require("7df9b17e75672a34");
+var $TypeError = TypeError;
+var max = Math.max;
+var SetRecord = function(set, size, has, keys) {
+    this.set = set;
+    this.size = size;
+    this.has = has;
+    this.keys = keys;
+};
+SetRecord.prototype = {
+    getIterator: function() {
+        return anObject(call(this.keys, this.set));
+    },
+    includes: function(it) {
+        return call(this.has, this.set, it);
+    }
+};
+// `GetSetRecord` abstract operation
+// https://tc39.es/proposal-set-methods/#sec-getsetrecord
+module.exports = function(obj) {
+    anObject(obj);
+    var numSize = +obj.size;
+    // NOTE: If size is undefined, then numSize will be NaN
+    // eslint-disable-next-line no-self-compare -- NaN check
+    if (numSize != numSize) throw $TypeError("Invalid size");
+    return new SetRecord(obj, max(toIntegerOrInfinity(numSize), 0), aCallable(obj.has), aCallable(obj.keys));
+};
+
+},{"b340de62878fda30":"gOMir","dd2883d664513ec3":"4isCr","9db4219f6b37a133":"d7JlP","7df9b17e75672a34":"kLXGe"}],"f4W6Z":[function(require,module,exports) {
+var getBuiltIn = require("7cf76b9cbc2aa6f");
+var createEmptySetLike = function() {
+    return {
+        size: 0,
+        has: function() {
+            return false;
+        },
+        keys: function() {
+            return {
+                next: function() {
+                    return {
+                        done: true
+                    };
+                }
+            };
+        }
+    };
+};
+module.exports = function(name) {
+    try {
+        var Set = getBuiltIn("Set");
+        new Set()[name](createEmptySetLike());
+        return true;
+    } catch (error) {
+        return false;
+    }
+};
+
+},{"7cf76b9cbc2aa6f":"6ZUSY"}],"hKIGC":[function(require,module,exports) {
+var $ = require("e65b9db1c4fbb15");
+var fails = require("1ed19a2435c7863f");
+var intersection = require("7d4d6f270a063a9a");
+var setMethodAcceptSetLike = require("74405a5eee101422");
+var INCORRECT = !setMethodAcceptSetLike("intersection") || fails(function() {
+    // eslint-disable-next-line es/no-array-from, es/no-set -- testing
+    return Array.from(new Set([
+        1,
+        2,
+        3
+    ]).intersection(new Set([
+        3,
+        2
+    ]))) != "3,2";
+});
+// `Set.prototype.intersection` method
+// https://github.com/tc39/proposal-set-methods
+$({
+    target: "Set",
+    proto: true,
+    real: true,
+    forced: INCORRECT
+}, {
+    intersection: intersection
+});
+
+},{"e65b9db1c4fbb15":"dIGt4","1ed19a2435c7863f":"hL6D2","7d4d6f270a063a9a":"jALzn","74405a5eee101422":"f4W6Z"}],"jALzn":[function(require,module,exports) {
+"use strict";
+var aSet = require("89ef5bcefcfe6f47");
+var SetHelpers = require("683b509a89007c86");
+var size = require("14ff375f7ed20a9");
+var getSetRecord = require("fe8b3f8dc19c946f");
+var iterateSet = require("16ef2a2308282fa7");
+var iterateSimple = require("5ff7b55a458db207");
+var Set = SetHelpers.Set;
+var add = SetHelpers.add;
+var has = SetHelpers.has;
+// `Set.prototype.intersection` method
+// https://github.com/tc39/proposal-set-methods
+module.exports = function intersection(other) {
+    var O = aSet(this);
+    var otherRec = getSetRecord(other);
+    var result = new Set();
+    if (size(O) > otherRec.size) iterateSimple(otherRec.getIterator(), function(e) {
+        if (has(O, e)) add(result, e);
+    });
+    else iterateSet(O, function(e) {
+        if (otherRec.includes(e)) add(result, e);
+    });
+    return result;
+};
+
+},{"89ef5bcefcfe6f47":"ksk6r","683b509a89007c86":"anFzm","14ff375f7ed20a9":"jVilI","fe8b3f8dc19c946f":"8tThq","16ef2a2308282fa7":"e9Nqz","5ff7b55a458db207":"bplR8"}],"iWYYJ":[function(require,module,exports) {
+var $ = require("58f3807d74a7cea5");
+var isDisjointFrom = require("e9bcd0678ff42fc4");
+var setMethodAcceptSetLike = require("dd225c7d03587eef");
+// `Set.prototype.isDisjointFrom` method
+// https://github.com/tc39/proposal-set-methods
+$({
+    target: "Set",
+    proto: true,
+    real: true,
+    forced: !setMethodAcceptSetLike("isDisjointFrom")
+}, {
+    isDisjointFrom: isDisjointFrom
+});
+
+},{"58f3807d74a7cea5":"dIGt4","e9bcd0678ff42fc4":"2DZ0r","dd225c7d03587eef":"f4W6Z"}],"2DZ0r":[function(require,module,exports) {
+"use strict";
+var aSet = require("ddcc65fffdd84aa4");
+var has = require("8cc38831e2651d8a").has;
+var size = require("ff77013876e88f0");
+var getSetRecord = require("c5c185c81f75ef01");
+var iterateSet = require("15a26906aabe25f8");
+var iterateSimple = require("b904d1e04db730a9");
+var iteratorClose = require("14f91d347dbbbb1b");
+// `Set.prototype.isDisjointFrom` method
+// https://tc39.github.io/proposal-set-methods/#Set.prototype.isDisjointFrom
+module.exports = function isDisjointFrom(other) {
+    var O = aSet(this);
+    var otherRec = getSetRecord(other);
+    if (size(O) <= otherRec.size) return iterateSet(O, function(e) {
+        if (otherRec.includes(e)) return false;
+    }, true) !== false;
+    var iterator = otherRec.getIterator();
+    return iterateSimple(iterator, function(e) {
+        if (has(O, e)) return iteratorClose(iterator, "normal", false);
+    }) !== false;
+};
+
+},{"ddcc65fffdd84aa4":"ksk6r","8cc38831e2651d8a":"anFzm","ff77013876e88f0":"jVilI","c5c185c81f75ef01":"8tThq","15a26906aabe25f8":"e9Nqz","b904d1e04db730a9":"bplR8","14f91d347dbbbb1b":"hs7nW"}],"1CHVf":[function(require,module,exports) {
+var $ = require("7f8421aa6557f19f");
+var isSubsetOf = require("dd8cdc927e1aece6");
+var setMethodAcceptSetLike = require("b826ea7981720ffc");
+// `Set.prototype.isSubsetOf` method
+// https://github.com/tc39/proposal-set-methods
+$({
+    target: "Set",
+    proto: true,
+    real: true,
+    forced: !setMethodAcceptSetLike("isSubsetOf")
+}, {
+    isSubsetOf: isSubsetOf
+});
+
+},{"7f8421aa6557f19f":"dIGt4","dd8cdc927e1aece6":"gVdAu","b826ea7981720ffc":"f4W6Z"}],"gVdAu":[function(require,module,exports) {
+"use strict";
+var aSet = require("1c19eaf6e1439ed6");
+var size = require("35f0eca39bec63f9");
+var iterate = require("f334a3deede4ee0a");
+var getSetRecord = require("7c41ed5af6004ee4");
+// `Set.prototype.isSubsetOf` method
+// https://tc39.github.io/proposal-set-methods/#Set.prototype.isSubsetOf
+module.exports = function isSubsetOf(other) {
+    var O = aSet(this);
+    var otherRec = getSetRecord(other);
+    if (size(O) > otherRec.size) return false;
+    return iterate(O, function(e) {
+        if (!otherRec.includes(e)) return false;
+    }, true) !== false;
+};
+
+},{"1c19eaf6e1439ed6":"ksk6r","35f0eca39bec63f9":"jVilI","f334a3deede4ee0a":"e9Nqz","7c41ed5af6004ee4":"8tThq"}],"NpLoM":[function(require,module,exports) {
+var $ = require("fc905321777edbb4");
+var isSupersetOf = require("785a9b766571a8bd");
+var setMethodAcceptSetLike = require("5efbb82cdd2fc6fe");
+// `Set.prototype.isSupersetOf` method
+// https://github.com/tc39/proposal-set-methods
+$({
+    target: "Set",
+    proto: true,
+    real: true,
+    forced: !setMethodAcceptSetLike("isSupersetOf")
+}, {
+    isSupersetOf: isSupersetOf
+});
+
+},{"fc905321777edbb4":"dIGt4","785a9b766571a8bd":"iJYw1","5efbb82cdd2fc6fe":"f4W6Z"}],"iJYw1":[function(require,module,exports) {
+"use strict";
+var aSet = require("bc2e588e90f5199d");
+var has = require("909aa5b9b3c87557").has;
+var size = require("86e4853ef05d589d");
+var getSetRecord = require("c97a0f03e00c8eb2");
+var iterateSimple = require("2a46e1d047622952");
+var iteratorClose = require("b801a55cf0e377c7");
+// `Set.prototype.isSupersetOf` method
+// https://tc39.github.io/proposal-set-methods/#Set.prototype.isSupersetOf
+module.exports = function isSupersetOf(other) {
+    var O = aSet(this);
+    var otherRec = getSetRecord(other);
+    if (size(O) < otherRec.size) return false;
+    var iterator = otherRec.getIterator();
+    return iterateSimple(iterator, function(e) {
+        if (!has(O, e)) return iteratorClose(iterator, "normal", false);
+    }) !== false;
+};
+
+},{"bc2e588e90f5199d":"ksk6r","909aa5b9b3c87557":"anFzm","86e4853ef05d589d":"jVilI","c97a0f03e00c8eb2":"8tThq","2a46e1d047622952":"bplR8","b801a55cf0e377c7":"hs7nW"}],"6uQXT":[function(require,module,exports) {
+var $ = require("f62207b3eaec8d80");
+var symmetricDifference = require("11f0e2607bd1020d");
+var setMethodAcceptSetLike = require("58a919e06f3ab7de");
+// `Set.prototype.symmetricDifference` method
+// https://github.com/tc39/proposal-set-methods
+$({
+    target: "Set",
+    proto: true,
+    real: true,
+    forced: !setMethodAcceptSetLike("symmetricDifference")
+}, {
+    symmetricDifference: symmetricDifference
+});
+
+},{"f62207b3eaec8d80":"dIGt4","11f0e2607bd1020d":"4kTNd","58a919e06f3ab7de":"f4W6Z"}],"4kTNd":[function(require,module,exports) {
+"use strict";
+var aSet = require("85a6986858affb6c");
+var SetHelpers = require("c203f6bf7d6eabd4");
+var clone = require("510b404599894fbe");
+var getSetRecord = require("e4bba30257ef49bc");
+var iterateSimple = require("ce474ef4f586f640");
+var add = SetHelpers.add;
+var has = SetHelpers.has;
+var remove = SetHelpers.remove;
+// `Set.prototype.symmetricDifference` method
+// https://github.com/tc39/proposal-set-methods
+module.exports = function symmetricDifference(other) {
+    var O = aSet(this);
+    var keysIter = getSetRecord(other).getIterator();
+    var result = clone(O);
+    iterateSimple(keysIter, function(e) {
+        if (has(O, e)) remove(result, e);
+        else add(result, e);
+    });
+    return result;
+};
+
+},{"85a6986858affb6c":"ksk6r","c203f6bf7d6eabd4":"anFzm","510b404599894fbe":"8JDsR","e4bba30257ef49bc":"8tThq","ce474ef4f586f640":"bplR8"}],"eLNhN":[function(require,module,exports) {
+var $ = require("6b4fcb3450573de6");
+var union = require("403eed792e8cf138");
+var setMethodAcceptSetLike = require("92bf6a72f0b2fe41");
+// `Set.prototype.union` method
+// https://github.com/tc39/proposal-set-methods
+$({
+    target: "Set",
+    proto: true,
+    real: true,
+    forced: !setMethodAcceptSetLike("union")
+}, {
+    union: union
+});
+
+},{"6b4fcb3450573de6":"dIGt4","403eed792e8cf138":"2uHuG","92bf6a72f0b2fe41":"f4W6Z"}],"2uHuG":[function(require,module,exports) {
+"use strict";
+var aSet = require("5450206c449761d");
+var add = require("b3f0787d362da534").add;
+var clone = require("3634824aea25e283");
+var getSetRecord = require("b195a76a6494083f");
+var iterateSimple = require("bb7511ad70cc1b53");
+// `Set.prototype.union` method
+// https://github.com/tc39/proposal-set-methods
+module.exports = function union(other) {
+    var O = aSet(this);
+    var keysIter = getSetRecord(other).getIterator();
+    var result = clone(O);
+    iterateSimple(keysIter, function(it) {
+        add(result, it);
+    });
+    return result;
+};
+
+},{"5450206c449761d":"ksk6r","b3f0787d362da534":"anFzm","3634824aea25e283":"8JDsR","b195a76a6494083f":"8tThq","bb7511ad70cc1b53":"bplR8"}],"fFjm0":[function(require,module,exports) {
+var $ = require("ee1255087a0b2c7f");
+var from = require("6c0d015e336d2603");
 // `Set.from` method
 // https://tc39.github.io/proposal-setmap-offrom/#sec-set.from
 $({
@@ -5892,9 +6480,9 @@ $({
     from: from
 });
 
-},{"../internals/export":"dIGt4","../internals/collection-from":"4QgyK"}],"h11gG":[function(require,module,exports) {
-var $ = require("../internals/export");
-var of = require("../internals/collection-of");
+},{"ee1255087a0b2c7f":"dIGt4","6c0d015e336d2603":"4QgyK"}],"h11gG":[function(require,module,exports) {
+var $ = require("84a73ffe36ae7f6b");
+var of = require("d7a0ba6abe352872");
 // `Set.of` method
 // https://tc39.github.io/proposal-setmap-offrom/#sec-set.of
 $({
@@ -5905,10 +6493,11 @@ $({
     of: of
 });
 
-},{"../internals/export":"dIGt4","../internals/collection-of":"eN5Ir"}],"7qoXf":[function(require,module,exports) {
+},{"84a73ffe36ae7f6b":"dIGt4","d7a0ba6abe352872":"eN5Ir"}],"7qoXf":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var addAll = require("../internals/collection-add-all");
+var $ = require("a54c61ea8de47a0");
+var aSet = require("7c754be9465ce0e9");
+var add = require("fcae9714e2df42c0").add;
 // `Set.prototype.addAll` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5917,26 +6506,18 @@ $({
     real: true,
     forced: true
 }, {
-    addAll: addAll
+    addAll: function addAll() {
+        var set = aSet(this);
+        for(var k = 0, len = arguments.length; k < len; k++)add(set, arguments[k]);
+        return set;
+    }
 });
 
-},{"../internals/export":"dIGt4","../internals/collection-add-all":"aYprJ"}],"aYprJ":[function(require,module,exports) {
+},{"a54c61ea8de47a0":"dIGt4","7c754be9465ce0e9":"ksk6r","fcae9714e2df42c0":"anFzm"}],"79fB3":[function(require,module,exports) {
 "use strict";
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-// https://github.com/tc39/collection-methods
-module.exports = function addAll() {
-    var set = anObject(this);
-    var adder = aCallable(set.add);
-    for(var k = 0, len = arguments.length; k < len; k++)call(adder, set, arguments[k]);
-    return set;
-};
-
-},{"../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr"}],"79fB3":[function(require,module,exports) {
-"use strict";
-var $ = require("../internals/export");
-var deleteAll = require("../internals/collection-delete-all");
+var $ = require("e53918488de656a7");
+var aSet = require("ff44b1dfe16df09b");
+var remove = require("2eec27f60a52118e").remove;
 // `Set.prototype.deleteAll` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5945,16 +6526,24 @@ $({
     real: true,
     forced: true
 }, {
-    deleteAll: deleteAll
+    deleteAll: function deleteAll() {
+        var collection = aSet(this);
+        var allDeleted = true;
+        var wasDeleted;
+        for(var k = 0, len = arguments.length; k < len; k++){
+            wasDeleted = remove(collection, arguments[k]);
+            allDeleted = allDeleted && wasDeleted;
+        }
+        return !!allDeleted;
+    }
 });
 
-},{"../internals/export":"dIGt4","../internals/collection-delete-all":"gWYS7"}],"4X7Cu":[function(require,module,exports) {
+},{"e53918488de656a7":"dIGt4","ff44b1dfe16df09b":"ksk6r","2eec27f60a52118e":"anFzm"}],"4X7Cu":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var bind = require("../internals/function-bind-context");
-var getSetIterator = require("../internals/get-set-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("7544036efb02503");
+var bind = require("42fc96a7d2cad6f4");
+var aSet = require("3c53b2f09176feaa");
+var iterate = require("91f6a623d21964f5");
 // `Set.prototype.every` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -5964,64 +6553,72 @@ $({
     forced: true
 }, {
     every: function every(callbackfn /* , thisArg */ ) {
-        var set = anObject(this);
-        var iterator = getSetIterator(set);
+        var set = aSet(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        return !iterate(iterator, function(value, stop) {
-            if (!boundFunction(value, value, set)) return stop();
-        }, {
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).stopped;
+        return iterate(set, function(value) {
+            if (!boundFunction(value, value, set)) return false;
+        }, true) !== false;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/function-bind-context":"7vpmS","../internals/get-set-iterator":"6v0Tr","../internals/iterate":"4OXGm"}],"6v0Tr":[function(require,module,exports) {
-var call = require("../internals/function-call");
-module.exports = function(it) {
-    // eslint-disable-next-line es-x/no-set -- safe
-    return call(Set.prototype.values, it);
-};
-
-},{"../internals/function-call":"d7JlP"}],"773AO":[function(require,module,exports) {
+},{"7544036efb02503":"dIGt4","42fc96a7d2cad6f4":"7vpmS","3c53b2f09176feaa":"ksk6r","91f6a623d21964f5":"e9Nqz"}],"773AO":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var speciesConstructor = require("../internals/species-constructor");
-var iterate = require("../internals/iterate");
+var $ = require("2e73374a2db8464a");
+var call = require("455b649b6f245a97");
+var toSetLike = require("b2250e1d0d8d4a90");
+var $difference = require("61d64437cd06d3b8");
 // `Set.prototype.difference` method
 // https://github.com/tc39/proposal-set-methods
+// TODO: Obsolete version, remove from `core-js@4`
 $({
     target: "Set",
     proto: true,
     real: true,
     forced: true
 }, {
-    difference: function difference(iterable) {
-        var set = anObject(this);
-        var newSet = new (speciesConstructor(set, getBuiltIn("Set")))(set);
-        var remover = aCallable(newSet["delete"]);
-        iterate(iterable, function(value) {
-            call(remover, newSet, value);
-        });
-        return newSet;
+    difference: function difference(other) {
+        return call($difference, this, toSetLike(other));
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/species-constructor":"cIK3T","../internals/iterate":"4OXGm"}],"a8QMe":[function(require,module,exports) {
+},{"2e73374a2db8464a":"dIGt4","455b649b6f245a97":"d7JlP","b2250e1d0d8d4a90":"dowDR","61d64437cd06d3b8":"8E2Q4"}],"dowDR":[function(require,module,exports) {
+var getBuiltIn = require("39a5b4db91c39073");
+var isCallable = require("ed6dbe59fb58e58e");
+var isIterable = require("5494d81bc20288c9");
+var isObject = require("2d79d879b8c593ea");
+var Set = getBuiltIn("Set");
+var isSetLike = function(it) {
+    return isObject(it) && typeof it.size == "number" && isCallable(it.has) && isCallable(it.keys);
+};
+// fallback old -> new set methods proposal arguments
+module.exports = function(it) {
+    if (isSetLike(it)) return it;
+    return isIterable(it) ? new Set(it) : it;
+};
+
+},{"39a5b4db91c39073":"6ZUSY","ed6dbe59fb58e58e":"l3Kyn","5494d81bc20288c9":"lcRPd","2d79d879b8c593ea":"Z0pBo"}],"lcRPd":[function(require,module,exports) {
+var classof = require("2183ffbaf494fc3");
+var hasOwn = require("468dc1442ea72088");
+var isNullOrUndefined = require("d8b623e76f3a45f9");
+var wellKnownSymbol = require("ec7d861e94a80ada");
+var Iterators = require("5a6d91251e6970e8");
+var ITERATOR = wellKnownSymbol("iterator");
+var $Object = Object;
+module.exports = function(it) {
+    if (isNullOrUndefined(it)) return false;
+    var O = $Object(it);
+    return O[ITERATOR] !== undefined || "@@iterator" in O || hasOwn(Iterators, classof(O));
+};
+
+},{"2183ffbaf494fc3":"dKT7A","468dc1442ea72088":"gC2Q5","d8b623e76f3a45f9":"gM5ar","ec7d861e94a80ada":"gTwyA","5a6d91251e6970e8":"30XHR"}],"a8QMe":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var bind = require("../internals/function-bind-context");
-var speciesConstructor = require("../internals/species-constructor");
-var getSetIterator = require("../internals/get-set-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("8616b78487cb130f");
+var bind = require("aa83140ed6c466df");
+var aSet = require("77c409e69ffeef7b");
+var SetHelpers = require("5a364419e5d77e5");
+var iterate = require("6f4daf421a8c62ed");
+var Set = SetHelpers.Set;
+var add = SetHelpers.add;
 // `Set.prototype.filter` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -6031,27 +6628,22 @@ $({
     forced: true
 }, {
     filter: function filter(callbackfn /* , thisArg */ ) {
-        var set = anObject(this);
-        var iterator = getSetIterator(set);
+        var set = aSet(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        var newSet = new (speciesConstructor(set, getBuiltIn("Set")))();
-        var adder = aCallable(newSet.add);
-        iterate(iterator, function(value) {
-            if (boundFunction(value, value, set)) call(adder, newSet, value);
-        }, {
-            IS_ITERATOR: true
+        var newSet = new Set();
+        iterate(set, function(value) {
+            if (boundFunction(value, value, set)) add(newSet, value);
         });
         return newSet;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/function-bind-context":"7vpmS","../internals/species-constructor":"cIK3T","../internals/get-set-iterator":"6v0Tr","../internals/iterate":"4OXGm"}],"44hBz":[function(require,module,exports) {
+},{"8616b78487cb130f":"dIGt4","aa83140ed6c466df":"7vpmS","77c409e69ffeef7b":"ksk6r","5a364419e5d77e5":"anFzm","6f4daf421a8c62ed":"e9Nqz"}],"44hBz":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var bind = require("../internals/function-bind-context");
-var getSetIterator = require("../internals/get-set-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("bf96de1170da88ca");
+var bind = require("4eb150e54428b3f2");
+var aSet = require("202c678c45eb6b58");
+var iterate = require("2219ba0a6ac6d6cd");
 // `Set.prototype.find` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -6061,144 +6653,106 @@ $({
     forced: true
 }, {
     find: function find(callbackfn /* , thisArg */ ) {
-        var set = anObject(this);
-        var iterator = getSetIterator(set);
+        var set = aSet(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        return iterate(iterator, function(value, stop) {
-            if (boundFunction(value, value, set)) return stop(value);
-        }, {
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).result;
+        var result = iterate(set, function(value) {
+            if (boundFunction(value, value, set)) return {
+                value: value
+            };
+        }, true);
+        return result && result.value;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/function-bind-context":"7vpmS","../internals/get-set-iterator":"6v0Tr","../internals/iterate":"4OXGm"}],"5PUFy":[function(require,module,exports) {
+},{"bf96de1170da88ca":"dIGt4","4eb150e54428b3f2":"7vpmS","202c678c45eb6b58":"ksk6r","2219ba0a6ac6d6cd":"e9Nqz"}],"5PUFy":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var speciesConstructor = require("../internals/species-constructor");
-var iterate = require("../internals/iterate");
+var $ = require("5cb2d15d04c008c4");
+var call = require("85234db67669c366");
+var toSetLike = require("db6f079378bd30a");
+var $intersection = require("f0495e0fd9c35ee4");
 // `Set.prototype.intersection` method
 // https://github.com/tc39/proposal-set-methods
+// TODO: Obsolete version, remove from `core-js@4`
 $({
     target: "Set",
     proto: true,
     real: true,
     forced: true
 }, {
-    intersection: function intersection(iterable) {
-        var set = anObject(this);
-        var newSet = new (speciesConstructor(set, getBuiltIn("Set")))();
-        var hasCheck = aCallable(set.has);
-        var adder = aCallable(newSet.add);
-        iterate(iterable, function(value) {
-            if (call(hasCheck, set, value)) call(adder, newSet, value);
-        });
-        return newSet;
+    intersection: function intersection(other) {
+        return call($intersection, this, toSetLike(other));
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/species-constructor":"cIK3T","../internals/iterate":"4OXGm"}],"b3q3i":[function(require,module,exports) {
+},{"5cb2d15d04c008c4":"dIGt4","85234db67669c366":"d7JlP","db6f079378bd30a":"dowDR","f0495e0fd9c35ee4":"jALzn"}],"b3q3i":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var iterate = require("../internals/iterate");
+var $ = require("e431d0e1a2b6e145");
+var call = require("6eaf50281f6cf0b6");
+var toSetLike = require("d906036f9f6d9def");
+var $isDisjointFrom = require("411b7cb29a967832");
 // `Set.prototype.isDisjointFrom` method
-// https://tc39.github.io/proposal-set-methods/#Set.prototype.isDisjointFrom
+// https://github.com/tc39/proposal-set-methods
+// TODO: Obsolete version, remove from `core-js@4`
 $({
     target: "Set",
     proto: true,
     real: true,
     forced: true
 }, {
-    isDisjointFrom: function isDisjointFrom(iterable) {
-        var set = anObject(this);
-        var hasCheck = aCallable(set.has);
-        return !iterate(iterable, function(value, stop) {
-            if (call(hasCheck, set, value) === true) return stop();
-        }, {
-            INTERRUPTED: true
-        }).stopped;
+    isDisjointFrom: function isDisjointFrom(other) {
+        return call($isDisjointFrom, this, toSetLike(other));
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/iterate":"4OXGm"}],"5igXN":[function(require,module,exports) {
+},{"e431d0e1a2b6e145":"dIGt4","6eaf50281f6cf0b6":"d7JlP","d906036f9f6d9def":"dowDR","411b7cb29a967832":"2DZ0r"}],"5igXN":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var isCallable = require("../internals/is-callable");
-var anObject = require("../internals/an-object");
-var getIterator = require("../internals/get-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("24105e8adb7bc011");
+var call = require("dad48d5860c59d15");
+var toSetLike = require("b40755ac308e52fc");
+var $isSubsetOf = require("4dd9f45e27baf74f");
 // `Set.prototype.isSubsetOf` method
-// https://tc39.github.io/proposal-set-methods/#Set.prototype.isSubsetOf
+// https://github.com/tc39/proposal-set-methods
+// TODO: Obsolete version, remove from `core-js@4`
 $({
     target: "Set",
     proto: true,
     real: true,
     forced: true
 }, {
-    isSubsetOf: function isSubsetOf(iterable) {
-        var iterator = getIterator(this);
-        var otherSet = anObject(iterable);
-        var hasCheck = otherSet.has;
-        if (!isCallable(hasCheck)) {
-            otherSet = new (getBuiltIn("Set"))(iterable);
-            hasCheck = aCallable(otherSet.has);
-        }
-        return !iterate(iterator, function(value, stop) {
-            if (call(hasCheck, otherSet, value) === false) return stop();
-        }, {
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).stopped;
+    isSubsetOf: function isSubsetOf(other) {
+        return call($isSubsetOf, this, toSetLike(other));
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/is-callable":"l3Kyn","../internals/an-object":"4isCr","../internals/get-iterator":"hjwee","../internals/iterate":"4OXGm"}],"1amm1":[function(require,module,exports) {
+},{"24105e8adb7bc011":"dIGt4","dad48d5860c59d15":"d7JlP","b40755ac308e52fc":"dowDR","4dd9f45e27baf74f":"gVdAu"}],"1amm1":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var iterate = require("../internals/iterate");
+var $ = require("fbf75821e6a0a63d");
+var call = require("c659c2fcf1f889d9");
+var toSetLike = require("7c44d0e9aadbf31b");
+var $isSupersetOf = require("9f820f6c45a2cc5d");
 // `Set.prototype.isSupersetOf` method
-// https://tc39.github.io/proposal-set-methods/#Set.prototype.isSupersetOf
+// https://github.com/tc39/proposal-set-methods
+// TODO: Obsolete version, remove from `core-js@4`
 $({
     target: "Set",
     proto: true,
     real: true,
     forced: true
 }, {
-    isSupersetOf: function isSupersetOf(iterable) {
-        var set = anObject(this);
-        var hasCheck = aCallable(set.has);
-        return !iterate(iterable, function(value, stop) {
-            if (call(hasCheck, set, value) === false) return stop();
-        }, {
-            INTERRUPTED: true
-        }).stopped;
+    isSupersetOf: function isSupersetOf(other) {
+        return call($isSupersetOf, this, toSetLike(other));
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/iterate":"4OXGm"}],"bMl6L":[function(require,module,exports) {
+},{"fbf75821e6a0a63d":"dIGt4","c659c2fcf1f889d9":"d7JlP","7c44d0e9aadbf31b":"dowDR","9f820f6c45a2cc5d":"iJYw1"}],"bMl6L":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var uncurryThis = require("../internals/function-uncurry-this");
-var anObject = require("../internals/an-object");
-var toString = require("../internals/to-string");
-var getSetIterator = require("../internals/get-set-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("29270e4a7152c844");
+var uncurryThis = require("d8c8da9c523cc042");
+var aSet = require("bd436578c4364886");
+var iterate = require("2413ae413f78ab3");
+var toString = require("a77364fda0f8c4a1");
 var arrayJoin = uncurryThis([].join);
-var push = [].push;
+var push = uncurryThis([].push);
 // `Set.prototype.join` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -6208,29 +6762,25 @@ $({
     forced: true
 }, {
     join: function join(separator) {
-        var set = anObject(this);
-        var iterator = getSetIterator(set);
+        var set = aSet(this);
         var sep = separator === undefined ? "," : toString(separator);
-        var result = [];
-        iterate(iterator, push, {
-            that: result,
-            IS_ITERATOR: true
+        var array = [];
+        iterate(set, function(value) {
+            push(array, value);
         });
-        return arrayJoin(result, sep);
+        return arrayJoin(array, sep);
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/function-uncurry-this":"7GlkT","../internals/an-object":"4isCr","../internals/to-string":"a1yl4","../internals/get-set-iterator":"6v0Tr","../internals/iterate":"4OXGm"}],"g65Jk":[function(require,module,exports) {
+},{"29270e4a7152c844":"dIGt4","d8c8da9c523cc042":"7GlkT","bd436578c4364886":"ksk6r","2413ae413f78ab3":"e9Nqz","a77364fda0f8c4a1":"a1yl4"}],"g65Jk":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var bind = require("../internals/function-bind-context");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var speciesConstructor = require("../internals/species-constructor");
-var getSetIterator = require("../internals/get-set-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("2f6183440ee6ae58");
+var bind = require("4fcc9a419ef6f85a");
+var aSet = require("42ac730660021fcb");
+var SetHelpers = require("6a32e8e58e4b08e5");
+var iterate = require("a8ee3e660c2121b4");
+var Set = SetHelpers.Set;
+var add = SetHelpers.add;
 // `Set.prototype.map` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -6240,27 +6790,22 @@ $({
     forced: true
 }, {
     map: function map(callbackfn /* , thisArg */ ) {
-        var set = anObject(this);
-        var iterator = getSetIterator(set);
+        var set = aSet(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        var newSet = new (speciesConstructor(set, getBuiltIn("Set")))();
-        var adder = aCallable(newSet.add);
-        iterate(iterator, function(value) {
-            call(adder, newSet, boundFunction(value, value, set));
-        }, {
-            IS_ITERATOR: true
+        var newSet = new Set();
+        iterate(set, function(value) {
+            add(newSet, boundFunction(value, value, set));
         });
         return newSet;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-bind-context":"7vpmS","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/species-constructor":"cIK3T","../internals/get-set-iterator":"6v0Tr","../internals/iterate":"4OXGm"}],"gtD5C":[function(require,module,exports) {
+},{"2f6183440ee6ae58":"dIGt4","4fcc9a419ef6f85a":"7vpmS","42ac730660021fcb":"ksk6r","6a32e8e58e4b08e5":"anFzm","a8ee3e660c2121b4":"e9Nqz"}],"gtD5C":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var getSetIterator = require("../internals/get-set-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("ea20981509710f71");
+var aCallable = require("4173245c8795296a");
+var aSet = require("69503e154d49a09");
+var iterate = require("6187f8e8833f9fda");
 var $TypeError = TypeError;
 // `Set.prototype.reduce` method
 // https://github.com/tc39/proposal-collection-methods
@@ -6271,31 +6816,27 @@ $({
     forced: true
 }, {
     reduce: function reduce(callbackfn /* , initialValue */ ) {
-        var set = anObject(this);
-        var iterator = getSetIterator(set);
+        var set = aSet(this);
         var noInitial = arguments.length < 2;
         var accumulator = noInitial ? undefined : arguments[1];
         aCallable(callbackfn);
-        iterate(iterator, function(value) {
+        iterate(set, function(value) {
             if (noInitial) {
                 noInitial = false;
                 accumulator = value;
             } else accumulator = callbackfn(accumulator, value, value, set);
-        }, {
-            IS_ITERATOR: true
         });
         if (noInitial) throw $TypeError("Reduce of empty set with no initial value");
         return accumulator;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/get-set-iterator":"6v0Tr","../internals/iterate":"4OXGm"}],"aYdPy":[function(require,module,exports) {
+},{"ea20981509710f71":"dIGt4","4173245c8795296a":"gOMir","69503e154d49a09":"ksk6r","6187f8e8833f9fda":"e9Nqz"}],"aYdPy":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var anObject = require("../internals/an-object");
-var bind = require("../internals/function-bind-context");
-var getSetIterator = require("../internals/get-set-iterator");
-var iterate = require("../internals/iterate");
+var $ = require("291fb6984f7549ec");
+var bind = require("49b9fd0aa007a87a");
+var aSet = require("1f005c32eba17349");
+var iterate = require("6135d5cf3a2c80fd");
 // `Set.prototype.some` method
 // https://github.com/tc39/proposal-collection-methods
 $({
@@ -6305,76 +6846,57 @@ $({
     forced: true
 }, {
     some: function some(callbackfn /* , thisArg */ ) {
-        var set = anObject(this);
-        var iterator = getSetIterator(set);
+        var set = aSet(this);
         var boundFunction = bind(callbackfn, arguments.length > 1 ? arguments[1] : undefined);
-        return iterate(iterator, function(value, stop) {
-            if (boundFunction(value, value, set)) return stop();
-        }, {
-            IS_ITERATOR: true,
-            INTERRUPTED: true
-        }).stopped;
+        return iterate(set, function(value) {
+            if (boundFunction(value, value, set)) return true;
+        }, true) === true;
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/an-object":"4isCr","../internals/function-bind-context":"7vpmS","../internals/get-set-iterator":"6v0Tr","../internals/iterate":"4OXGm"}],"lsopM":[function(require,module,exports) {
+},{"291fb6984f7549ec":"dIGt4","49b9fd0aa007a87a":"7vpmS","1f005c32eba17349":"ksk6r","6135d5cf3a2c80fd":"e9Nqz"}],"lsopM":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var call = require("../internals/function-call");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var speciesConstructor = require("../internals/species-constructor");
-var iterate = require("../internals/iterate");
+var $ = require("f28e20c66bf45ed4");
+var call = require("3a8beb2f8a5bd7de");
+var toSetLike = require("88913b8edd9ddff1");
+var $symmetricDifference = require("9ab2a94f046c76d1");
 // `Set.prototype.symmetricDifference` method
 // https://github.com/tc39/proposal-set-methods
+// TODO: Obsolete version, remove from `core-js@4`
 $({
     target: "Set",
     proto: true,
     real: true,
     forced: true
 }, {
-    symmetricDifference: function symmetricDifference(iterable) {
-        var set = anObject(this);
-        var newSet = new (speciesConstructor(set, getBuiltIn("Set")))(set);
-        var remover = aCallable(newSet["delete"]);
-        var adder = aCallable(newSet.add);
-        iterate(iterable, function(value) {
-            call(remover, newSet, value) || call(adder, newSet, value);
-        });
-        return newSet;
+    symmetricDifference: function symmetricDifference(other) {
+        return call($symmetricDifference, this, toSetLike(other));
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/function-call":"d7JlP","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/species-constructor":"cIK3T","../internals/iterate":"4OXGm"}],"3nyPK":[function(require,module,exports) {
+},{"f28e20c66bf45ed4":"dIGt4","3a8beb2f8a5bd7de":"d7JlP","88913b8edd9ddff1":"dowDR","9ab2a94f046c76d1":"4kTNd"}],"3nyPK":[function(require,module,exports) {
 "use strict";
-var $ = require("../internals/export");
-var getBuiltIn = require("../internals/get-built-in");
-var aCallable = require("../internals/a-callable");
-var anObject = require("../internals/an-object");
-var speciesConstructor = require("../internals/species-constructor");
-var iterate = require("../internals/iterate");
+var $ = require("1c75ce5bb20b4e76");
+var call = require("8c7fb64ed76c0756");
+var toSetLike = require("70ebde8fecd830d");
+var $union = require("20c3d2937c1aaf40");
 // `Set.prototype.union` method
 // https://github.com/tc39/proposal-set-methods
+// TODO: Obsolete version, remove from `core-js@4`
 $({
     target: "Set",
     proto: true,
     real: true,
     forced: true
 }, {
-    union: function union(iterable) {
-        var set = anObject(this);
-        var newSet = new (speciesConstructor(set, getBuiltIn("Set")))(set);
-        iterate(iterable, aCallable(newSet.add), {
-            that: newSet
-        });
-        return newSet;
+    union: function union(other) {
+        return call($union, this, toSetLike(other));
     }
 });
 
-},{"../internals/export":"dIGt4","../internals/get-built-in":"6ZUSY","../internals/a-callable":"gOMir","../internals/an-object":"4isCr","../internals/species-constructor":"cIK3T","../internals/iterate":"4OXGm"}],"ba7ov":[function(require,module,exports) {
+},{"1c75ce5bb20b4e76":"dIGt4","8c7fb64ed76c0756":"d7JlP","70ebde8fecd830d":"dowDR","20c3d2937c1aaf40":"2uHuG"}],"ba7ov":[function(require,module,exports) {
 var global = arguments[3];
-var now = require("performance-now"), root = typeof window === "undefined" ? global : window, vendors = [
+var now = require("7634c59391d7eb50"), root = typeof window === "undefined" ? global : window, vendors = [
     "moz",
     "webkit"
 ], suffix = "AnimationFrame", raf = root["request" + suffix], caf = root["cancel" + suffix] || root["cancelRequest" + suffix];
@@ -6395,9 +6917,9 @@ if (!raf || !caf) {
                 // callbacks from appending listeners
                 // to the current frame's queue
                 queue.length = 0;
-                for(var i1 = 0; i1 < cp.length; i1++){
-                    if (!cp[i1].cancelled) try {
-                        cp[i1].callback(last);
+                for(var i = 0; i < cp.length; i++){
+                    if (!cp[i].cancelled) try {
+                        cp[i].callback(last);
                     } catch (e) {
                         setTimeout(function() {
                             throw e;
@@ -6414,7 +6936,7 @@ if (!raf || !caf) {
         return id;
     };
     caf = function(handle) {
-        for(var i2 = 0; i2 < queue.length; i2++)if (queue[i2].handle === handle) queue[i2].cancelled = true;
+        for(var i = 0; i < queue.length; i++)if (queue[i].handle === handle) queue[i].cancelled = true;
     };
 }
 module.exports = function(fn) {
@@ -6432,8 +6954,8 @@ module.exports.polyfill = function(object) {
     object.cancelAnimationFrame = caf;
 };
 
-},{"performance-now":"7cqVO"}],"7cqVO":[function(require,module,exports) {
-var process = require("process");
+},{"7634c59391d7eb50":"7cqVO"}],"7cqVO":[function(require,module,exports) {
+var process = require("36059fcdea3d0e97");
 // Generated by CoffeeScript 1.12.2
 (function() {
     var getNanoSeconds, hrtime, loadTime, moduleLoadTime, nodeLoadTime, upTime;
@@ -6466,14 +6988,14 @@ var process = require("process");
     }
 }).call(this);
 
-},{"process":"jhUEF"}],"jhUEF":[function(require,module,exports) {
+},{"36059fcdea3d0e97":"jhUEF"}],"jhUEF":[function(require,module,exports) {
 "use strict";
 
 },{}],"3IZzP":[function(require,module,exports) {
 "use strict";
-module.exports = require("./cjs/react.development.js");
+module.exports = require("32a693c59295b430");
 
-},{"./cjs/react.development.js":"hqRc7"}],"hqRc7":[function(require,module,exports) {
+},{"32a693c59295b430":"hqRc7"}],"hqRc7":[function(require,module,exports) {
 /**
  * @license React
  * react.development.js
@@ -6543,20 +7065,20 @@ module.exports = require("./cjs/react.development.js");
    * @type {ReactComponent}
    */ current: null
     };
-    var ReactDebugCurrentFrame1 = {};
+    var ReactDebugCurrentFrame = {};
     var currentExtraStackFrame = null;
     function setExtraStackFrame(stack) {
         currentExtraStackFrame = stack;
     }
-    ReactDebugCurrentFrame1.setExtraStackFrame = function(stack) {
+    ReactDebugCurrentFrame.setExtraStackFrame = function(stack) {
         currentExtraStackFrame = stack;
     }; // Stack implementation injected by the current renderer.
-    ReactDebugCurrentFrame1.getCurrentStack = null;
-    ReactDebugCurrentFrame1.getStackAddendum = function() {
+    ReactDebugCurrentFrame.getCurrentStack = null;
+    ReactDebugCurrentFrame.getStackAddendum = function() {
         var stack = ""; // Add an extra top frame while an element is being validated
         if (currentExtraStackFrame) stack += currentExtraStackFrame;
          // Delegate to the injected renderer-specific implementation
-        var impl = ReactDebugCurrentFrame1.getCurrentStack;
+        var impl = ReactDebugCurrentFrame.getCurrentStack;
         if (impl) stack += impl() || "";
         return stack;
     };
@@ -6573,7 +7095,7 @@ module.exports = require("./cjs/react.development.js");
         ReactCurrentBatchConfig: ReactCurrentBatchConfig,
         ReactCurrentOwner: ReactCurrentOwner
     };
-    ReactSharedInternals.ReactDebugCurrentFrame = ReactDebugCurrentFrame1;
+    ReactSharedInternals.ReactDebugCurrentFrame = ReactDebugCurrentFrame;
     ReactSharedInternals.ReactCurrentActQueue = ReactCurrentActQueue;
     // by calls to these methods by a Babel plugin.
     //
@@ -6583,7 +7105,7 @@ module.exports = require("./cjs/react.development.js");
         for(var _len = arguments.length, args = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++)args[_key - 1] = arguments[_key];
         printWarning("warn", format, args);
     }
-    function error1(format) {
+    function error(format) {
         for(var _len2 = arguments.length, args = new Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++)args[_key2 - 1] = arguments[_key2];
         printWarning("error", format, args);
     }
@@ -6610,7 +7132,7 @@ module.exports = require("./cjs/react.development.js");
         var componentName = _constructor && (_constructor.displayName || _constructor.name) || "ReactClass";
         var warningKey = componentName + "." + callerName;
         if (didWarnStateUpdateForUnmountedComponent[warningKey]) return;
-        error1("Can't call %s on a component that is not yet mounted. This is a no-op, but it might indicate a bug in your application. Instead, assign to `this.state` directly or define a `state = {};` class property with the desired state in the %s component.", callerName, componentName);
+        error("Can't call %s on a component that is not yet mounted. This is a no-op, but it might indicate a bug in your application. Instead, assign to `this.state` directly or define a `state = {};` class property with the desired state in the %s component.", callerName, componentName);
         didWarnStateUpdateForUnmountedComponent[warningKey] = true;
     }
     /**
@@ -6677,14 +7199,14 @@ module.exports = require("./cjs/react.development.js");
     Object.freeze(emptyObject);
     /**
  * Base class helpers for the updating state of a component.
- */ function Component1(props, context, updater) {
+ */ function Component(props, context, updater) {
         this.props = props;
         this.context = context; // If a component has string refs, we will assign a different object later.
         this.refs = emptyObject; // We initialize the default updater but the real one gets injected by the
         // renderer.
         this.updater = updater || ReactNoopUpdateQueue;
     }
-    Component1.prototype.isReactComponent = {};
+    Component.prototype.isReactComponent = {};
     /**
  * Sets a subset of the state. Always use this to mutate
  * state. You should treat `this.state` as immutable.
@@ -6709,7 +7231,7 @@ module.exports = require("./cjs/react.development.js");
  * @param {?function} callback Called after state is updated.
  * @final
  * @protected
- */ Component1.prototype.setState = function(partialState, callback) {
+ */ Component.prototype.setState = function(partialState, callback) {
         if (typeof partialState !== "object" && typeof partialState !== "function" && partialState != null) throw new Error("setState(...): takes an object of state variables to update or a function which returns an object of state variables.");
         this.updater.enqueueSetState(this, partialState, callback, "setState");
     };
@@ -6726,7 +7248,7 @@ module.exports = require("./cjs/react.development.js");
  * @param {?function} callback Called after update is complete.
  * @final
  * @protected
- */ Component1.prototype.forceUpdate = function(callback) {
+ */ Component.prototype.forceUpdate = function(callback) {
         this.updater.enqueueForceUpdate(this, callback, "forceUpdate");
     };
     var deprecatedAPIs = {
@@ -6740,7 +7262,7 @@ module.exports = require("./cjs/react.development.js");
         ]
     };
     var defineDeprecationWarning = function(methodName, info) {
-        Object.defineProperty(Component1.prototype, methodName, {
+        Object.defineProperty(Component.prototype, methodName, {
             get: function() {
                 warn("%s(...) is deprecated in plain JavaScript React classes. %s", info[0], info[1]);
                 return undefined;
@@ -6749,7 +7271,7 @@ module.exports = require("./cjs/react.development.js");
     };
     for(var fnName in deprecatedAPIs)if (deprecatedAPIs.hasOwnProperty(fnName)) defineDeprecationWarning(fnName, deprecatedAPIs[fnName]);
     function ComponentDummy() {}
-    ComponentDummy.prototype = Component1.prototype;
+    ComponentDummy.prototype = Component.prototype;
     /**
  * Convenience component with default shallow equality check for sCU.
  */ function PureComponent(props, context, updater) {
@@ -6760,7 +7282,7 @@ module.exports = require("./cjs/react.development.js");
     }
     var pureComponentPrototype = PureComponent.prototype = new ComponentDummy();
     pureComponentPrototype.constructor = PureComponent; // Avoid an extra prototype jump for these methods.
-    assign(pureComponentPrototype, Component1.prototype);
+    assign(pureComponentPrototype, Component.prototype);
     pureComponentPrototype.isPureReactComponent = true;
     // an immutable object with a single mutable value
     function createRef() {
@@ -6825,7 +7347,7 @@ module.exports = require("./cjs/react.development.js");
     }
     function checkKeyStringCoercion(value) {
         if (willCoercionThrow(value)) {
-            error1("The provided key is an unsupported type %s. This value must be coerced to a string before before using it here.", typeName(value));
+            error("The provided key is an unsupported type %s. This value must be coerced to a string before before using it here.", typeName(value));
             return testStringCoercion(value); // throw (to help callers find troubleshooting comments)
         }
     }
@@ -6841,7 +7363,7 @@ module.exports = require("./cjs/react.development.js");
     function getComponentNameFromType(type) {
         if (type == null) // Host root, text node or just invalid type.
         return null;
-        if (typeof type.tag === "number") error1("Received an unexpected object in getComponentNameFromType(). This is likely a bug in React. Please file an issue.");
+        if (typeof type.tag === "number") error("Received an unexpected object in getComponentNameFromType(). This is likely a bug in React. Please file an issue.");
         if (typeof type === "function") return type.displayName || type.name || null;
         if (typeof type === "string") return type;
         switch(type){
@@ -6910,7 +7432,7 @@ module.exports = require("./cjs/react.development.js");
         var warnAboutAccessingKey = function() {
             if (!specialPropKeyWarningShown) {
                 specialPropKeyWarningShown = true;
-                error1("%s: `key` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://reactjs.org/link/special-props)", displayName);
+                error("%s: `key` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://reactjs.org/link/special-props)", displayName);
             }
         };
         warnAboutAccessingKey.isReactWarning = true;
@@ -6923,7 +7445,7 @@ module.exports = require("./cjs/react.development.js");
         var warnAboutAccessingRef = function() {
             if (!specialPropRefWarningShown) {
                 specialPropRefWarningShown = true;
-                error1("%s: `ref` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://reactjs.org/link/special-props)", displayName);
+                error("%s: `ref` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://reactjs.org/link/special-props)", displayName);
             }
         };
         warnAboutAccessingRef.isReactWarning = true;
@@ -6936,7 +7458,7 @@ module.exports = require("./cjs/react.development.js");
         if (typeof config.ref === "string" && ReactCurrentOwner.current && config.__self && ReactCurrentOwner.current.stateNode !== config.__self) {
             var componentName = getComponentNameFromType(ReactCurrentOwner.current.type);
             if (!didWarnAboutStringRefs[componentName]) {
-                error1('Component "%s" contains the string ref "%s". Support for string refs will be removed in a future major release. This case cannot be automatically converted to an arrow function. We ask you to manually fix this case by using useRef() or createRef() instead. Learn more about using refs safely here: https://reactjs.org/link/strict-mode-string-ref', componentName, config.ref);
+                error('Component "%s" contains the string ref "%s". Support for string refs will be removed in a future major release. This case cannot be automatically converted to an arrow function. We ask you to manually fix this case by using useRef() or createRef() instead. Learn more about using refs safely here: https://reactjs.org/link/strict-mode-string-ref', componentName, config.ref);
                 didWarnAboutStringRefs[componentName] = true;
             }
         }
@@ -7341,7 +7863,7 @@ module.exports = require("./cjs/react.development.js");
                 get: function() {
                     if (!hasWarnedAboutUsingConsumerProvider) {
                         hasWarnedAboutUsingConsumerProvider = true;
-                        error1("Rendering <Context.Consumer.Provider> is not supported and will be removed in a future major release. Did you mean to render <Context.Provider> instead?");
+                        error("Rendering <Context.Consumer.Provider> is not supported and will be removed in a future major release. Did you mean to render <Context.Provider> instead?");
                     }
                     return context.Provider;
                 },
@@ -7377,7 +7899,7 @@ module.exports = require("./cjs/react.development.js");
                 get: function() {
                     if (!hasWarnedAboutUsingNestedContextConsumers) {
                         hasWarnedAboutUsingNestedContextConsumers = true;
-                        error1("Rendering <Context.Consumer.Consumer> is not supported and will be removed in a future major release. Did you mean to render <Context.Consumer> instead?");
+                        error("Rendering <Context.Consumer.Consumer> is not supported and will be removed in a future major release. Did you mean to render <Context.Consumer> instead?");
                     }
                     return context.Consumer;
                 }
@@ -7435,10 +7957,10 @@ module.exports = require("./cjs/react.development.js");
             }
         }
         if (payload._status === Resolved) {
-            var moduleObject1 = payload._result;
-            if (moduleObject1 === undefined) error1("lazy: Expected the result of a dynamic import() call. Instead received: %s\n\nYour code should look like: \n  const MyComponent = lazy(() => import('./MyComponent'))\n\nDid you accidentally put curly braces around the import?", moduleObject1);
-            if (!("default" in moduleObject1)) error1("lazy: Expected the result of a dynamic import() call. Instead received: %s\n\nYour code should look like: \n  const MyComponent = lazy(() => import('./MyComponent'))", moduleObject1);
-            return moduleObject1.default;
+            var moduleObject = payload._result;
+            if (moduleObject === undefined) error("lazy: Expected the result of a dynamic import() call. Instead received: %s\n\nYour code should look like: \n  const MyComponent = lazy(() => import('./MyComponent'))\n\nDid you accidentally put curly braces around the import?", moduleObject);
+            if (!("default" in moduleObject)) error("lazy: Expected the result of a dynamic import() call. Instead received: %s\n\nYour code should look like: \n  const MyComponent = lazy(() => import('./MyComponent'))", moduleObject);
+            return moduleObject.default;
         } else throw payload._result;
     }
     function lazy(ctor) {
@@ -7462,7 +7984,7 @@ module.exports = require("./cjs/react.development.js");
                     return defaultProps;
                 },
                 set: function(newDefaultProps) {
-                    error1("React.lazy(...): It is not supported to assign `defaultProps` to a lazy component import. Either specify them where the component is defined, or create a wrapping component around it.");
+                    error("React.lazy(...): It is not supported to assign `defaultProps` to a lazy component import. Either specify them where the component is defined, or create a wrapping component around it.");
                     defaultProps = newDefaultProps; // Match production behavior more closely:
                     // $FlowFixMe
                     Object.defineProperty(lazyType, "defaultProps", {
@@ -7476,7 +7998,7 @@ module.exports = require("./cjs/react.development.js");
                     return propTypes;
                 },
                 set: function(newPropTypes) {
-                    error1("React.lazy(...): It is not supported to assign `propTypes` to a lazy component import. Either specify them where the component is defined, or create a wrapping component around it.");
+                    error("React.lazy(...): It is not supported to assign `propTypes` to a lazy component import. Either specify them where the component is defined, or create a wrapping component around it.");
                     propTypes = newPropTypes; // Match production behavior more closely:
                     // $FlowFixMe
                     Object.defineProperty(lazyType, "propTypes", {
@@ -7488,11 +8010,11 @@ module.exports = require("./cjs/react.development.js");
         return lazyType;
     }
     function forwardRef(render) {
-        if (render != null && render.$$typeof === REACT_MEMO_TYPE) error1("forwardRef requires a render function but received a `memo` component. Instead of forwardRef(memo(...)), use memo(forwardRef(...)).");
-        else if (typeof render !== "function") error1("forwardRef requires a render function but was given %s.", render === null ? "null" : typeof render);
-        else if (render.length !== 0 && render.length !== 2) error1("forwardRef render functions accept exactly two parameters: props and ref. %s", render.length === 1 ? "Did you forget to use the ref parameter?" : "Any additional parameter will be undefined.");
+        if (render != null && render.$$typeof === REACT_MEMO_TYPE) error("forwardRef requires a render function but received a `memo` component. Instead of forwardRef(memo(...)), use memo(forwardRef(...)).");
+        else if (typeof render !== "function") error("forwardRef requires a render function but was given %s.", render === null ? "null" : typeof render);
+        else if (render.length !== 0 && render.length !== 2) error("forwardRef render functions accept exactly two parameters: props and ref. %s", render.length === 1 ? "Did you forget to use the ref parameter?" : "Any additional parameter will be undefined.");
         if (render != null) {
-            if (render.defaultProps != null || render.propTypes != null) error1("forwardRef render functions do not support propTypes or defaultProps. Did you accidentally pass a React component?");
+            if (render.defaultProps != null || render.propTypes != null) error("forwardRef render functions do not support propTypes or defaultProps. Did you accidentally pass a React component?");
         }
         var elementType = {
             $$typeof: REACT_FORWARD_REF_TYPE,
@@ -7525,7 +8047,8 @@ module.exports = require("./cjs/react.development.js");
          // Note: typeof might be other than 'symbol' or 'number' (e.g. if it's a polyfill).
         if (type === REACT_FRAGMENT_TYPE || type === REACT_PROFILER_TYPE || enableDebugTracing || type === REACT_STRICT_MODE_TYPE || type === REACT_SUSPENSE_TYPE || type === REACT_SUSPENSE_LIST_TYPE || enableLegacyHidden || type === REACT_OFFSCREEN_TYPE || enableScopeAPI || enableCacheElement || enableTransitionTracing) return true;
         if (typeof type === "object" && type !== null) {
-            if (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE || // types supported by any Flight configuration anywhere since
+            if (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE || // This needs to include all possible module reference object
+            // types supported by any Flight configuration anywhere since
             // we don't know which Flight build this will end up being used
             // with.
             type.$$typeof === REACT_MODULE_REFERENCE || type.getModuleId !== undefined) return true;
@@ -7533,7 +8056,7 @@ module.exports = require("./cjs/react.development.js");
         return false;
     }
     function memo(type, compare) {
-        if (!isValidElementType(type)) error1("memo: The first argument must be a component. Instead received: %s", type === null ? "null" : typeof type);
+        if (!isValidElementType(type)) error("memo: The first argument must be a component. Instead received: %s", type === null ? "null" : typeof type);
         var elementType = {
             $$typeof: REACT_MEMO_TYPE,
             type: type,
@@ -7561,7 +8084,7 @@ module.exports = require("./cjs/react.development.js");
     }
     function resolveDispatcher() {
         var dispatcher = ReactCurrentDispatcher.current;
-        if (dispatcher === null) error1("Invalid hook call. Hooks can only be called inside of the body of a function component. This could happen for one of the following reasons:\n1. You might have mismatching versions of React and the renderer (such as React DOM)\n2. You might be breaking the Rules of Hooks\n3. You might have more than one copy of React in the same app\nSee https://reactjs.org/link/invalid-hook-call for tips about how to debug and fix this problem.");
+        if (dispatcher === null) error("Invalid hook call. Hooks can only be called inside of the body of a function component. This could happen for one of the following reasons:\n1. You might have mismatching versions of React and the renderer (such as React DOM)\n2. You might be breaking the Rules of Hooks\n3. You might have more than one copy of React in the same app\nSee https://reactjs.org/link/invalid-hook-call for tips about how to debug and fix this problem.");
         // intentionally don't throw our own error because this is in a hot path.
         // Also helps ensure this is inlined.
         return dispatcher;
@@ -7572,8 +8095,8 @@ module.exports = require("./cjs/react.development.js");
         if (Context._context !== undefined) {
             var realContext = Context._context; // Don't deduplicate because this legitimately causes bugs
             // and nobody should be using this in existing code.
-            if (realContext.Consumer === Context) error1("Calling useContext(Context.Consumer) is not supported, may cause bugs, and will be removed in a future major release. Did you mean to call useContext(Context) instead?");
-            else if (realContext.Provider === Context) error1("Calling useContext(Context.Provider) is not supported. Did you mean to call useContext(Context) instead?");
+            if (realContext.Consumer === Context) error("Calling useContext(Context.Consumer) is not supported, may cause bugs, and will be removed in a future major release. Did you mean to call useContext(Context) instead?");
+            else if (realContext.Provider === Context) error("Calling useContext(Context.Provider) is not supported. Did you mean to call useContext(Context) instead?");
         }
         return dispatcher.useContext(Context);
     }
@@ -7706,7 +8229,7 @@ module.exports = require("./cjs/react.development.js");
                 })
             });
         /* eslint-enable react-internal/no-production-logging */ }
-        if (disabledDepth < 0) error1("disabledDepth fell below zero. This is a bug in React. Please file an issue.");
+        if (disabledDepth < 0) error("disabledDepth fell below zero. This is a bug in React. Please file an issue.");
     }
     var ReactCurrentDispatcher$1 = ReactSharedInternals.ReactCurrentDispatcher;
     var prefix;
@@ -7895,7 +8418,7 @@ module.exports = require("./cjs/react.development.js");
             }
             if (error$1 && !(error$1 instanceof Error)) {
                 setCurrentlyValidatingElement(element);
-                error1("%s: type specification of %s `%s` is invalid; the type checker function must return `null` or an `Error` but returned a %s. You may have forgotten to pass an argument to the type checker creator (arrayOf, instanceOf, objectOf, oneOf, oneOfType, and shape all require an argument).", componentName || "React class", location, typeSpecName, typeof error$1);
+                error("%s: type specification of %s `%s` is invalid; the type checker function must return `null` or an `Error` but returned a %s. You may have forgotten to pass an argument to the type checker creator (arrayOf, instanceOf, objectOf, oneOf, oneOfType, and shape all require an argument).", componentName || "React class", location, typeSpecName, typeof error$1);
                 setCurrentlyValidatingElement(null);
             }
             if (error$1 instanceof Error && !(error$1.message in loggedTypeFailures)) {
@@ -7903,7 +8426,7 @@ module.exports = require("./cjs/react.development.js");
                 // same error.
                 loggedTypeFailures[error$1.message] = true;
                 setCurrentlyValidatingElement(element);
-                error1("Failed %s type: %s", location, error$1.message);
+                error("Failed %s type: %s", location, error$1.message);
                 setCurrentlyValidatingElement(null);
             }
         }
@@ -7971,7 +8494,7 @@ module.exports = require("./cjs/react.development.js");
         if (element && element._owner && element._owner !== ReactCurrentOwner.current) // Give the component that originally created this child.
         childOwner = " It was passed a child from " + getComponentNameFromType(element._owner.type) + ".";
         setCurrentlyValidatingElement$1(element);
-        error1('Each child in a list should have a unique "key" prop.%s%s See https://reactjs.org/link/warning-keys for more information.', currentComponentErrorInfo, childOwner);
+        error('Each child in a list should have a unique "key" prop.%s%s See https://reactjs.org/link/warning-keys for more information.', currentComponentErrorInfo, childOwner);
         setCurrentlyValidatingElement$1(null);
     }
     /**
@@ -8014,7 +8537,8 @@ module.exports = require("./cjs/react.development.js");
         if (type === null || type === undefined || typeof type === "string") return;
         var propTypes;
         if (typeof type === "function") propTypes = type.propTypes;
-        else if (typeof type === "object" && (type.$$typeof === REACT_FORWARD_REF_TYPE || // Inner props are checked in the reconciler.
+        else if (typeof type === "object" && (type.$$typeof === REACT_FORWARD_REF_TYPE || // Note: Memo only checks outer props here.
+        // Inner props are checked in the reconciler.
         type.$$typeof === REACT_MEMO_TYPE)) propTypes = type.propTypes;
         else return;
         if (propTypes) {
@@ -8024,9 +8548,9 @@ module.exports = require("./cjs/react.development.js");
         } else if (type.PropTypes !== undefined && !propTypesMisspellWarningShown) {
             propTypesMisspellWarningShown = true; // Intentionally inside to avoid triggering lazy initializers:
             var _name = getComponentNameFromType(type);
-            error1("Component %s declared `PropTypes` instead of `propTypes`. Did you misspell the property assignment?", _name || "Unknown");
+            error("Component %s declared `PropTypes` instead of `propTypes`. Did you misspell the property assignment?", _name || "Unknown");
         }
-        if (typeof type.getDefaultProps === "function" && !type.getDefaultProps.isReactClassApproved) error1("getDefaultProps is only used on classic React.createClass definitions. Use a static property named `defaultProps` instead.");
+        if (typeof type.getDefaultProps === "function" && !type.getDefaultProps.isReactClassApproved) error("getDefaultProps is only used on classic React.createClass definitions. Use a static property named `defaultProps` instead.");
     }
     /**
  * Given a fragment, validate that it can only be provided with fragment props
@@ -8037,14 +8561,14 @@ module.exports = require("./cjs/react.development.js");
             var key = keys[i];
             if (key !== "children" && key !== "key") {
                 setCurrentlyValidatingElement$1(fragment);
-                error1("Invalid prop `%s` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.", key);
+                error("Invalid prop `%s` supplied to `React.Fragment`. React.Fragment can only have `key` and `children` props.", key);
                 setCurrentlyValidatingElement$1(null);
                 break;
             }
         }
         if (fragment.ref !== null) {
             setCurrentlyValidatingElement$1(fragment);
-            error1("Invalid attribute `ref` supplied to `React.Fragment`.");
+            error("Invalid attribute `ref` supplied to `React.Fragment`.");
             setCurrentlyValidatingElement$1(null);
         }
     }
@@ -8064,7 +8588,7 @@ module.exports = require("./cjs/react.development.js");
                 typeString = "<" + (getComponentNameFromType(type.type) || "Unknown") + " />";
                 info = " Did you accidentally export a JSX literal instead of a component?";
             } else typeString = typeof type;
-            error1("React.createElement: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s", typeString, info);
+            error("React.createElement: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: %s.%s", typeString, info);
         }
         var element = createElement.apply(this, arguments); // The result can be nullish if a mock or a custom function is used.
         // TODO: Drop this when these are no longer allowed as the type argument.
@@ -8138,7 +8662,7 @@ module.exports = require("./cjs/react.development.js");
             enqueueTaskImpl = function(callback) {
                 if (didWarnAboutMessageChannel === false) {
                     didWarnAboutMessageChannel = true;
-                    if (typeof MessageChannel === "undefined") error1("This browser does not have a MessageChannel implementation, so enqueuing tasks via await act(async () => ...) will fail. Please file an issue at https://github.com/facebook/react/issues if you encounter this warning.");
+                    if (typeof MessageChannel === "undefined") error("This browser does not have a MessageChannel implementation, so enqueuing tasks via await act(async () => ...) will fail. Please file an issue at https://github.com/facebook/react/issues if you encounter this warning.");
                 }
                 var channel = new MessageChannel();
                 channel.port1.onmessage = callback;
@@ -8175,9 +8699,9 @@ module.exports = require("./cjs/react.development.js");
                     flushActQueue(queue);
                 }
             }
-        } catch (error2) {
+        } catch (error) {
             popActScope(prevActScopeDepth);
-            throw error2;
+            throw error;
         } finally{
             ReactCurrentActQueue.isBatchingLegacy = prevIsBatchingLegacy;
         }
@@ -8205,12 +8729,12 @@ module.exports = require("./cjs/react.development.js");
             Promise.resolve().then(function() {}).then(function() {
                 if (!wasAwaited) {
                     didWarnNoAwaitAct = true;
-                    error1("You called act(async () => ...) without await. This could lead to unexpected testing behaviour, interleaving multiple act calls and mixing their scopes. You should - await act(async () => ...);");
+                    error("You called act(async () => ...) without await. This could lead to unexpected testing behaviour, interleaving multiple act calls and mixing their scopes. You should - await act(async () => ...);");
                 }
             });
             return thenable;
         } else {
-            var returnValue1 = result; // The callback is not an async function. Exit the current scope
+            var returnValue = result; // The callback is not an async function. Exit the current scope
             // immediately, without awaiting.
             popActScope(prevActScopeDepth);
             if (actScopeDepth === 0) {
@@ -8229,8 +8753,8 @@ module.exports = require("./cjs/react.development.js");
                         if (ReactCurrentActQueue.current === null) {
                             // Recursively flush the queue until there's no remaining work.
                             ReactCurrentActQueue.current = [];
-                            recursivelyFlushAsyncActWork(returnValue1, resolve, reject);
-                        } else resolve(returnValue1);
+                            recursivelyFlushAsyncActWork(returnValue, resolve, reject);
+                        } else resolve(returnValue);
                     }
                 };
                 return _thenable;
@@ -8239,7 +8763,7 @@ module.exports = require("./cjs/react.development.js");
                 // immediately resolves. The outer scope will flush the queue.
                 var _thenable2 = {
                     then: function(resolve, reject) {
-                        resolve(returnValue1);
+                        resolve(returnValue);
                     }
                 };
                 return _thenable2;
@@ -8247,7 +8771,7 @@ module.exports = require("./cjs/react.development.js");
         }
     }
     function popActScope(prevActScopeDepth) {
-        if (prevActScopeDepth !== actScopeDepth - 1) error1("You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. ");
+        if (prevActScopeDepth !== actScopeDepth - 1) error("You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. ");
         actScopeDepth = prevActScopeDepth;
     }
     function recursivelyFlushAsyncActWork(returnValue, resolve, reject) {
@@ -8300,7 +8824,7 @@ module.exports = require("./cjs/react.development.js");
         only: onlyChild
     };
     exports.Children = Children;
-    exports.Component = Component1;
+    exports.Component = Component;
     exports.Fragment = REACT_FRAGMENT_TYPE;
     exports.Profiler = REACT_PROFILER_TYPE;
     exports.PureComponent = PureComponent;
@@ -8339,7 +8863,7 @@ module.exports = require("./cjs/react.development.js");
 
 },{}],"elCkH":[function(require,module,exports) {
 "use strict";
-var m = require("react-dom");
+var m = require("6f25da78f7ab4c01");
 var i = m.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
 exports.createRoot = function(c, o) {
     i.usingClientEntryPoint = true;
@@ -8358,7 +8882,7 @@ exports.hydrateRoot = function(c, h, o) {
     }
 };
 
-},{"react-dom":"lBJKS"}],"lBJKS":[function(require,module,exports) {
+},{"6f25da78f7ab4c01":"lBJKS"}],"lBJKS":[function(require,module,exports) {
 "use strict";
 function checkDCE() {
     /* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */ if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ === "undefined" || typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE !== "function") return;
@@ -8372,9 +8896,9 @@ function checkDCE() {
     // a false positive.
     throw new Error("^_^");
 }
-module.exports = require("./cjs/react-dom.development.js");
+module.exports = require("a84fc1c770cfd209");
 
-},{"./cjs/react-dom.development.js":"SuVMz"}],"SuVMz":[function(require,module,exports) {
+},{"a84fc1c770cfd209":"SuVMz"}],"SuVMz":[function(require,module,exports) {
 /**
  * @license React
  * react-dom.development.js
@@ -8387,8 +8911,8 @@ module.exports = require("./cjs/react-dom.development.js");
 (function() {
     "use strict";
     /* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */ if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart === "function") __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
-    var React = require("react");
-    var Scheduler = require("scheduler");
+    var React = require("bc023b7d791778c6");
+    var Scheduler = require("b4fe22f87f4f8ad1");
     var ReactSharedInternals = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
     var suppressWarning = false;
     function setSuppressWarning(newSuppressWarning) {
@@ -8404,7 +8928,7 @@ module.exports = require("./cjs/react-dom.development.js");
             printWarning("warn", format, args);
         }
     }
-    function error1(format) {
+    function error(format) {
         if (!suppressWarning) {
             for(var _len2 = arguments.length, args = new Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++)args[_key2 - 1] = arguments[_key2];
             printWarning("error", format, args);
@@ -8482,23 +9006,23 @@ module.exports = require("./cjs/react-dom.development.js");
     var allNativeEvents = new Set();
     /**
  * Mapping from registration name to event name
- */ var registrationNameDependencies1 = {};
+ */ var registrationNameDependencies = {};
     /**
  * Mapping from lowercase registration names to the properly cased version,
  * used to warn in the case of missing event handlers. Available
  * only in true.
  * @type {Object}
- */ var possibleRegistrationNames1 = {}; // Trust the developer to only use possibleRegistrationNames in true
+ */ var possibleRegistrationNames = {}; // Trust the developer to only use possibleRegistrationNames in true
     function registerTwoPhaseEvent(registrationName, dependencies) {
         registerDirectEvent(registrationName, dependencies);
         registerDirectEvent(registrationName + "Capture", dependencies);
     }
     function registerDirectEvent(registrationName, dependencies) {
-        if (registrationNameDependencies1[registrationName]) error1("EventRegistry: More than one plugin attempted to publish the same registration name, `%s`.", registrationName);
-        registrationNameDependencies1[registrationName] = dependencies;
+        if (registrationNameDependencies[registrationName]) error("EventRegistry: More than one plugin attempted to publish the same registration name, `%s`.", registrationName);
+        registrationNameDependencies[registrationName] = dependencies;
         var lowerCasedName = registrationName.toLowerCase();
-        possibleRegistrationNames1[lowerCasedName] = registrationName;
-        if (registrationName === "onDoubleClick") possibleRegistrationNames1.ondblclick = registrationName;
+        possibleRegistrationNames[lowerCasedName] = registrationName;
+        if (registrationName === "onDoubleClick") possibleRegistrationNames.ondblclick = registrationName;
         for(var i = 0; i < dependencies.length; i++)allNativeEvents.add(dependencies[i]);
     }
     var canUseDOM = !!(typeof window !== "undefined" && typeof window.document !== "undefined" && typeof window.document.createElement !== "undefined");
@@ -8554,37 +9078,37 @@ module.exports = require("./cjs/react-dom.development.js");
     }
     function checkAttributeStringCoercion(value, attributeName) {
         if (willCoercionThrow(value)) {
-            error1("The provided `%s` attribute is an unsupported type %s. This value must be coerced to a string before before using it here.", attributeName, typeName(value));
+            error("The provided `%s` attribute is an unsupported type %s. This value must be coerced to a string before before using it here.", attributeName, typeName(value));
             return testStringCoercion(value); // throw (to help callers find troubleshooting comments)
         }
     }
     function checkKeyStringCoercion(value) {
         if (willCoercionThrow(value)) {
-            error1("The provided key is an unsupported type %s. This value must be coerced to a string before before using it here.", typeName(value));
+            error("The provided key is an unsupported type %s. This value must be coerced to a string before before using it here.", typeName(value));
             return testStringCoercion(value); // throw (to help callers find troubleshooting comments)
         }
     }
     function checkPropStringCoercion(value, propName) {
         if (willCoercionThrow(value)) {
-            error1("The provided `%s` prop is an unsupported type %s. This value must be coerced to a string before before using it here.", propName, typeName(value));
+            error("The provided `%s` prop is an unsupported type %s. This value must be coerced to a string before before using it here.", propName, typeName(value));
             return testStringCoercion(value); // throw (to help callers find troubleshooting comments)
         }
     }
     function checkCSSPropertyStringCoercion(value, propName) {
         if (willCoercionThrow(value)) {
-            error1("The provided `%s` CSS property is an unsupported type %s. This value must be coerced to a string before before using it here.", propName, typeName(value));
+            error("The provided `%s` CSS property is an unsupported type %s. This value must be coerced to a string before before using it here.", propName, typeName(value));
             return testStringCoercion(value); // throw (to help callers find troubleshooting comments)
         }
     }
     function checkHtmlStringCoercion(value) {
         if (willCoercionThrow(value)) {
-            error1("The provided HTML markup uses a value of unsupported type %s. This value must be coerced to a string before before using it here.", typeName(value));
+            error("The provided HTML markup uses a value of unsupported type %s. This value must be coerced to a string before before using it here.", typeName(value));
             return testStringCoercion(value); // throw (to help callers find troubleshooting comments)
         }
     }
     function checkFormFieldValueStringCoercion(value) {
         if (willCoercionThrow(value)) {
-            error1("Form field values (value, checked, defaultValue, or defaultChecked props) must be strings, not %s. This value must be coerced to a string before before using it here.", typeName(value));
+            error("Form field values (value, checked, defaultValue, or defaultChecked props) must be strings, not %s. This value must be coerced to a string before before using it here.", typeName(value));
             return testStringCoercion(value); // throw (to help callers find troubleshooting comments)
         }
     }
@@ -8621,7 +9145,7 @@ module.exports = require("./cjs/react-dom.development.js");
             return true;
         }
         illegalAttributeNameCache[attributeName] = true;
-        error1("Invalid attribute name: `%s`", attributeName);
+        error("Invalid attribute name: `%s`", attributeName);
         return false;
     }
     function shouldIgnoreAttribute(name, propertyInfo, isCustomComponentTag) {
@@ -8930,10 +9454,10 @@ module.exports = require("./cjs/react-dom.development.js");
     // https://infra.spec.whatwg.org/#c0-control-or-space
     /* eslint-disable max-len */ var isJavaScriptProtocol = /^[\u0000-\u001F ]*j[\r\n\t]*a[\r\n\t]*v[\r\n\t]*a[\r\n\t]*s[\r\n\t]*c[\r\n\t]*r[\r\n\t]*i[\r\n\t]*p[\r\n\t]*t[\r\n\t]*\:/i;
     var didWarn = false;
-    function sanitizeURL1(url) {
+    function sanitizeURL(url) {
         if (!didWarn && isJavaScriptProtocol.test(url)) {
             didWarn = true;
-            error1("A future version of React will block javascript: URLs as a security precaution. Use event handlers instead if you can. If you need to generate unsafe HTML try using dangerouslySetInnerHTML instead. React was passed %s.", JSON.stringify(url));
+            error("A future version of React will block javascript: URLs as a security precaution. Use event handlers instead if you can. If you need to generate unsafe HTML try using dangerouslySetInnerHTML instead. React was passed %s.", JSON.stringify(url));
         }
     }
     /**
@@ -8950,7 +9474,7 @@ module.exports = require("./cjs/react-dom.development.js");
             // the hydration is successful of a javascript: URL, we
             // still want to warn on the client.
             // eslint-disable-next-line react-internal/safe-string-coercion
-            sanitizeURL1("" + expected);
+            sanitizeURL("" + expected);
             var attributeName = propertyInfo.attributeName;
             var stringValue = null;
             if (propertyInfo.type === OVERLOADED_BOOLEAN) {
@@ -9035,7 +9559,7 @@ module.exports = require("./cjs/react-dom.development.js");
             else {
                 checkAttributeStringCoercion(value, attributeName);
                 attributeValue = "" + value;
-                if (propertyInfo.sanitizeURL) sanitizeURL1(attributeValue.toString());
+                if (propertyInfo.sanitizeURL) sanitizeURL(attributeValue.toString());
             }
             if (attributeNamespace) node.setAttributeNS(attributeNamespace, attributeName, attributeValue);
             else node.setAttribute(attributeName, attributeValue);
@@ -9145,20 +9669,20 @@ module.exports = require("./cjs/react-dom.development.js");
                 })
             });
         /* eslint-enable react-internal/no-production-logging */ }
-        if (disabledDepth < 0) error1("disabledDepth fell below zero. This is a bug in React. Please file an issue.");
+        if (disabledDepth < 0) error("disabledDepth fell below zero. This is a bug in React. Please file an issue.");
     }
-    var ReactCurrentDispatcher1 = ReactSharedInternals.ReactCurrentDispatcher;
-    var prefix1;
+    var ReactCurrentDispatcher = ReactSharedInternals.ReactCurrentDispatcher;
+    var prefix;
     function describeBuiltInComponentFrame(name, source, ownerFn) {
-        if (prefix1 === undefined) // Extract the VM specific prefix used by each line.
+        if (prefix === undefined) // Extract the VM specific prefix used by each line.
         try {
             throw Error();
         } catch (x) {
             var match = x.stack.trim().match(/\n( *(at )?)/);
-            prefix1 = match && match[1] || "";
+            prefix = match && match[1] || "";
         }
          // We use the prefix to ensure our stacks line up with native stack frames.
-        return "\n" + prefix1 + name;
+        return "\n" + prefix + name;
     }
     var reentry = false;
     var componentFrameCache;
@@ -9174,9 +9698,9 @@ module.exports = require("./cjs/react-dom.development.js");
         var previousPrepareStackTrace = Error.prepareStackTrace; // $FlowFixMe It does accept undefined.
         Error.prepareStackTrace = undefined;
         var previousDispatcher;
-        previousDispatcher = ReactCurrentDispatcher1.current; // Set the dispatcher in DEV because this might be call in the render function
+        previousDispatcher = ReactCurrentDispatcher.current; // Set the dispatcher in DEV because this might be call in the render function
         // for warnings.
-        ReactCurrentDispatcher1.current = null;
+        ReactCurrentDispatcher.current = null;
         disableLogs();
         try {
             // This should throw.
@@ -9260,7 +9784,7 @@ module.exports = require("./cjs/react-dom.development.js");
             }
         } finally{
             reentry = false;
-            ReactCurrentDispatcher1.current = previousDispatcher;
+            ReactCurrentDispatcher.current = previousDispatcher;
             reenableLogs();
             Error.prepareStackTrace = previousPrepareStackTrace;
         } // Fallback to just using the name if we couldn't make it throw.
@@ -9355,7 +9879,7 @@ module.exports = require("./cjs/react-dom.development.js");
     function getComponentNameFromType(type) {
         if (type == null) // Host root, text node or just invalid type.
         return null;
-        if (typeof type.tag === "number") error1("Received an unexpected object in getComponentNameFromType(). This is likely a bug in React. Please file an issue.");
+        if (typeof type.tag === "number") error("Received an unexpected object in getComponentNameFromType(). This is likely a bug in React. Please file an issue.");
         if (typeof type === "function") return type.displayName || type.name || null;
         if (typeof type === "string") return type;
         switch(type){
@@ -9462,33 +9986,33 @@ module.exports = require("./cjs/react-dom.development.js");
         }
         return null;
     }
-    var ReactDebugCurrentFrame1 = ReactSharedInternals.ReactDebugCurrentFrame;
-    var current1 = null;
+    var ReactDebugCurrentFrame = ReactSharedInternals.ReactDebugCurrentFrame;
+    var current = null;
     var isRendering = false;
     function getCurrentFiberOwnerNameInDevOrNull() {
-        if (current1 === null) return null;
-        var owner = current1._debugOwner;
+        if (current === null) return null;
+        var owner = current._debugOwner;
         if (owner !== null && typeof owner !== "undefined") return getComponentNameFromFiber(owner);
         return null;
     }
     function getCurrentFiberStackInDev() {
-        if (current1 === null) return "";
+        if (current === null) return "";
          // Safe because if current fiber exists, we are reconciling,
         // and it is guaranteed to be the work-in-progress version.
-        return getStackByFiberInDevAndProd(current1);
+        return getStackByFiberInDevAndProd(current);
     }
     function resetCurrentFiber() {
-        ReactDebugCurrentFrame1.getCurrentStack = null;
-        current1 = null;
+        ReactDebugCurrentFrame.getCurrentStack = null;
+        current = null;
         isRendering = false;
     }
     function setCurrentFiber(fiber) {
-        ReactDebugCurrentFrame1.getCurrentStack = fiber === null ? null : getCurrentFiberStackInDev;
-        current1 = fiber;
+        ReactDebugCurrentFrame.getCurrentStack = fiber === null ? null : getCurrentFiberStackInDev;
+        current = fiber;
         isRendering = false;
     }
     function getCurrentFiber() {
-        return current1;
+        return current;
     }
     function setIsRendering(rendering) {
         isRendering = rendering;
@@ -9526,8 +10050,8 @@ module.exports = require("./cjs/react-dom.development.js");
         submit: true
     };
     function checkControlledValueProps(tagName, props) {
-        if (!(hasReadOnlyValue[props.type] || props.onChange || props.onInput || props.readOnly || props.disabled || props.value == null)) error1("You provided a `value` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultValue`. Otherwise, set either `onChange` or `readOnly`.");
-        if (!(props.onChange || props.readOnly || props.disabled || props.checked == null)) error1("You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.");
+        if (!(hasReadOnlyValue[props.type] || props.onChange || props.onInput || props.readOnly || props.disabled || props.value == null)) error("You provided a `value` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultValue`. Otherwise, set either `onChange` or `readOnly`.");
+        if (!(props.onChange || props.readOnly || props.disabled || props.checked == null)) error("You provided a `checked` prop to a form field without an `onChange` handler. This will render a read-only field. If the field should be mutable use `defaultChecked`. Otherwise, set either `onChange` or `readOnly`.");
     }
     function isCheckable(elem) {
         var type = elem.type;
@@ -9653,11 +10177,11 @@ module.exports = require("./cjs/react-dom.development.js");
     function initWrapperState(element, props) {
         checkControlledValueProps("input", props);
         if (props.checked !== undefined && props.defaultChecked !== undefined && !didWarnCheckedDefaultChecked) {
-            error1("%s contains an input of type %s with both checked and defaultChecked props. Input elements must be either controlled or uncontrolled (specify either the checked prop, or the defaultChecked prop, but not both). Decide between using a controlled or uncontrolled input element and remove one of these props. More info: https://reactjs.org/link/controlled-components", getCurrentFiberOwnerNameInDevOrNull() || "A component", props.type);
+            error("%s contains an input of type %s with both checked and defaultChecked props. Input elements must be either controlled or uncontrolled (specify either the checked prop, or the defaultChecked prop, but not both). Decide between using a controlled or uncontrolled input element and remove one of these props. More info: https://reactjs.org/link/controlled-components", getCurrentFiberOwnerNameInDevOrNull() || "A component", props.type);
             didWarnCheckedDefaultChecked = true;
         }
         if (props.value !== undefined && props.defaultValue !== undefined && !didWarnValueDefaultValue) {
-            error1("%s contains an input of type %s with both value and defaultValue props. Input elements must be either controlled or uncontrolled (specify either the value prop, or the defaultValue prop, but not both). Decide between using a controlled or uncontrolled input element and remove one of these props. More info: https://reactjs.org/link/controlled-components", getCurrentFiberOwnerNameInDevOrNull() || "A component", props.type);
+            error("%s contains an input of type %s with both value and defaultValue props. Input elements must be either controlled or uncontrolled (specify either the value prop, or the defaultValue prop, but not both). Decide between using a controlled or uncontrolled input element and remove one of these props. More info: https://reactjs.org/link/controlled-components", getCurrentFiberOwnerNameInDevOrNull() || "A component", props.type);
             didWarnValueDefaultValue = true;
         }
         var node = element;
@@ -9677,11 +10201,11 @@ module.exports = require("./cjs/react-dom.development.js");
         var node = element;
         var controlled = isControlled(props);
         if (!node._wrapperState.controlled && controlled && !didWarnUncontrolledToControlled) {
-            error1("A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components");
+            error("A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components");
             didWarnUncontrolledToControlled = true;
         }
         if (node._wrapperState.controlled && !controlled && !didWarnControlledToUncontrolled) {
-            error1("A component is changing a controlled input to be uncontrolled. This is likely caused by the value changing from a defined to undefined, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components");
+            error("A component is changing a controlled input to be uncontrolled. This is likely caused by the value changing from a defined to undefined, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://reactjs.org/link/controlled-components");
             didWarnControlledToUncontrolled = true;
         }
         updateChecked(element, props);
@@ -9689,7 +10213,8 @@ module.exports = require("./cjs/react-dom.development.js");
         var type = props.type;
         if (value != null) {
             if (type === "number") {
-                if (value === 0 && node.value === "" || // eslint-disable-next-line
+                if (value === 0 && node.value === "" || // We explicitly want to coerce to number here if possible.
+                // eslint-disable-next-line
                 node.value != value) node.value = toString(value);
             } else if (node.value !== toString(value)) node.value = toString(value);
         } else if (type === "submit" || type === "reset") {
@@ -9806,18 +10331,18 @@ module.exports = require("./cjs/react-dom.development.js");
                 if (typeof child === "string" || typeof child === "number") return;
                 if (!didWarnInvalidChild) {
                     didWarnInvalidChild = true;
-                    error1("Cannot infer the option value of complex children. Pass a `value` prop or use a plain string as children to <option>.");
+                    error("Cannot infer the option value of complex children. Pass a `value` prop or use a plain string as children to <option>.");
                 }
             });
             else if (props.dangerouslySetInnerHTML != null) {
                 if (!didWarnInvalidInnerHTML) {
                     didWarnInvalidInnerHTML = true;
-                    error1("Pass a `value` prop if you set dangerouslyInnerHTML so React knows which value should be selected.");
+                    error("Pass a `value` prop if you set dangerouslyInnerHTML so React knows which value should be selected.");
                 }
             }
         } // TODO: Remove support for `selected` in <option>.
         if (props.selected != null && !didWarnSelectedSetOnOption) {
-            error1("Use the `defaultValue` or `value` props on <select> instead of setting `selected` on <option>.");
+            error("Use the `defaultValue` or `value` props on <select> instead of setting `selected` on <option>.");
             didWarnSelectedSetOnOption = true;
         }
     }
@@ -9848,8 +10373,8 @@ module.exports = require("./cjs/react-dom.development.js");
             var propName = valuePropNames[i];
             if (props[propName] == null) continue;
             var propNameIsArray = isArray(props[propName]);
-            if (props.multiple && !propNameIsArray) error1("The `%s` prop supplied to <select> must be an array if `multiple` is true.%s", propName, getDeclarationErrorAddendum());
-            else if (!props.multiple && propNameIsArray) error1("The `%s` prop supplied to <select> must be a scalar value if `multiple` is false.%s", propName, getDeclarationErrorAddendum());
+            if (props.multiple && !propNameIsArray) error("The `%s` prop supplied to <select> must be an array if `multiple` is true.%s", propName, getDeclarationErrorAddendum());
+            else if (!props.multiple && propNameIsArray) error("The `%s` prop supplied to <select> must be a scalar value if `multiple` is false.%s", propName, getDeclarationErrorAddendum());
         }
     }
     function updateOptions(node, multiple, propValue, setDefaultSelected) {
@@ -9906,7 +10431,7 @@ module.exports = require("./cjs/react-dom.development.js");
             wasMultiple: !!props.multiple
         };
         if (props.value !== undefined && props.defaultValue !== undefined && !didWarnValueDefaultValue$1) {
-            error1("Select elements must be either controlled or uncontrolled (specify either the value prop, or the defaultValue prop, but not both). Decide between using a controlled or uncontrolled select element and remove one of these props. More info: https://reactjs.org/link/controlled-components");
+            error("Select elements must be either controlled or uncontrolled (specify either the value prop, or the defaultValue prop, but not both). Decide between using a controlled or uncontrolled select element and remove one of these props. More info: https://reactjs.org/link/controlled-components");
             didWarnValueDefaultValue$1 = true;
         }
     }
@@ -9970,14 +10495,14 @@ module.exports = require("./cjs/react-dom.development.js");
         var node = element;
         checkControlledValueProps("textarea", props);
         if (props.value !== undefined && props.defaultValue !== undefined && !didWarnValDefaultVal) {
-            error1("%s contains a textarea with both value and defaultValue props. Textarea elements must be either controlled or uncontrolled (specify either the value prop, or the defaultValue prop, but not both). Decide between using a controlled or uncontrolled textarea and remove one of these props. More info: https://reactjs.org/link/controlled-components", getCurrentFiberOwnerNameInDevOrNull() || "A component");
+            error("%s contains a textarea with both value and defaultValue props. Textarea elements must be either controlled or uncontrolled (specify either the value prop, or the defaultValue prop, but not both). Decide between using a controlled or uncontrolled textarea and remove one of these props. More info: https://reactjs.org/link/controlled-components", getCurrentFiberOwnerNameInDevOrNull() || "A component");
             didWarnValDefaultVal = true;
         }
         var initialValue = props.value; // Only bother fetching default value if we're going to use it
         if (initialValue == null) {
             var children = props.children, defaultValue = props.defaultValue;
             if (children != null) {
-                error1("Use the `defaultValue` or `value` props instead of setting children on <textarea>.");
+                error("Use the `defaultValue` or `value` props instead of setting children on <textarea>.");
                 if (defaultValue != null) throw new Error("If you supply `defaultValue` on a <textarea>, do not pass children.");
                 if (isArray(children)) {
                     if (children.length > 1) throw new Error("<textarea> can only have at most one child.");
@@ -10439,7 +10964,7 @@ module.exports = require("./cjs/react-dom.development.js");
     /**
  * Support style names that may come passed in prefixed by adding permutations
  * of vendor prefixes.
- */ var prefixes1 = [
+ */ var prefixes = [
         "Webkit",
         "ms",
         "Moz",
@@ -10447,7 +10972,7 @@ module.exports = require("./cjs/react-dom.development.js");
     ]; // Using Object.keys here, or else the vanilla for-in loop makes IE8 go into an
     // infinite loop, because it iterates over the newly added props too.
     Object.keys(isUnitlessNumber).forEach(function(prop) {
-        prefixes1.forEach(function(prefix) {
+        prefixes.forEach(function(prefix) {
             isUnitlessNumber[prefixKey(prefix, prop)] = isUnitlessNumber[prop];
         });
     });
@@ -10510,29 +11035,29 @@ module.exports = require("./cjs/react-dom.development.js");
     var warnHyphenatedStyleName = function(name) {
         if (warnedStyleNames.hasOwnProperty(name) && warnedStyleNames[name]) return;
         warnedStyleNames[name] = true;
-        error1("Unsupported style property %s. Did you mean %s?", name, // (http://www.andismith.com/blog/2012/02/modernizr-prefixed/), an `-ms` prefix
+        error("Unsupported style property %s. Did you mean %s?", name, // (http://www.andismith.com/blog/2012/02/modernizr-prefixed/), an `-ms` prefix
         // is converted to lowercase `ms`.
         camelize(name.replace(msPattern$1, "ms-")));
     };
     var warnBadVendoredStyleName = function(name) {
         if (warnedStyleNames.hasOwnProperty(name) && warnedStyleNames[name]) return;
         warnedStyleNames[name] = true;
-        error1("Unsupported vendor-prefixed style property %s. Did you mean %s?", name, name.charAt(0).toUpperCase() + name.slice(1));
+        error("Unsupported vendor-prefixed style property %s. Did you mean %s?", name, name.charAt(0).toUpperCase() + name.slice(1));
     };
     var warnStyleValueWithSemicolon = function(name, value) {
         if (warnedStyleValues.hasOwnProperty(value) && warnedStyleValues[value]) return;
         warnedStyleValues[value] = true;
-        error1('Style property values shouldn\'t contain a semicolon. Try "%s: %s" instead.', name, value.replace(badStyleValueWithSemicolonPattern, ""));
+        error('Style property values shouldn\'t contain a semicolon. Try "%s: %s" instead.', name, value.replace(badStyleValueWithSemicolonPattern, ""));
     };
     var warnStyleValueIsNaN = function(name, value) {
         if (warnedForNaNValue) return;
         warnedForNaNValue = true;
-        error1("`NaN` is an invalid value for the `%s` css style property.", name);
+        error("`NaN` is an invalid value for the `%s` css style property.", name);
     };
     var warnStyleValueIsInfinity = function(name, value) {
         if (warnedForInfinityValue) return;
         warnedForInfinityValue = true;
-        error1("`Infinity` is an invalid value for the `%s` css style property.", name);
+        error("`Infinity` is an invalid value for the `%s` css style property.", name);
     };
     warnValidStyle = function(name, value) {
         if (name.indexOf("-") > -1) warnHyphenatedStyleName(name);
@@ -10629,7 +11154,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 var warningKey = originalKey + "," + correctOriginalKey;
                 if (warnedAbout[warningKey]) continue;
                 warnedAbout[warningKey] = true;
-                error1("%s a style property during rerender (%s) when a conflicting property is set (%s) can lead to styling bugs. To avoid this, don't mix shorthand and non-shorthand properties for the same value; instead, replace the shorthand with separate values.", isValueEmpty(styleUpdates[originalKey]) ? "Removing" : "Updating", originalKey, correctOriginalKey);
+                error("%s a style property during rerender (%s) when a conflicting property is set (%s) can lead to styling bugs. To avoid this, don't mix shorthand and non-shorthand properties for the same value; instead, replace the shorthand with separate values.", isValueEmpty(styleUpdates[originalKey]) ? "Removing" : "Updating", originalKey, correctOriginalKey);
             }
         }
     }
@@ -10667,7 +11192,7 @@ module.exports = require("./cjs/react-dom.development.js");
             if (props.children != null) throw new Error("Can only set one of `children` or `props.dangerouslySetInnerHTML`.");
             if (typeof props.dangerouslySetInnerHTML !== "object" || !(HTML in props.dangerouslySetInnerHTML)) throw new Error("`props.dangerouslySetInnerHTML` must be in the form `{__html: ...}`. Please visit https://reactjs.org/link/dangerously-set-inner-html for more information.");
         }
-        if (!props.suppressContentEditableWarning && props.contentEditable && props.children != null) error1("A component is `contentEditable` and contains `children` managed by React. It is now your responsibility to guarantee that none of those nodes are unexpectedly modified or duplicated. This is probably not intentional.");
+        if (!props.suppressContentEditableWarning && props.contentEditable && props.children != null) error("A component is `contentEditable` and contains `children` managed by React. It is now your responsibility to guarantee that none of those nodes are unexpectedly modified or duplicated. This is probably not intentional.");
         if (props.style != null && typeof props.style !== "object") throw new Error("The `style` prop expects a mapping from style properties to values, not a string. For example, style={{marginRight: spacing + 'em'}} when using JSX.");
     }
     function isCustomComponent(tagName, props) {
@@ -11251,12 +11776,12 @@ module.exports = require("./cjs/react-dom.development.js");
             var correctName = ariaProperties.hasOwnProperty(ariaName) ? ariaName : null; // If this is an aria-* attribute, but is not listed in the known DOM
             // DOM properties, then it is an invalid aria-* attribute.
             if (correctName == null) {
-                error1("Invalid ARIA attribute `%s`. ARIA attributes follow the pattern aria-* and must be lowercase.", name);
+                error("Invalid ARIA attribute `%s`. ARIA attributes follow the pattern aria-* and must be lowercase.", name);
                 warnedProperties[name] = true;
                 return true;
             } // aria-* attributes should be lowercase; suggest the lowercase version.
             if (name !== correctName) {
-                error1("Invalid ARIA attribute `%s`. Did you mean `%s`?", name, correctName);
+                error("Invalid ARIA attribute `%s`. Did you mean `%s`?", name, correctName);
                 warnedProperties[name] = true;
                 return true;
             }
@@ -11270,7 +11795,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 return false;
             } // aria-* attributes should be lowercase; suggest the lowercase version.
             if (name !== standardName) {
-                error1("Unknown ARIA attribute `%s`. Did you mean `%s`?", name, standardName);
+                error("Unknown ARIA attribute `%s`. Did you mean `%s`?", name, standardName);
                 warnedProperties[name] = true;
                 return true;
             }
@@ -11286,8 +11811,8 @@ module.exports = require("./cjs/react-dom.development.js");
         var unknownPropString = invalidProps.map(function(prop) {
             return "`" + prop + "`";
         }).join(", ");
-        if (invalidProps.length === 1) error1("Invalid aria prop %s on <%s> tag. For details, see https://reactjs.org/link/invalid-aria-props", unknownPropString, type);
-        else if (invalidProps.length > 1) error1("Invalid aria props %s on <%s> tag. For details, see https://reactjs.org/link/invalid-aria-props", unknownPropString, type);
+        if (invalidProps.length === 1) error("Invalid aria prop %s on <%s> tag. For details, see https://reactjs.org/link/invalid-aria-props", unknownPropString, type);
+        else if (invalidProps.length > 1) error("Invalid aria props %s on <%s> tag. For details, see https://reactjs.org/link/invalid-aria-props", unknownPropString, type);
     }
     function validateProperties(type, props) {
         if (isCustomComponent(type, props)) return;
@@ -11298,8 +11823,8 @@ module.exports = require("./cjs/react-dom.development.js");
         if (type !== "input" && type !== "textarea" && type !== "select") return;
         if (props != null && props.value === null && !didWarnValueNull) {
             didWarnValueNull = true;
-            if (type === "select" && props.multiple) error1("`value` prop on `%s` should not be null. Consider using an empty array when `multiple` is set to `true` to clear the component or `undefined` for uncontrolled components.", type);
-            else error1("`value` prop on `%s` should not be null. Consider using an empty string to clear the component or `undefined` for uncontrolled components.", type);
+            if (type === "select" && props.multiple) error("`value` prop on `%s` should not be null. Consider using an empty array when `multiple` is set to `true` to clear the component or `undefined` for uncontrolled components.", type);
+            else error("`value` prop on `%s` should not be null. Consider using an empty string to clear the component or `undefined` for uncontrolled components.", type);
         }
     }
     var validateProperty$1 = function() {};
@@ -11312,7 +11837,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (hasOwnProperty.call(warnedProperties$1, name) && warnedProperties$1[name]) return true;
         var lowerCasedName = name.toLowerCase();
         if (lowerCasedName === "onfocusin" || lowerCasedName === "onfocusout") {
-            error1("React uses onFocus and onBlur instead of onFocusIn and onFocusOut. All React events are normalized to bubble, so onFocusIn and onFocusOut are not needed/supported by React.");
+            error("React uses onFocus and onBlur instead of onFocusIn and onFocusOut. All React events are normalized to bubble, so onFocusIn and onFocusOut are not needed/supported by React.");
             warnedProperties$1[name] = true;
             return true;
         } // We can't rely on the event system being injected on the server.
@@ -11321,12 +11846,12 @@ module.exports = require("./cjs/react-dom.development.js");
             if (registrationNameDependencies.hasOwnProperty(name)) return true;
             var registrationName = possibleRegistrationNames.hasOwnProperty(lowerCasedName) ? possibleRegistrationNames[lowerCasedName] : null;
             if (registrationName != null) {
-                error1("Invalid event handler property `%s`. Did you mean `%s`?", name, registrationName);
+                error("Invalid event handler property `%s`. Did you mean `%s`?", name, registrationName);
                 warnedProperties$1[name] = true;
                 return true;
             }
             if (EVENT_NAME_REGEX.test(name)) {
-                error1("Unknown event handler property `%s`. It will be ignored.", name);
+                error("Unknown event handler property `%s`. It will be ignored.", name);
                 warnedProperties$1[name] = true;
                 return true;
             }
@@ -11334,28 +11859,28 @@ module.exports = require("./cjs/react-dom.development.js");
             // If no event plugins have been injected, we are in a server environment.
             // So we can't tell if the event name is correct for sure, but we can filter
             // out known bad ones like `onclick`. We can't suggest a specific replacement though.
-            if (INVALID_EVENT_NAME_REGEX.test(name)) error1("Invalid event handler property `%s`. React events use the camelCase naming convention, for example `onClick`.", name);
+            if (INVALID_EVENT_NAME_REGEX.test(name)) error("Invalid event handler property `%s`. React events use the camelCase naming convention, for example `onClick`.", name);
             warnedProperties$1[name] = true;
             return true;
         } // Let the ARIA attribute hook validate ARIA attributes
         if (rARIA$1.test(name) || rARIACamel$1.test(name)) return true;
         if (lowerCasedName === "innerhtml") {
-            error1("Directly setting property `innerHTML` is not permitted. For more information, lookup documentation on `dangerouslySetInnerHTML`.");
+            error("Directly setting property `innerHTML` is not permitted. For more information, lookup documentation on `dangerouslySetInnerHTML`.");
             warnedProperties$1[name] = true;
             return true;
         }
         if (lowerCasedName === "aria") {
-            error1("The `aria` attribute is reserved for future use in React. Pass individual `aria-` attributes instead.");
+            error("The `aria` attribute is reserved for future use in React. Pass individual `aria-` attributes instead.");
             warnedProperties$1[name] = true;
             return true;
         }
         if (lowerCasedName === "is" && value !== null && value !== undefined && typeof value !== "string") {
-            error1("Received a `%s` for a string attribute `is`. If this is expected, cast the value to a string.", typeof value);
+            error("Received a `%s` for a string attribute `is`. If this is expected, cast the value to a string.", typeof value);
             warnedProperties$1[name] = true;
             return true;
         }
         if (typeof value === "number" && isNaN(value)) {
-            error1("Received NaN for the `%s` attribute. If this is expected, cast the value to a string.", name);
+            error("Received NaN for the `%s` attribute. If this is expected, cast the value to a string.", name);
             warnedProperties$1[name] = true;
             return true;
         }
@@ -11364,20 +11889,20 @@ module.exports = require("./cjs/react-dom.development.js");
         if (possibleStandardNames.hasOwnProperty(lowerCasedName)) {
             var standardName = possibleStandardNames[lowerCasedName];
             if (standardName !== name) {
-                error1("Invalid DOM property `%s`. Did you mean `%s`?", name, standardName);
+                error("Invalid DOM property `%s`. Did you mean `%s`?", name, standardName);
                 warnedProperties$1[name] = true;
                 return true;
             }
         } else if (!isReserved && name !== lowerCasedName) {
             // Unknown attributes should have lowercase casing since that's how they
             // will be cased anyway with server rendering.
-            error1("React does not recognize the `%s` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you accidentally passed it from a parent component, remove it from the DOM element.", name, lowerCasedName);
+            error("React does not recognize the `%s` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `%s` instead. If you accidentally passed it from a parent component, remove it from the DOM element.", name, lowerCasedName);
             warnedProperties$1[name] = true;
             return true;
         }
         if (typeof value === "boolean" && shouldRemoveAttributeWithWarning(name, value, propertyInfo, false)) {
-            if (value) error1('Received `%s` for a non-boolean attribute `%s`.\n\nIf you want to write it to the DOM, pass a string instead: %s="%s" or %s={value.toString()}.', value, name, name, value, name);
-            else error1('Received `%s` for a non-boolean attribute `%s`.\n\nIf you want to write it to the DOM, pass a string instead: %s="%s" or %s={value.toString()}.\n\nIf you used to conditionally omit it with %s={condition && value}, pass %s={condition ? value : undefined} instead.', value, name, name, value, name, name, name);
+            if (value) error('Received `%s` for a non-boolean attribute `%s`.\n\nIf you want to write it to the DOM, pass a string instead: %s="%s" or %s={value.toString()}.', value, name, name, value, name);
+            else error('Received `%s` for a non-boolean attribute `%s`.\n\nIf you want to write it to the DOM, pass a string instead: %s="%s" or %s={value.toString()}.\n\nIf you used to conditionally omit it with %s={condition && value}, pass %s={condition ? value : undefined} instead.', value, name, name, value, name, name, name);
             warnedProperties$1[name] = true;
             return true;
         } // Now that we've validated casing, do not validate
@@ -11389,7 +11914,7 @@ module.exports = require("./cjs/react-dom.development.js");
             return false;
         } // Warn when passing the strings 'false' or 'true' into a boolean prop
         if ((value === "false" || value === "true") && propertyInfo !== null && propertyInfo.type === BOOLEAN) {
-            error1("Received the string `%s` for the boolean attribute `%s`. %s Did you mean %s={%s}?", value, name, value === "false" ? "The browser will interpret it as a truthy value." : 'Although this works, it will not work as expected if you pass the string "false".', name, value);
+            error("Received the string `%s` for the boolean attribute `%s`. %s Did you mean %s={%s}?", value, name, value === "false" ? "The browser will interpret it as a truthy value." : 'Although this works, it will not work as expected if you pass the string "false".', name, value);
             warnedProperties$1[name] = true;
             return true;
         }
@@ -11404,8 +11929,8 @@ module.exports = require("./cjs/react-dom.development.js");
         var unknownPropString = unknownProps.map(function(prop) {
             return "`" + prop + "`";
         }).join(", ");
-        if (unknownProps.length === 1) error1("Invalid value for prop %s on <%s> tag. Either remove it from the element, or pass a string or number value to keep it in the DOM. For details, see https://reactjs.org/link/attribute-behavior ", unknownPropString, type);
-        else if (unknownProps.length > 1) error1("Invalid values for props %s on <%s> tag. Either remove them from the element, or pass a string or number value to keep them in the DOM. For details, see https://reactjs.org/link/attribute-behavior ", unknownPropString, type);
+        if (unknownProps.length === 1) error("Invalid value for prop %s on <%s> tag. Either remove it from the element, or pass a string or number value to keep it in the DOM. For details, see https://reactjs.org/link/attribute-behavior ", unknownPropString, type);
+        else if (unknownProps.length > 1) error("Invalid values for props %s on <%s> tag. Either remove them from the element, or pass a string or number value to keep them in the DOM. For details, see https://reactjs.org/link/attribute-behavior ", unknownPropString, type);
     };
     function validateProperties$2(type, props, eventRegistry) {
         if (isCustomComponent(type, props)) return;
@@ -11423,11 +11948,11 @@ module.exports = require("./cjs/react-dom.development.js");
     // and DOMPluginEventSystem.
     var currentReplayingEvent = null;
     function setReplayingEvent(event) {
-        if (currentReplayingEvent !== null) error1("Expected currently replaying event to be null. This error is likely caused by a bug in React. Please file an issue.");
+        if (currentReplayingEvent !== null) error("Expected currently replaying event to be null. This error is likely caused by a bug in React. Please file an issue.");
         currentReplayingEvent = event;
     }
     function resetReplayingEvent() {
-        if (currentReplayingEvent === null) error1("Expected currently replaying event to not be null. This error is likely caused by a bug in React. Please file an issue.");
+        if (currentReplayingEvent === null) error("Expected currently replaying event to not be null. This error is likely caused by a bug in React. Please file an issue.");
         currentReplayingEvent = null;
     }
     function isReplayingEvent(event) {
@@ -11569,15 +12094,15 @@ module.exports = require("./cjs/react-dom.development.js");
     var passiveBrowserEventsSupported = false; // Check if browser support events with passive listeners
     // https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#Safely_detecting_option_support
     if (canUseDOM) try {
-        var options1 = {}; // $FlowFixMe: Ignore Flow complaining about needing a value
-        Object.defineProperty(options1, "passive", {
+        var options = {}; // $FlowFixMe: Ignore Flow complaining about needing a value
+        Object.defineProperty(options, "passive", {
             get: function() {
                 passiveBrowserEventsSupported = true;
             }
         });
-        window.addEventListener("test", options1, options1);
-        window.removeEventListener("test", options1, options1);
-    } catch (e1) {
+        window.addEventListener("test", options, options);
+        window.removeEventListener("test", options, options);
+    } catch (e) {
         passiveBrowserEventsSupported = false;
     }
     function invokeGuardedCallbackProd(name, func, context, a, b, c, d, e, f) {
@@ -11779,13 +12304,13 @@ module.exports = require("./cjs/react-dom.development.js");
  *
  * Note that this module is currently shared and assumed to be stateless.
  * If this becomes an actual Map, that will break.
- */ function get1(key) {
+ */ function get(key) {
         return key._reactInternals;
     }
-    function has1(key) {
+    function has(key) {
         return key._reactInternals !== undefined;
     }
-    function set1(key, value) {
+    function set(key, value) {
         key._reactInternals = value;
     }
     // Don't change these two values. They're used by React Dev Tools.
@@ -11876,10 +12401,10 @@ module.exports = require("./cjs/react-dom.development.js");
         if (owner !== null && owner.tag === ClassComponent) {
             var ownerFiber = owner;
             var instance = ownerFiber.stateNode;
-            if (!instance._warnedAboutRefsInRender) error1("%s is accessing isMounted inside its render() function. render() should be a pure function of props and state. It should never access something that requires stale data from the previous render, such as refs. Move this logic to componentDidMount and componentDidUpdate instead.", getComponentNameFromFiber(ownerFiber) || "A component");
+            if (!instance._warnedAboutRefsInRender) error("%s is accessing isMounted inside its render() function. render() should be a pure function of props and state. It should never access something that requires stale data from the previous render, such as refs. Move this logic to componentDidMount and componentDidUpdate instead.", getComponentNameFromFiber(ownerFiber) || "A component");
             instance._warnedAboutRefsInRender = true;
         }
-        var fiber = get1(component);
+        var fiber = get(component);
         if (!fiber) return false;
         return getNearestMountedFiber(fiber) === fiber;
     }
@@ -12057,7 +12582,7 @@ module.exports = require("./cjs/react-dom.development.js");
         // https://github.com/facebook/react/issues/3877
         return true;
         if (!hook.supportsFiber) {
-            error1("The installed version of React DevTools is too old and will not work with the current version of React. Please update React DevTools. https://reactjs.org/link/react-devtools");
+            error("The installed version of React DevTools is too old and will not work with the current version of React. Please update React DevTools. https://reactjs.org/link/react-devtools");
             return true;
         }
         try {
@@ -12071,7 +12596,7 @@ module.exports = require("./cjs/react-dom.development.js");
             rendererID = hook.inject(internals); // We have successfully injected, so now it is safe to set up hooks.
             injectedHook = hook;
         } catch (err) {
-            error1("React instrumentation encountered an error: %s.", err);
+            error("React instrumentation encountered an error: %s.", err);
         }
         if (hook.checkDCE) // This is the real DevTools.
         return true;
@@ -12084,7 +12609,7 @@ module.exports = require("./cjs/react-dom.development.js");
         } catch (err) {
             if (!hasLoggedError) {
                 hasLoggedError = true;
-                error1("React instrumentation encountered an error: %s", err);
+                error("React instrumentation encountered an error: %s", err);
             }
         }
     }
@@ -12115,7 +12640,7 @@ module.exports = require("./cjs/react-dom.development.js");
         } catch (err) {
             if (!hasLoggedError) {
                 hasLoggedError = true;
-                error1("React instrumentation encountered an error: %s", err);
+                error("React instrumentation encountered an error: %s", err);
             }
         }
     }
@@ -12125,7 +12650,7 @@ module.exports = require("./cjs/react-dom.development.js");
         } catch (err) {
             if (!hasLoggedError) {
                 hasLoggedError = true;
-                error1("React instrumentation encountered an error: %s", err);
+                error("React instrumentation encountered an error: %s", err);
             }
         }
     }
@@ -12135,7 +12660,7 @@ module.exports = require("./cjs/react-dom.development.js");
         } catch (err) {
             if (!hasLoggedError) {
                 hasLoggedError = true;
-                error1("React instrumentation encountered an error: %s", err);
+                error("React instrumentation encountered an error: %s", err);
             }
         }
     }
@@ -12152,7 +12677,7 @@ module.exports = require("./cjs/react-dom.development.js");
         } catch (err) {
             if (!hasLoggedError) {
                 hasLoggedError = true;
-                error1("React instrumentation encountered an error: %s", err);
+                error("React instrumentation encountered an error: %s", err);
             }
         }
     } // Profiler API hooks
@@ -12360,7 +12885,7 @@ module.exports = require("./cjs/react-dom.development.js");
             case OffscreenLane:
                 return OffscreenLane;
             default:
-                error1("Should have found matching lanes. This is a bug in React.");
+                error("Should have found matching lanes. This is a bug in React.");
                 return lanes;
         }
     }
@@ -12392,12 +12917,14 @@ module.exports = require("./cjs/react-dom.development.js");
          // If we're already in the middle of a render, switching lanes will interrupt
         // it and we'll lose our progress. We should only do this if the new lanes are
         // higher priority.
-        if (wipLanes !== NoLanes && wipLanes !== nextLanes && // bother waiting until the root is complete.
+        if (wipLanes !== NoLanes && wipLanes !== nextLanes && // If we already suspended with a delay, then interrupting is fine. Don't
+        // bother waiting until the root is complete.
         (wipLanes & suspendedLanes) === NoLanes) {
             var nextLane = getHighestPriorityLane(nextLanes);
             var wipLane = getHighestPriorityLane(wipLanes);
             if (// one. This works because the bits decrease in priority as you go left.
-            nextLane >= wipLane || // only difference between default updates and transition updates is that
+            nextLane >= wipLane || // Default priority updates should not interrupt transition updates. The
+            // only difference between default updates and transition updates is that
             // default updates do not support refresh transitions.
             nextLane === DefaultLane && (wipLane & TransitionLanes) !== NoLanes) // Keep working on the existing in-progress tree. Do not interrupt.
             return wipLanes;
@@ -12507,7 +13034,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 // Anything idle priority or lower should never expire.
                 return NoTimestamp;
             default:
-                error1("Should have found matching lanes. This is a bug in React.");
+                error("Should have found matching lanes. This is a bug in React.");
                 return NoTimestamp;
         }
     }
@@ -12712,7 +13239,8 @@ module.exports = require("./cjs/react-dom.development.js");
         while(lanes){
             var index = pickArbitraryLaneIndex(lanes);
             var lane = 1 << index;
-            if (lane & entangledLanes | entanglements[index] & entangledLanes) entanglements[index] |= entangledLanes;
+            if (lane & entangledLanes | // Is this lane transitively entangled with the newly entangled lanes?
+            entanglements[index] & entangledLanes) entanglements[index] |= entangledLanes;
             lanes &= ~lane;
         }
     }
@@ -13374,16 +13902,16 @@ module.exports = require("./cjs/react-dom.development.js");
  * use its position to find its replacement.
  *
  *
- */ var root1 = null;
+ */ var root = null;
     var startText = null;
     var fallbackText = null;
     function initialize(nativeEventTarget) {
-        root1 = nativeEventTarget;
+        root = nativeEventTarget;
         startText = getText();
         return true;
     }
     function reset() {
-        root1 = null;
+        root = null;
         startText = null;
         fallbackText = null;
     }
@@ -13407,8 +13935,8 @@ module.exports = require("./cjs/react-dom.development.js");
         return fallbackText;
     }
     function getText() {
-        if ("value" in root1) return root1.value;
-        return root1.textContent;
+        if ("value" in root) return root.value;
+        return root.textContent;
     }
     /**
  * `charCode` represents the actual "character code" and is safe to use with
@@ -13882,7 +14410,8 @@ module.exports = require("./cjs/react-dom.development.js");
  * This is required because Firefox fires `keypress` events for key commands
  * (cut, copy, select-all, etc.) even though no character is inserted.
  */ function isKeypressCommand(nativeEvent) {
-        return (nativeEvent.ctrlKey || nativeEvent.altKey || nativeEvent.metaKey) && !(nativeEvent.ctrlKey && nativeEvent.altKey);
+        return (nativeEvent.ctrlKey || nativeEvent.altKey || nativeEvent.metaKey) && // ctrlKey && altKey is equivalent to AltGr, and is not a command.
+        !(nativeEvent.ctrlKey && nativeEvent.altKey);
     }
     /**
  * Translate native top level events into event types.
@@ -14878,11 +15407,11 @@ module.exports = require("./cjs/react-dom.development.js");
  */ var prefixedEventNames = {};
     /**
  * Element to check for prefixes on.
- */ var style1 = {};
+ */ var style = {};
     /**
  * Bootstrap if a DOM exists.
  */ if (canUseDOM) {
-        style1 = document.createElement("div").style; // On some platforms, in particular some releases of Android 4.x,
+        style = document.createElement("div").style; // On some platforms, in particular some releases of Android 4.x,
         // the un-prefixed "animation" and "transition" properties are defined on the
         // style object but the events that fire will still be prefixed, so we need
         // to check if the un-prefixed events are usable, and if not remove them from the map.
@@ -14903,7 +15432,7 @@ module.exports = require("./cjs/react-dom.development.js");
         else if (!vendorPrefixes[eventName]) return eventName;
         var prefixMap = vendorPrefixes[eventName];
         for(var styleProp in prefixMap){
-            if (prefixMap.hasOwnProperty(styleProp) && styleProp in style1) return prefixedEventNames[eventName] = prefixMap[styleProp];
+            if (prefixMap.hasOwnProperty(styleProp) && styleProp in style) return prefixedEventNames[eventName] = prefixMap[styleProp];
         }
         return eventName;
     }
@@ -15103,7 +15632,8 @@ module.exports = require("./cjs/react-dom.development.js");
         // In the past, React has always bubbled them, but this can be surprising.
         // We're going to try aligning closer to the browser behavior by not bubbling
         // them in React either. We'll start by not bubbling onScroll, and then expand.
-        var accumulateTargetOnly = !inCapturePhase && // nonDelegatedEvents list in DOMPluginEventSystem.
+        var accumulateTargetOnly = !inCapturePhase && // TODO: ideally, we'd eventually add all events from
+        // nonDelegatedEvents list in DOMPluginEventSystem.
         // Then we can remove this special list.
         // This is a breaking change that can wait until React 18.
         domEventName === "scroll";
@@ -15227,7 +15757,7 @@ module.exports = require("./cjs/react-dom.development.js");
         processDispatchQueue(dispatchQueue, eventSystemFlags);
     }
     function listenToNonDelegatedEvent(domEventName, targetElement) {
-        if (!nonDelegatedEvents.has(domEventName)) error1('Did not expect a listenToNonDelegatedEvent() call for "%s". This is a bug in React. Please file an issue.', domEventName);
+        if (!nonDelegatedEvents.has(domEventName)) error('Did not expect a listenToNonDelegatedEvent() call for "%s". This is a bug in React. Please file an issue.', domEventName);
         var isCapturePhaseListener = false;
         var listenerSet = getEventListenerSet(targetElement);
         var listenerSetKey = getListenerSetKey(domEventName, isCapturePhaseListener);
@@ -15237,7 +15767,7 @@ module.exports = require("./cjs/react-dom.development.js");
         }
     }
     function listenToNativeEvent(domEventName, isCapturePhaseListener, target) {
-        if (nonDelegatedEvents.has(domEventName) && !isCapturePhaseListener) error1('Did not expect a listenToNativeEvent() call for "%s" in the bubble phase. This is a bug in React. Please file an issue.', domEventName);
+        if (nonDelegatedEvents.has(domEventName) && !isCapturePhaseListener) error('Did not expect a listenToNativeEvent() call for "%s" in the bubble phase. This is a bug in React. Please file an issue.', domEventName);
         var eventSystemFlags = 0;
         if (isCapturePhaseListener) eventSystemFlags |= IS_CAPTURE_PHASE;
         addTrappedEventListener(target, domEventName, eventSystemFlags, isCapturePhaseListener);
@@ -15506,8 +16036,8 @@ module.exports = require("./cjs/react-dom.development.js");
         validateProperties(type, props);
         validateProperties$1(type, props);
         validateProperties$2(type, props, {
-            registrationNameDependencies: registrationNameDependencies1,
-            possibleRegistrationNames: possibleRegistrationNames1
+            registrationNameDependencies: registrationNameDependencies,
+            possibleRegistrationNames: possibleRegistrationNames
         });
     }; // IE 11 parses & normalizes the style attribute as opposed to other
     // browsers. It adds spaces and sorts the properties in some
@@ -15524,7 +16054,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var normalizedServerValue = normalizeMarkupForTextOrAttribute(serverValue);
         if (normalizedServerValue === normalizedClientValue) return;
         didWarnInvalidHydration = true;
-        error1("Prop `%s` did not match. Server: %s Client: %s", propName, JSON.stringify(normalizedServerValue), JSON.stringify(normalizedClientValue));
+        error("Prop `%s` did not match. Server: %s Client: %s", propName, JSON.stringify(normalizedServerValue), JSON.stringify(normalizedClientValue));
     };
     warnForExtraAttributes = function(attributeNames) {
         if (didWarnInvalidHydration) return;
@@ -15533,11 +16063,11 @@ module.exports = require("./cjs/react-dom.development.js");
         attributeNames.forEach(function(name) {
             names.push(name);
         });
-        error1("Extra attributes from the server: %s", names);
+        error("Extra attributes from the server: %s", names);
     };
     warnForInvalidEventListener = function(registrationName, listener) {
-        if (listener === false) error1("Expected `%s` listener to be a function, instead got `false`.\n\nIf you used to conditionally omit it with %s={condition && value}, pass %s={condition ? value : undefined} instead.", registrationName, registrationName, registrationName);
-        else error1("Expected `%s` listener to be a function, instead got a value of `%s` type.", registrationName, typeof listener);
+        if (listener === false) error("Expected `%s` listener to be a function, instead got `false`.\n\nIf you used to conditionally omit it with %s={condition && value}, pass %s={condition ? value : undefined} instead.", registrationName, registrationName, registrationName);
+        else error("Expected `%s` listener to be a function, instead got a value of `%s` type.", registrationName, typeof listener);
     }; // Parse the HTML and read it back to normalize the HTML string so that it
     // can be used for comparison.
     normalizeHTML = function(parent, html) {
@@ -15567,7 +16097,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (shouldWarnDev) {
             if (!didWarnInvalidHydration) {
                 didWarnInvalidHydration = true;
-                error1('Text content did not match. Server: "%s" Client: "%s"', normalizedServerText, normalizedClientText);
+                error('Text content did not match. Server: "%s" Client: "%s"', normalizedServerText, normalizedClientText);
             }
         }
         if (isConcurrentMode && enableClientRenderFallbackOnTextMismatch) // In concurrent roots, we throw when there's a text mismatch and revert to
@@ -15613,7 +16143,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 } else if (typeof nextProp === "number") setTextContent(domElement, "" + nextProp);
             } else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING) ;
             else if (propKey === AUTOFOCUS) ;
-            else if (registrationNameDependencies1.hasOwnProperty(propKey)) {
+            else if (registrationNameDependencies.hasOwnProperty(propKey)) {
                 if (nextProp != null) {
                     if (typeof nextProp !== "function") warnForInvalidEventListener(propKey, nextProp);
                     if (propKey === "onScroll") listenToNonDelegatedEvent("scroll", domElement);
@@ -15642,7 +16172,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (namespaceURI === HTML_NAMESPACE) {
             isCustomComponentTag = isCustomComponent(type, props); // Should this check be gated by parent namespace? Not sure we want to
             // allow <SVG> or <mATH>.
-            if (!isCustomComponentTag && type !== type.toLowerCase()) error1("<%s /> is using incorrect casing. Use PascalCase for React components, or lowercase for HTML elements.", type);
+            if (!isCustomComponentTag && type !== type.toLowerCase()) error("<%s /> is using incorrect casing. Use PascalCase for React components, or lowercase for HTML elements.", type);
             if (type === "script") {
                 // Create the script via .innerHTML so its "parser-inserted" flag is
                 // set to true and it does not execute
@@ -15681,7 +16211,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (namespaceURI === HTML_NAMESPACE) {
             if (!isCustomComponentTag && Object.prototype.toString.call(domElement) === "[object HTMLUnknownElement]" && !hasOwnProperty.call(warnedUnknownTags, type)) {
                 warnedUnknownTags[type] = true;
-                error1("The tag <%s> is unrecognized in this browser. If you meant to render a React component, start its name with an uppercase letter.", type);
+                error("The tag <%s> is unrecognized in this browser. If you meant to render a React component, start its name with an uppercase letter.", type);
             }
         }
         return domElement;
@@ -15830,7 +16360,7 @@ module.exports = require("./cjs/react-dom.development.js");
             } else if (propKey === DANGEROUSLY_SET_INNER_HTML || propKey === CHILDREN) ;
             else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING) ;
             else if (propKey === AUTOFOCUS) ;
-            else if (registrationNameDependencies1.hasOwnProperty(propKey)) // This is a special case. If any listener updates we need to ensure
+            else if (registrationNameDependencies.hasOwnProperty(propKey)) // This is a special case. If any listener updates we need to ensure
             // that the "current" fiber pointer gets updated so we need a commit
             // to update this element.
             {
@@ -15875,7 +16405,7 @@ module.exports = require("./cjs/react-dom.development.js");
             } else if (propKey === CHILDREN) {
                 if (typeof nextProp === "string" || typeof nextProp === "number") (updatePayload = updatePayload || []).push(propKey, "" + nextProp);
             } else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING) ;
-            else if (registrationNameDependencies1.hasOwnProperty(propKey)) {
+            else if (registrationNameDependencies.hasOwnProperty(propKey)) {
                 if (nextProp != null) {
                     // We eagerly listen to this even though we haven't committed yet.
                     if (typeof nextProp !== "function") warnForInvalidEventListener(propKey, nextProp);
@@ -16037,17 +16567,19 @@ module.exports = require("./cjs/react-dom.development.js");
                         ];
                     }
                 }
-            } else if (registrationNameDependencies1.hasOwnProperty(propKey)) {
+            } else if (registrationNameDependencies.hasOwnProperty(propKey)) {
                 if (nextProp != null) {
                     if (typeof nextProp !== "function") warnForInvalidEventListener(propKey, nextProp);
                     if (propKey === "onScroll") listenToNonDelegatedEvent("scroll", domElement);
                 }
-            } else if (shouldWarnDev && true && typeof isCustomComponentTag === "boolean") {
+            } else if (shouldWarnDev && true && // Convince Flow we've calculated it (it's DEV-only in this method.)
+            typeof isCustomComponentTag === "boolean") {
                 // Validate that the properties correspond to their expected values.
                 var serverValue = void 0;
                 var propertyInfo = isCustomComponentTag && enableCustomElementPropertySupport ? null : getPropertyInfo(propKey);
                 if (rawProps[SUPPRESS_HYDRATION_WARNING] === true) ;
-                else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING || // TODO: Only ignore them on controlled tags.
+                else if (propKey === SUPPRESS_CONTENT_EDITABLE_WARNING || propKey === SUPPRESS_HYDRATION_WARNING || // Controlled attributes are not validated
+                // TODO: Only ignore them on controlled tags.
                 propKey === "value" || propKey === "checked" || propKey === "selected") ;
                 else if (propKey === DANGEROUSLY_SET_INNER_HTML) {
                     var serverHTML = domElement.innerHTML;
@@ -16134,17 +16666,17 @@ module.exports = require("./cjs/react-dom.development.js");
     function warnForDeletedHydratableElement(parentNode, child) {
         if (didWarnInvalidHydration) return;
         didWarnInvalidHydration = true;
-        error1("Did not expect server HTML to contain a <%s> in <%s>.", child.nodeName.toLowerCase(), parentNode.nodeName.toLowerCase());
+        error("Did not expect server HTML to contain a <%s> in <%s>.", child.nodeName.toLowerCase(), parentNode.nodeName.toLowerCase());
     }
     function warnForDeletedHydratableText(parentNode, child) {
         if (didWarnInvalidHydration) return;
         didWarnInvalidHydration = true;
-        error1('Did not expect server HTML to contain the text node "%s" in <%s>.', child.nodeValue, parentNode.nodeName.toLowerCase());
+        error('Did not expect server HTML to contain the text node "%s" in <%s>.', child.nodeValue, parentNode.nodeName.toLowerCase());
     }
     function warnForInsertedHydratedElement(parentNode, tag, props) {
         if (didWarnInvalidHydration) return;
         didWarnInvalidHydration = true;
-        error1("Expected server HTML to contain a matching <%s> in <%s>.", tag, parentNode.nodeName.toLowerCase());
+        error("Expected server HTML to contain a matching <%s> in <%s>.", tag, parentNode.nodeName.toLowerCase());
     }
     function warnForInsertedHydratedText(parentNode, text) {
         if (text === "") // We expect to insert empty text nodes since they're not represented in
@@ -16154,7 +16686,7 @@ module.exports = require("./cjs/react-dom.development.js");
         return;
         if (didWarnInvalidHydration) return;
         didWarnInvalidHydration = true;
-        error1('Expected server HTML to contain a matching text node for "%s" in <%s>.', text, parentNode.nodeName.toLowerCase());
+        error('Expected server HTML to contain a matching text node for "%s" in <%s>.', text, parentNode.nodeName.toLowerCase());
     }
     function restoreControlledState$3(domElement, tag, props) {
         switch(tag){
@@ -16475,7 +17007,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var parentInfo = ancestorInfo.current;
         var parentTag = parentInfo && parentInfo.tag;
         if (childText != null) {
-            if (childTag != null) error1("validateDOMNesting: when childText is passed, childTag should be null");
+            if (childTag != null) error("validateDOMNesting: when childText is passed, childTag should be null");
             childTag = "#text";
         }
         var invalidParent = isTagValidWithParent(childTag, parentTag) ? null : parentInfo;
@@ -16498,8 +17030,8 @@ module.exports = require("./cjs/react-dom.development.js");
         if (invalidParent) {
             var info = "";
             if (ancestorTag === "table" && childTag === "tr") info += " Add a <tbody>, <thead> or <tfoot> to your code to match the DOM tree generated by the browser.";
-            error1("validateDOMNesting(...): %s cannot appear as a child of <%s>.%s%s", tagDisplayName, ancestorTag, whitespaceInfo, info);
-        } else error1("validateDOMNesting(...): %s cannot appear as a descendant of <%s>.", tagDisplayName, ancestorTag);
+            error("validateDOMNesting(...): %s cannot appear as a child of <%s>.%s%s", tagDisplayName, ancestorTag, whitespaceInfo, info);
+        } else error("validateDOMNesting(...): %s cannot appear as a descendant of <%s>.", tagDisplayName, ancestorTag);
     };
     var SUPPRESS_HYDRATION_WARNING$1 = "suppressHydrationWarning";
     var SUSPENSE_START_DATA = "$";
@@ -16949,7 +17481,7 @@ module.exports = require("./cjs/react-dom.development.js");
     function errorHydratingContainer(parentContainer) {
         // TODO: This gets logged by onRecoverableError, too, so we should be
         // able to remove it.
-        error1("An error occurred during hydration. The server HTML was replaced with client content in <%s>.", parentContainer.nodeName.toLowerCase());
+        error("An error occurred during hydration. The server HTML was replaced with client content in <%s>.", parentContainer.nodeName.toLowerCase());
     }
     function preparePortalMount(portalInstance) {
         listenToAllSupportedEvents(portalInstance);
@@ -17115,7 +17647,7 @@ module.exports = require("./cjs/react-dom.development.js");
             }
             if (error$1 && !(error$1 instanceof Error)) {
                 setCurrentlyValidatingElement(element);
-                error1("%s: type specification of %s `%s` is invalid; the type checker function must return `null` or an `Error` but returned a %s. You may have forgotten to pass an argument to the type checker creator (arrayOf, instanceOf, objectOf, oneOf, oneOfType, and shape all require an argument).", componentName || "React class", location, typeSpecName, typeof error$1);
+                error("%s: type specification of %s `%s` is invalid; the type checker function must return `null` or an `Error` but returned a %s. You may have forgotten to pass an argument to the type checker creator (arrayOf, instanceOf, objectOf, oneOf, oneOfType, and shape all require an argument).", componentName || "React class", location, typeSpecName, typeof error$1);
                 setCurrentlyValidatingElement(null);
             }
             if (error$1 instanceof Error && !(error$1.message in loggedTypeFailures)) {
@@ -17123,7 +17655,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 // same error.
                 loggedTypeFailures[error$1.message] = true;
                 setCurrentlyValidatingElement(element);
-                error1("Failed %s type: %s", location, error$1.message);
+                error("Failed %s type: %s", location, error$1.message);
                 setCurrentlyValidatingElement(null);
             }
         }
@@ -17131,27 +17663,27 @@ module.exports = require("./cjs/react-dom.development.js");
     var valueStack = [];
     var fiberStack;
     fiberStack = [];
-    var index1 = -1;
+    var index = -1;
     function createCursor(defaultValue) {
         return {
             current: defaultValue
         };
     }
     function pop(cursor, fiber) {
-        if (index1 < 0) {
-            error1("Unexpected pop.");
+        if (index < 0) {
+            error("Unexpected pop.");
             return;
         }
-        if (fiber !== fiberStack[index1]) error1("Unexpected Fiber popped.");
-        cursor.current = valueStack[index1];
-        valueStack[index1] = null;
-        fiberStack[index1] = null;
-        index1--;
+        if (fiber !== fiberStack[index]) error("Unexpected Fiber popped.");
+        cursor.current = valueStack[index];
+        valueStack[index] = null;
+        fiberStack[index] = null;
+        index--;
     }
     function push(cursor, value, fiber) {
-        index1++;
-        valueStack[index1] = cursor.current;
-        fiberStack[index1] = fiber;
+        index++;
+        valueStack[index] = cursor.current;
+        fiberStack[index] = fiber;
         cursor.current = value;
     }
     var warnedAboutMissingGetChildContext;
@@ -17193,7 +17725,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (instance) cacheContext(workInProgress, unmaskedContext, context);
         return context;
     }
-    function hasContextChanged1() {
+    function hasContextChanged() {
         return didPerformWorkStackCursor.current;
     }
     function isContextProvider(type) {
@@ -17221,7 +17753,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var componentName = getComponentNameFromFiber(fiber) || "Unknown";
             if (!warnedAboutMissingGetChildContext[componentName]) {
                 warnedAboutMissingGetChildContext[componentName] = true;
-                error1("%s.childContextTypes is specified but there is no getChildContext() method on the instance. You can either define getChildContext() on %s or remove childContextTypes from it.", componentName, componentName);
+                error("%s.childContextTypes is specified but there is no getChildContext() method on the instance. You can either define getChildContext() on %s or remove childContextTypes from it.", componentName, componentName);
             }
             return parentContext;
         }
@@ -17492,17 +18024,17 @@ module.exports = require("./cjs/react-dom.development.js");
         treeContextProvider = workInProgress;
     }
     function warnIfNotHydrating() {
-        if (!getIsHydrating()) error1("Expected to be hydrating. This is a bug in React. Please file an issue.");
+        if (!getIsHydrating()) error("Expected to be hydrating. This is a bug in React. Please file an issue.");
     }
     // This may have been an insertion or a hydration.
     var hydrationParentFiber = null;
     var nextHydratableInstance = null;
-    var isHydrating1 = false; // This flag allows for warning supression when we expect there to be mismatches
+    var isHydrating = false; // This flag allows for warning supression when we expect there to be mismatches
     // due to earlier mismatches or a suspended fiber.
     var didSuspendOrErrorDEV = false; // Hydration errors that were thrown inside this boundary
     var hydrationErrors = null;
     function warnIfHydrating() {
-        if (isHydrating1) error1("We should not be hydrating here. This is a bug in React. Please file a bug.");
+        if (isHydrating) error("We should not be hydrating here. This is a bug in React. Please file a bug.");
     }
     function markDidThrowWhileHydratingDEV() {
         didSuspendOrErrorDEV = true;
@@ -17514,7 +18046,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var parentInstance = fiber.stateNode.containerInfo;
         nextHydratableInstance = getFirstHydratableChildWithinContainer(parentInstance);
         hydrationParentFiber = fiber;
-        isHydrating1 = true;
+        isHydrating = true;
         hydrationErrors = null;
         didSuspendOrErrorDEV = false;
         return true;
@@ -17522,7 +18054,7 @@ module.exports = require("./cjs/react-dom.development.js");
     function reenterHydrationStateFromDehydratedSuspenseInstance(fiber, suspenseInstance, treeContext) {
         nextHydratableInstance = getFirstHydratableChildWithinSuspenseInstance(suspenseInstance);
         hydrationParentFiber = fiber;
-        isHydrating1 = true;
+        isHydrating = true;
         hydrationErrors = null;
         didSuspendOrErrorDEV = false;
         if (treeContext !== null) restoreSuspendedTreeContext(fiber, treeContext);
@@ -17672,7 +18204,7 @@ module.exports = require("./cjs/react-dom.development.js");
         throw new Error("Hydration failed because the initial UI does not match what was rendered on the server.");
     }
     function tryToClaimNextHydratableInstance(fiber) {
-        if (!isHydrating1) return;
+        if (!isHydrating) return;
         var nextInstance = nextHydratableInstance;
         if (!nextInstance) {
             if (shouldClientRenderOnMismatch(fiber)) {
@@ -17680,7 +18212,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 throwOnHydrationMismatch();
             } // Nothing to hydrate. Make it an insertion.
             insertNonHydratedInstance(hydrationParentFiber, fiber);
-            isHydrating1 = false;
+            isHydrating = false;
             hydrationParentFiber = fiber;
             return;
         }
@@ -17697,7 +18229,7 @@ module.exports = require("./cjs/react-dom.development.js");
             if (!nextInstance || !tryHydrate(fiber, nextInstance)) {
                 // Nothing to hydrate. Make it an insertion.
                 insertNonHydratedInstance(hydrationParentFiber, fiber);
-                isHydrating1 = false;
+                isHydrating = false;
                 hydrationParentFiber = fiber;
                 return;
             } // We matched the next one, we'll now assume that the first one was
@@ -17762,12 +18294,12 @@ module.exports = require("./cjs/react-dom.development.js");
         if (fiber !== hydrationParentFiber) // We're deeper than the current hydration context, inside an inserted
         // tree.
         return false;
-        if (!isHydrating1) {
+        if (!isHydrating) {
             // If we're not currently hydrating but we're in a hydration context, then
             // we were an insertion and now need to pop up reenter hydration of our
             // siblings.
             popToNextHostParent(fiber);
-            isHydrating1 = true;
+            isHydrating = true;
             return false;
         } // If we have any remaining hydratable nodes, we need to delete them now.
         // We only do this deeper than head and body since they tend to have random
@@ -17791,7 +18323,7 @@ module.exports = require("./cjs/react-dom.development.js");
         return true;
     }
     function hasUnhydratedTailNodes() {
-        return isHydrating1 && nextHydratableInstance !== null;
+        return isHydrating && nextHydratableInstance !== null;
     }
     function warnIfUnhydratedTailNodes(fiber) {
         var nextInstance = nextHydratableInstance;
@@ -17803,7 +18335,7 @@ module.exports = require("./cjs/react-dom.development.js");
     function resetHydrationState() {
         hydrationParentFiber = null;
         nextHydratableInstance = null;
-        isHydrating1 = false;
+        isHydrating = false;
         didSuspendOrErrorDEV = false;
     }
     function upgradeHydrationErrorsToRecoverable() {
@@ -17816,7 +18348,7 @@ module.exports = require("./cjs/react-dom.development.js");
         }
     }
     function getIsHydrating() {
-        return isHydrating1;
+        return isHydrating;
     }
     function queueHydrationError(error) {
         if (hydrationErrors === null) hydrationErrors = [
@@ -17862,7 +18394,8 @@ module.exports = require("./cjs/react-dom.development.js");
     ReactStrictModeWarnings.recordUnsafeLifecycleWarnings = function(fiber, instance) {
         // Dedupe strategy: Warn once per component.
         if (didWarnAboutUnsafeLifecycles.has(fiber.type)) return;
-        if (typeof instance.componentWillMount === "function" && instance.componentWillMount.__suppressDeprecationWarning !== true) pendingComponentWillMountWarnings.push(fiber);
+        if (typeof instance.componentWillMount === "function" && // Don't warn about react-lifecycles-compat polyfilled components.
+        instance.componentWillMount.__suppressDeprecationWarning !== true) pendingComponentWillMountWarnings.push(fiber);
         if (fiber.mode & StrictLegacyMode && typeof instance.UNSAFE_componentWillMount === "function") pendingUNSAFE_ComponentWillMountWarnings.push(fiber);
         if (typeof instance.componentWillReceiveProps === "function" && instance.componentWillReceiveProps.__suppressDeprecationWarning !== true) pendingComponentWillReceivePropsWarnings.push(fiber);
         if (fiber.mode & StrictLegacyMode && typeof instance.UNSAFE_componentWillReceiveProps === "function") pendingUNSAFE_ComponentWillReceivePropsWarnings.push(fiber);
@@ -17922,15 +18455,15 @@ module.exports = require("./cjs/react-dom.development.js");
         // UNSAFE_ ones before the deprecated ones, since they'll be 'louder'
         if (UNSAFE_componentWillMountUniqueNames.size > 0) {
             var sortedNames = setToSortedString(UNSAFE_componentWillMountUniqueNames);
-            error1("Using UNSAFE_componentWillMount in strict mode is not recommended and may indicate bugs in your code. See https://reactjs.org/link/unsafe-component-lifecycles for details.\n\n* Move code with side effects to componentDidMount, and set initial state in the constructor.\n\nPlease update the following components: %s", sortedNames);
+            error("Using UNSAFE_componentWillMount in strict mode is not recommended and may indicate bugs in your code. See https://reactjs.org/link/unsafe-component-lifecycles for details.\n\n* Move code with side effects to componentDidMount, and set initial state in the constructor.\n\nPlease update the following components: %s", sortedNames);
         }
         if (UNSAFE_componentWillReceivePropsUniqueNames.size > 0) {
             var _sortedNames = setToSortedString(UNSAFE_componentWillReceivePropsUniqueNames);
-            error1("Using UNSAFE_componentWillReceiveProps in strict mode is not recommended and may indicate bugs in your code. See https://reactjs.org/link/unsafe-component-lifecycles for details.\n\n* Move data fetching code or side effects to componentDidUpdate.\n* If you're updating state whenever props change, refactor your code to use memoization techniques or move it to static getDerivedStateFromProps. Learn more at: https://reactjs.org/link/derived-state\n\nPlease update the following components: %s", _sortedNames);
+            error("Using UNSAFE_componentWillReceiveProps in strict mode is not recommended and may indicate bugs in your code. See https://reactjs.org/link/unsafe-component-lifecycles for details.\n\n* Move data fetching code or side effects to componentDidUpdate.\n* If you're updating state whenever props change, refactor your code to use memoization techniques or move it to static getDerivedStateFromProps. Learn more at: https://reactjs.org/link/derived-state\n\nPlease update the following components: %s", _sortedNames);
         }
         if (UNSAFE_componentWillUpdateUniqueNames.size > 0) {
             var _sortedNames2 = setToSortedString(UNSAFE_componentWillUpdateUniqueNames);
-            error1("Using UNSAFE_componentWillUpdate in strict mode is not recommended and may indicate bugs in your code. See https://reactjs.org/link/unsafe-component-lifecycles for details.\n\n* Move data fetching code or side effects to componentDidUpdate.\n\nPlease update the following components: %s", _sortedNames2);
+            error("Using UNSAFE_componentWillUpdate in strict mode is not recommended and may indicate bugs in your code. See https://reactjs.org/link/unsafe-component-lifecycles for details.\n\n* Move data fetching code or side effects to componentDidUpdate.\n\nPlease update the following components: %s", _sortedNames2);
         }
         if (componentWillMountUniqueNames.size > 0) {
             var _sortedNames3 = setToSortedString(componentWillMountUniqueNames);
@@ -17950,7 +18483,7 @@ module.exports = require("./cjs/react-dom.development.js");
     ReactStrictModeWarnings.recordLegacyContextWarning = function(fiber, instance) {
         var strictRoot = findStrictRoot(fiber);
         if (strictRoot === null) {
-            error1("Expected to find a StrictMode component in a strict mode tree. This error is likely caused by a bug in React. Please file an issue.");
+            error("Expected to find a StrictMode component in a strict mode tree. This error is likely caused by a bug in React. Please file an issue.");
             return;
         } // Dedup strategy: Warn once per component.
         if (didWarnAboutLegacyContext.has(fiber.type)) return;
@@ -17975,7 +18508,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var sortedNames = setToSortedString(uniqueNames);
             try {
                 setCurrentFiber(firstFiber);
-                error1("Legacy context API has been detected within a strict-mode tree.\n\nThe old API will be supported in all 16.x releases, but applications using it should migrate to the new version.\n\nPlease update the following components: %s\n\nLearn more about this warning here: https://reactjs.org/link/legacy-context", sortedNames);
+                error("Legacy context API has been detected within a strict-mode tree.\n\nThe old API will be supported in all 16.x releases, but applications using it should migrate to the new version.\n\nPlease update the following components: %s\n\nLearn more about this warning here: https://reactjs.org/link/legacy-context", sortedNames);
             } finally{
                 resetCurrentFiber();
             }
@@ -18025,7 +18558,7 @@ module.exports = require("./cjs/react-dom.development.js");
     function pushProvider(providerFiber, context, nextValue) {
         push(valueCursor, context._currentValue, providerFiber);
         context._currentValue = nextValue;
-        if (context._currentRenderer !== undefined && context._currentRenderer !== null && context._currentRenderer !== rendererSigil) error1("Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.");
+        if (context._currentRenderer !== undefined && context._currentRenderer !== null && context._currentRenderer !== rendererSigil) error("Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.");
         context._currentRenderer = rendererSigil;
     }
     function popProvider(context, providerFiber) {
@@ -18045,7 +18578,7 @@ module.exports = require("./cjs/react-dom.development.js");
             if (node === propagationRoot) break;
             node = node.return;
         }
-        if (node !== propagationRoot) error1("Expected to find the propagation root when scheduling context work. This error is likely caused by a bug in React. Please file an issue.");
+        if (node !== propagationRoot) error("Expected to find the propagation root when scheduling context work. This error is likely caused by a bug in React. Please file an issue.");
     }
     function propagateContextChange(workInProgress, context, renderLanes) {
         propagateContextChange_eager(workInProgress, context, renderLanes);
@@ -18157,7 +18690,7 @@ module.exports = require("./cjs/react-dom.development.js");
     function readContext(context) {
         // This warning would fire if you read context inside a Hook like useMemo.
         // Unlike the class check below, it's not enforced in production for perf.
-        if (isDisallowedContextReadInDEV) error1("Context can only be read while React is rendering. In classes, you can read it in the render method or getDerivedStateFromProps. In function components, you can read it directly in the function body, but not inside Hooks like useReducer() or useMemo().");
+        if (isDisallowedContextReadInDEV) error("Context can only be read while React is rendering. In classes, you can read it in the render method or getDerivedStateFromProps. In function components, you can read it directly in the function body, but not inside Hooks like useReducer() or useMemo().");
         var value = context._currentValue;
         if (lastFullyObservedContext === context) ;
         else {
@@ -18338,7 +18871,7 @@ module.exports = require("./cjs/react-dom.development.js");
         return null;
         var sharedQueue = updateQueue.shared;
         if (currentlyProcessingQueue === sharedQueue && !didWarnUpdateInsideUpdate) {
-            error1("An update (setState, replaceState, or forceUpdate) was scheduled from inside an update function. Update functions should be pure, with zero side-effects. Consider using componentDidUpdate or a callback.");
+            error("An update (setState, replaceState, or forceUpdate) was scheduled from inside an update function. Update functions should be pure, with zero side-effects. Consider using componentDidUpdate or a callback.");
             didWarnUpdateInsideUpdate = true;
         }
         if (isUnsafeClassRenderPhaseUpdate()) {
@@ -18567,7 +19100,8 @@ module.exports = require("./cjs/react-dom.development.js");
                     } // Process this update.
                     newState = getStateFromUpdate(workInProgress, queue, update, newState, props, instance);
                     var callback = update.callback;
-                    if (callback !== null && // callback again.
+                    if (callback !== null && // If the update was already committed, we should not queue its
+                    // callback again.
                     update.lane !== NoLane) {
                         workInProgress.flags |= Callback;
                         var effects = queue.effects;
@@ -18623,7 +19157,7 @@ module.exports = require("./cjs/react-dom.development.js");
         }
         currentlyProcessingQueue = null;
     }
-    function callCallback1(callback, context) {
+    function callCallback(callback, context) {
         if (typeof callback !== "function") throw new Error("Invalid argument passed as callback. Expected a function. Instead " + ("received: " + callback));
         callback.call(context);
     }
@@ -18642,7 +19176,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var callback = effect.callback;
             if (callback !== null) {
                 effect.callback = null;
-                callCallback1(callback, instance);
+                callCallback(callback, instance);
             }
         }
     }
@@ -18673,7 +19207,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var key = callerName + "_" + callback;
         if (!didWarnOnInvalidCallback.has(key)) {
             didWarnOnInvalidCallback.add(key);
-            error1("%s(...): Expected the last optional `callback` argument to be a function. Instead received: %s.", callerName, callback);
+            error("%s(...): Expected the last optional `callback` argument to be a function. Instead received: %s.", callerName, callback);
         }
     };
     warnOnUndefinedDerivedState = function(type, partialState) {
@@ -18681,7 +19215,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var componentName = getComponentNameFromType(type) || "Component";
             if (!didWarnAboutUndefinedDerivedState.has(componentName)) {
                 didWarnAboutUndefinedDerivedState.add(componentName);
-                error1("%s.getDerivedStateFromProps(): A valid state object (or null) must be returned. You have returned undefined.", componentName);
+                error("%s.getDerivedStateFromProps(): A valid state object (or null) must be returned. You have returned undefined.", componentName);
             }
         }
     }; // This is so gross but it's at least non-critical and can be removed if
@@ -18721,7 +19255,7 @@ module.exports = require("./cjs/react-dom.development.js");
     var classComponentUpdater = {
         isMounted: isMounted,
         enqueueSetState: function(inst, payload, callback) {
-            var fiber = get1(inst);
+            var fiber = get(inst);
             var eventTime = requestEventTime();
             var lane = requestUpdateLane(fiber);
             var update = createUpdate(eventTime, lane);
@@ -18738,7 +19272,7 @@ module.exports = require("./cjs/react-dom.development.js");
             markStateUpdateScheduled(fiber, lane);
         },
         enqueueReplaceState: function(inst, payload, callback) {
-            var fiber = get1(inst);
+            var fiber = get(inst);
             var eventTime = requestEventTime();
             var lane = requestUpdateLane(fiber);
             var update = createUpdate(eventTime, lane);
@@ -18756,7 +19290,7 @@ module.exports = require("./cjs/react-dom.development.js");
             markStateUpdateScheduled(fiber, lane);
         },
         enqueueForceUpdate: function(inst, callback) {
-            var fiber = get1(inst);
+            var fiber = get(inst);
             var eventTime = requestEventTime();
             var lane = requestUpdateLane(fiber);
             var update = createUpdate(eventTime, lane);
@@ -18786,7 +19320,7 @@ module.exports = require("./cjs/react-dom.development.js");
                     setIsStrictModeForDevtools(false);
                 }
             }
-            if (shouldUpdate === undefined) error1("%s.shouldComponentUpdate(): Returned undefined instead of a boolean value. Make sure to return true or false.", getComponentNameFromType(ctor) || "Component");
+            if (shouldUpdate === undefined) error("%s.shouldComponentUpdate(): Returned undefined instead of a boolean value. Make sure to return true or false.", getComponentNameFromType(ctor) || "Component");
             return shouldUpdate;
         }
         if (ctor.prototype && ctor.prototype.isPureReactComponent) return !shallowEqual(oldProps, newProps) || !shallowEqual(oldState, newState);
@@ -18797,42 +19331,42 @@ module.exports = require("./cjs/react-dom.development.js");
         var name = getComponentNameFromType(ctor) || "Component";
         var renderPresent = instance.render;
         if (!renderPresent) {
-            if (ctor.prototype && typeof ctor.prototype.render === "function") error1("%s(...): No `render` method found on the returned component instance: did you accidentally return an object from the constructor?", name);
-            else error1("%s(...): No `render` method found on the returned component instance: you may have forgotten to define `render`.", name);
+            if (ctor.prototype && typeof ctor.prototype.render === "function") error("%s(...): No `render` method found on the returned component instance: did you accidentally return an object from the constructor?", name);
+            else error("%s(...): No `render` method found on the returned component instance: you may have forgotten to define `render`.", name);
         }
-        if (instance.getInitialState && !instance.getInitialState.isReactClassApproved && !instance.state) error1("getInitialState was defined on %s, a plain JavaScript class. This is only supported for classes created using React.createClass. Did you mean to define a state property instead?", name);
-        if (instance.getDefaultProps && !instance.getDefaultProps.isReactClassApproved) error1("getDefaultProps was defined on %s, a plain JavaScript class. This is only supported for classes created using React.createClass. Use a static property to define defaultProps instead.", name);
-        if (instance.propTypes) error1("propTypes was defined as an instance property on %s. Use a static property to define propTypes instead.", name);
-        if (instance.contextType) error1("contextType was defined as an instance property on %s. Use a static property to define contextType instead.", name);
-        if (instance.contextTypes) error1("contextTypes was defined as an instance property on %s. Use a static property to define contextTypes instead.", name);
+        if (instance.getInitialState && !instance.getInitialState.isReactClassApproved && !instance.state) error("getInitialState was defined on %s, a plain JavaScript class. This is only supported for classes created using React.createClass. Did you mean to define a state property instead?", name);
+        if (instance.getDefaultProps && !instance.getDefaultProps.isReactClassApproved) error("getDefaultProps was defined on %s, a plain JavaScript class. This is only supported for classes created using React.createClass. Use a static property to define defaultProps instead.", name);
+        if (instance.propTypes) error("propTypes was defined as an instance property on %s. Use a static property to define propTypes instead.", name);
+        if (instance.contextType) error("contextType was defined as an instance property on %s. Use a static property to define contextType instead.", name);
+        if (instance.contextTypes) error("contextTypes was defined as an instance property on %s. Use a static property to define contextTypes instead.", name);
         if (ctor.contextType && ctor.contextTypes && !didWarnAboutContextTypeAndContextTypes.has(ctor)) {
             didWarnAboutContextTypeAndContextTypes.add(ctor);
-            error1("%s declares both contextTypes and contextType static properties. The legacy contextTypes property will be ignored.", name);
+            error("%s declares both contextTypes and contextType static properties. The legacy contextTypes property will be ignored.", name);
         }
-        if (typeof instance.componentShouldUpdate === "function") error1("%s has a method called componentShouldUpdate(). Did you mean shouldComponentUpdate()? The name is phrased as a question because the function is expected to return a value.", name);
-        if (ctor.prototype && ctor.prototype.isPureReactComponent && typeof instance.shouldComponentUpdate !== "undefined") error1("%s has a method called shouldComponentUpdate(). shouldComponentUpdate should not be used when extending React.PureComponent. Please extend React.Component if shouldComponentUpdate is used.", getComponentNameFromType(ctor) || "A pure component");
-        if (typeof instance.componentDidUnmount === "function") error1("%s has a method called componentDidUnmount(). But there is no such lifecycle method. Did you mean componentWillUnmount()?", name);
-        if (typeof instance.componentDidReceiveProps === "function") error1("%s has a method called componentDidReceiveProps(). But there is no such lifecycle method. If you meant to update the state in response to changing props, use componentWillReceiveProps(). If you meant to fetch data or run side-effects or mutations after React has updated the UI, use componentDidUpdate().", name);
-        if (typeof instance.componentWillRecieveProps === "function") error1("%s has a method called componentWillRecieveProps(). Did you mean componentWillReceiveProps()?", name);
-        if (typeof instance.UNSAFE_componentWillRecieveProps === "function") error1("%s has a method called UNSAFE_componentWillRecieveProps(). Did you mean UNSAFE_componentWillReceiveProps()?", name);
+        if (typeof instance.componentShouldUpdate === "function") error("%s has a method called componentShouldUpdate(). Did you mean shouldComponentUpdate()? The name is phrased as a question because the function is expected to return a value.", name);
+        if (ctor.prototype && ctor.prototype.isPureReactComponent && typeof instance.shouldComponentUpdate !== "undefined") error("%s has a method called shouldComponentUpdate(). shouldComponentUpdate should not be used when extending React.PureComponent. Please extend React.Component if shouldComponentUpdate is used.", getComponentNameFromType(ctor) || "A pure component");
+        if (typeof instance.componentDidUnmount === "function") error("%s has a method called componentDidUnmount(). But there is no such lifecycle method. Did you mean componentWillUnmount()?", name);
+        if (typeof instance.componentDidReceiveProps === "function") error("%s has a method called componentDidReceiveProps(). But there is no such lifecycle method. If you meant to update the state in response to changing props, use componentWillReceiveProps(). If you meant to fetch data or run side-effects or mutations after React has updated the UI, use componentDidUpdate().", name);
+        if (typeof instance.componentWillRecieveProps === "function") error("%s has a method called componentWillRecieveProps(). Did you mean componentWillReceiveProps()?", name);
+        if (typeof instance.UNSAFE_componentWillRecieveProps === "function") error("%s has a method called UNSAFE_componentWillRecieveProps(). Did you mean UNSAFE_componentWillReceiveProps()?", name);
         var hasMutatedProps = instance.props !== newProps;
-        if (instance.props !== undefined && hasMutatedProps) error1("%s(...): When calling super() in `%s`, make sure to pass up the same props that your component's constructor was passed.", name, name);
-        if (instance.defaultProps) error1("Setting defaultProps as an instance property on %s is not supported and will be ignored. Instead, define defaultProps as a static property on %s.", name, name);
+        if (instance.props !== undefined && hasMutatedProps) error("%s(...): When calling super() in `%s`, make sure to pass up the same props that your component's constructor was passed.", name, name);
+        if (instance.defaultProps) error("Setting defaultProps as an instance property on %s is not supported and will be ignored. Instead, define defaultProps as a static property on %s.", name, name);
         if (typeof instance.getSnapshotBeforeUpdate === "function" && typeof instance.componentDidUpdate !== "function" && !didWarnAboutGetSnapshotBeforeUpdateWithoutDidUpdate.has(ctor)) {
             didWarnAboutGetSnapshotBeforeUpdateWithoutDidUpdate.add(ctor);
-            error1("%s: getSnapshotBeforeUpdate() should be used with componentDidUpdate(). This component defines getSnapshotBeforeUpdate() only.", getComponentNameFromType(ctor));
+            error("%s: getSnapshotBeforeUpdate() should be used with componentDidUpdate(). This component defines getSnapshotBeforeUpdate() only.", getComponentNameFromType(ctor));
         }
-        if (typeof instance.getDerivedStateFromProps === "function") error1("%s: getDerivedStateFromProps() is defined as an instance method and will be ignored. Instead, declare it as a static method.", name);
-        if (typeof instance.getDerivedStateFromError === "function") error1("%s: getDerivedStateFromError() is defined as an instance method and will be ignored. Instead, declare it as a static method.", name);
-        if (typeof ctor.getSnapshotBeforeUpdate === "function") error1("%s: getSnapshotBeforeUpdate() is defined as a static method and will be ignored. Instead, declare it as an instance method.", name);
+        if (typeof instance.getDerivedStateFromProps === "function") error("%s: getDerivedStateFromProps() is defined as an instance method and will be ignored. Instead, declare it as a static method.", name);
+        if (typeof instance.getDerivedStateFromError === "function") error("%s: getDerivedStateFromError() is defined as an instance method and will be ignored. Instead, declare it as a static method.", name);
+        if (typeof ctor.getSnapshotBeforeUpdate === "function") error("%s: getSnapshotBeforeUpdate() is defined as a static method and will be ignored. Instead, declare it as an instance method.", name);
         var _state = instance.state;
-        if (_state && (typeof _state !== "object" || isArray(_state))) error1("%s.state: must be set to an object or null", name);
-        if (typeof instance.getChildContext === "function" && typeof ctor.childContextTypes !== "object") error1("%s.getChildContext(): childContextTypes must be defined in order to use getChildContext().", name);
+        if (_state && (typeof _state !== "object" || isArray(_state))) error("%s.state: must be set to an object or null", name);
+        if (typeof instance.getChildContext === "function" && typeof ctor.childContextTypes !== "object") error("%s.getChildContext(): childContextTypes must be defined in order to use getChildContext().", name);
     }
     function adoptClassInstance(workInProgress, instance) {
         instance.updater = classComponentUpdater;
         workInProgress.stateNode = instance; // The instance needs access to the fiber so that it can schedule updates
-        set1(instance, workInProgress);
+        set(instance, workInProgress);
         instance._reactInternalInstance = fakeInternalInstance;
     }
     function constructClassInstance(workInProgress, ctor, props) {
@@ -18851,7 +19385,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 else if (contextType._context !== undefined) // <Context.Consumer>
                 addendum = " Did you accidentally pass the Context.Consumer instead?";
                 else addendum = " However, it is set to an object with keys {" + Object.keys(contextType).join(", ") + "}.";
-                error1("%s defines an invalid contextType. contextType should point to the Context object returned by React.createContext().%s", getComponentNameFromType(ctor) || "Component", addendum);
+                error("%s defines an invalid contextType. contextType should point to the Context object returned by React.createContext().%s", getComponentNameFromType(ctor) || "Component", addendum);
             }
         }
         if (typeof contextType === "object" && contextType !== null) context = readContext(contextType);
@@ -18876,7 +19410,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var componentName = getComponentNameFromType(ctor) || "Component";
             if (!didWarnAboutUninitializedState.has(componentName)) {
                 didWarnAboutUninitializedState.add(componentName);
-                error1("`%s` uses `getDerivedStateFromProps` but its initial state is %s. This is not recommended. Instead, define the initial state by assigning an object to `this.state` in the constructor of `%s`. This ensures that `getDerivedStateFromProps` arguments have a consistent shape.", componentName, instance.state === null ? "null" : "undefined", componentName);
+                error("`%s` uses `getDerivedStateFromProps` but its initial state is %s. This is not recommended. Instead, define the initial state by assigning an object to `this.state` in the constructor of `%s`. This ensures that `getDerivedStateFromProps` arguments have a consistent shape.", componentName, instance.state === null ? "null" : "undefined", componentName);
             }
         } // If new component APIs are defined, "unsafe" lifecycles won't be called.
         // Warn about these lifecycles if they are present.
@@ -18896,7 +19430,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 var newApiName = typeof ctor.getDerivedStateFromProps === "function" ? "getDerivedStateFromProps()" : "getSnapshotBeforeUpdate()";
                 if (!didWarnAboutLegacyLifecyclesAndDerivedState.has(_componentName)) {
                     didWarnAboutLegacyLifecyclesAndDerivedState.add(_componentName);
-                    error1("Unsafe legacy lifecycles will not be called for components using new component APIs.\n\n%s uses %s but also contains the following legacy lifecycles:%s%s%s\n\nThe above lifecycles should be removed. Learn more about this warning here:\nhttps://reactjs.org/link/unsafe-component-lifecycles", _componentName, newApiName, foundWillMountName !== null ? "\n  " + foundWillMountName : "", foundWillReceivePropsName !== null ? "\n  " + foundWillReceivePropsName : "", foundWillUpdateName !== null ? "\n  " + foundWillUpdateName : "");
+                    error("Unsafe legacy lifecycles will not be called for components using new component APIs.\n\n%s uses %s but also contains the following legacy lifecycles:%s%s%s\n\nThe above lifecycles should be removed. Learn more about this warning here:\nhttps://reactjs.org/link/unsafe-component-lifecycles", _componentName, newApiName, foundWillMountName !== null ? "\n  " + foundWillMountName : "", foundWillReceivePropsName !== null ? "\n  " + foundWillReceivePropsName : "", foundWillUpdateName !== null ? "\n  " + foundWillUpdateName : "");
                 }
             }
         }
@@ -18909,7 +19443,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (typeof instance.componentWillMount === "function") instance.componentWillMount();
         if (typeof instance.UNSAFE_componentWillMount === "function") instance.UNSAFE_componentWillMount();
         if (oldState !== instance.state) {
-            error1("%s.componentWillMount(): Assigning directly to this.state is deprecated (except inside a component's constructor). Use setState instead.", getComponentNameFromFiber(workInProgress) || "Component");
+            error("%s.componentWillMount(): Assigning directly to this.state is deprecated (except inside a component's constructor). Use setState instead.", getComponentNameFromFiber(workInProgress) || "Component");
             classComponentUpdater.enqueueReplaceState(instance, instance.state, null);
         }
     }
@@ -18921,7 +19455,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var componentName = getComponentNameFromFiber(workInProgress) || "Component";
             if (!didWarnAboutStateAssignmentForComponent.has(componentName)) {
                 didWarnAboutStateAssignmentForComponent.add(componentName);
-                error1("%s.componentWillReceiveProps(): Assigning directly to this.state is deprecated (except inside a component's constructor). Use setState instead.", componentName);
+                error("%s.componentWillReceiveProps(): Assigning directly to this.state is deprecated (except inside a component's constructor). Use setState instead.", componentName);
             }
             classComponentUpdater.enqueueReplaceState(instance, instance.state, null);
         }
@@ -18943,7 +19477,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var componentName = getComponentNameFromType(ctor) || "Component";
             if (!didWarnAboutDirectlyAssigningPropsToState.has(componentName)) {
                 didWarnAboutDirectlyAssigningPropsToState.add(componentName);
-                error1("%s: It is not recommended to assign props directly to state because updates to props won't be reflected in state. In most cases, it is better to use props directly.", componentName);
+                error("%s: It is not recommended to assign props directly to state because updates to props won't be reflected in state. In most cases, it is better to use props directly.", componentName);
             }
         }
         if (workInProgress.mode & StrictLegacyMode) ReactStrictModeWarnings.recordLegacyContextWarning(workInProgress, instance);
@@ -18994,7 +19528,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var newState = instance.state = oldState;
         processUpdateQueue(workInProgress, newProps, instance, renderLanes);
         newState = workInProgress.memoizedState;
-        if (oldProps === newProps && oldState === newState && !hasContextChanged1() && !checkHasForceUpdateAfterProcessing()) {
+        if (oldProps === newProps && oldState === newState && !hasContextChanged() && !checkHasForceUpdateAfterProcessing()) {
             // If an update was already in progress, we should schedule an Update
             // effect even though we're bailing out, so that cWU/cDU are called.
             if (typeof instance.componentDidMount === "function") {
@@ -19071,7 +19605,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var newState = instance.state = oldState;
         processUpdateQueue(workInProgress, newProps, instance, renderLanes);
         newState = workInProgress.memoizedState;
-        if (unresolvedOldProps === unresolvedNewProps && oldState === newState && !hasContextChanged1() && !checkHasForceUpdateAfterProcessing() && !enableLazyContextPropagation) {
+        if (unresolvedOldProps === unresolvedNewProps && oldState === newState && !hasContextChanged() && !checkHasForceUpdateAfterProcessing() && !enableLazyContextPropagation) {
             // If an update was already in progress, we should schedule an Update
             // effect even though we're bailing out, so that cWU/cDU are called.
             if (typeof instance.componentDidUpdate === "function") {
@@ -19086,7 +19620,8 @@ module.exports = require("./cjs/react-dom.development.js");
             applyDerivedStateFromProps(workInProgress, ctor, getDerivedStateFromProps, newProps);
             newState = workInProgress.memoizedState;
         }
-        var shouldUpdate = checkHasForceUpdateAfterProcessing() || checkShouldComponentUpdate(workInProgress, ctor, oldProps, newProps, oldState, newState, nextContext) || // both before and after `shouldComponentUpdate` has been called. Not ideal,
+        var shouldUpdate = checkHasForceUpdateAfterProcessing() || checkShouldComponentUpdate(workInProgress, ctor, oldProps, newProps, oldState, newState, nextContext) || // TODO: In some cases, we'll end up checking if context has changed twice,
+        // both before and after `shouldComponentUpdate` has been called. Not ideal,
         // but I'm loath to refactor this function. This only happens for memoized
         // components so it's not that common.
         enableLazyContextPropagation;
@@ -19141,19 +19676,20 @@ module.exports = require("./cjs/react-dom.development.js");
         var componentName = getComponentNameFromFiber(returnFiber) || "Component";
         if (ownerHasKeyUseWarning[componentName]) return;
         ownerHasKeyUseWarning[componentName] = true;
-        error1('Each child in a list should have a unique "key" prop. See https://reactjs.org/link/warning-keys for more information.');
+        error('Each child in a list should have a unique "key" prop. See https://reactjs.org/link/warning-keys for more information.');
     };
     function coerceRef(returnFiber, current, element) {
         var mixedRef = element.ref;
         if (mixedRef !== null && typeof mixedRef !== "function" && typeof mixedRef !== "object") {
             // TODO: Clean this up once we turn on the string ref warning for
             // everyone, because the strict mode case will no longer be relevant
-            if ((returnFiber.mode & StrictLegacyMode || warnAboutStringRefs) && // because these cannot be automatically converted to an arrow function
+            if ((returnFiber.mode & StrictLegacyMode || warnAboutStringRefs) && // We warn in ReactElement.js if owner and self are equal for string refs
+            // because these cannot be automatically converted to an arrow function
             // using a codemod. Therefore, we don't have to warn about string refs again.
             !(element._owner && element._self && element._owner.stateNode !== element._self)) {
                 var componentName = getComponentNameFromFiber(returnFiber) || "Component";
                 if (!didWarnAboutStringRefs[componentName]) {
-                    error1('A string ref, "%s", has been found within a strict mode tree. String refs are a source of potential bugs and should be avoided. We recommend using useRef() or createRef() instead. Learn more about using refs safely here: https://reactjs.org/link/strict-mode-string-ref', mixedRef);
+                    error('A string ref, "%s", has been found within a strict mode tree. String refs are a source of potential bugs and should be avoided. We recommend using useRef() or createRef() instead. Learn more about using refs safely here: https://reactjs.org/link/strict-mode-string-ref', mixedRef);
                     didWarnAboutStringRefs[componentName] = true;
                 }
             }
@@ -19195,7 +19731,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var componentName = getComponentNameFromFiber(returnFiber) || "Component";
         if (ownerHasFunctionTypeWarning[componentName]) return;
         ownerHasFunctionTypeWarning[componentName] = true;
-        error1("Functions are not valid as a React child. This may happen if you return a Component instead of <Component /> from render. Or maybe you meant to call this function rather than return it.");
+        error("Functions are not valid as a React child. This may happen if you return a Component instead of <Component /> from render. Or maybe you meant to call this function rather than return it.");
     }
     function resolveLazy(lazyType) {
         var payload = lazyType._payload;
@@ -19296,7 +19832,8 @@ module.exports = require("./cjs/react-dom.development.js");
             var elementType = element.type;
             if (elementType === REACT_FRAGMENT_TYPE) return updateFragment(returnFiber, current, element.props.children, lanes, element.key);
             if (current !== null) {
-                if (current.elementType === elementType || isCompatibleFamilyForHotReloading(current, element) || // We need to do this after the Hot Reloading check above,
+                if (current.elementType === elementType || isCompatibleFamilyForHotReloading(current, element) || // Lazy types should reconcile their resolved type.
+                // We need to do this after the Hot Reloading check above,
                 // because hot reloading has different semantics than prod because
                 // it doesn't resuspend. So we can't let the call below suspend.
                 typeof elementType === "object" && elementType !== null && elementType.$$typeof === REACT_LAZY_TYPE && resolveLazy(elementType) === current.type) {
@@ -19455,7 +19992,7 @@ module.exports = require("./cjs/react-dom.development.js");
                         knownKeys.add(key);
                         break;
                     }
-                    error1("Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted \u2014 the behavior is unsupported and could change in a future version.", key);
+                    error("Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.", key);
                     break;
                 case REACT_LAZY_TYPE:
                     var payload = child._payload;
@@ -19570,12 +20107,13 @@ module.exports = require("./cjs/react-dom.development.js");
             if (typeof iteratorFn !== "function") throw new Error("An object is not an iterable. This error is likely caused by a bug in React. Please file an issue.");
             // We don't support rendering Generators because it's a mutation.
             // See https://github.com/facebook/react/issues/12995
-            if (typeof Symbol === "function" && newChildrenIterable[Symbol.toStringTag] === "Generator") {
-                if (!didWarnAboutGenerators) error1("Using Generators as children is unsupported and will likely yield unexpected results because enumerating a generator mutates it. You may convert it to an array with `Array.from()` or the `[...spread]` operator before rendering. Keep in mind you might need to polyfill these features for older browsers.");
+            if (typeof Symbol === "function" && // $FlowFixMe Flow doesn't know about toStringTag
+            newChildrenIterable[Symbol.toStringTag] === "Generator") {
+                if (!didWarnAboutGenerators) error("Using Generators as children is unsupported and will likely yield unexpected results because enumerating a generator mutates it. You may convert it to an array with `Array.from()` or the `[...spread]` operator before rendering. Keep in mind you might need to polyfill these features for older browsers.");
                 didWarnAboutGenerators = true;
             } // Warn about using Maps as children
             if (newChildrenIterable.entries === iteratorFn) {
-                if (!didWarnAboutMaps) error1("Using Maps as children is not supported. Use an array of keyed ReactElements instead.");
+                if (!didWarnAboutMaps) error("Using Maps as children is not supported. Use an array of keyed ReactElements instead.");
                 didWarnAboutMaps = true;
             } // First, validate keys.
             // We'll get a different iterator later for the main pass.
@@ -19716,7 +20254,8 @@ module.exports = require("./cjs/react-dom.development.js");
                             existing._debugOwner = element._owner;
                             return existing;
                         }
-                    } else if (child.elementType === elementType || isCompatibleFamilyForHotReloading(child, element) || // We need to do this after the Hot Reloading check above,
+                    } else if (child.elementType === elementType || isCompatibleFamilyForHotReloading(child, element) || // Lazy types should reconcile their resolved type.
+                    // We need to do this after the Hot Reloading check above,
                     // because hot reloading has different semantics than prod because
                     // it doesn't resuspend. So we can't let the call below suspend.
                     typeof elementType === "object" && elementType !== null && elementType.$$typeof === REACT_LAZY_TYPE && resolveLazy(elementType) === child.type) {
@@ -19802,7 +20341,7 @@ module.exports = require("./cjs/react-dom.development.js");
         }
         return reconcileChildFibers;
     }
-    var reconcileChildFibers1 = ChildReconciler(true);
+    var reconcileChildFibers = ChildReconciler(true);
     var mountChildFibers = ChildReconciler(false);
     function cloneChildFibers(current, workInProgress) {
         if (current !== null && workInProgress.child !== current.child) throw new Error("Resuming work not yet implemented.");
@@ -19933,7 +20472,8 @@ module.exports = require("./cjs/react-dom.development.js");
                     var dehydrated = state.dehydrated;
                     if (dehydrated === null || isSuspenseInstancePending(dehydrated) || isSuspenseInstanceFallback(dehydrated)) return node;
                 }
-            } else if (node.tag === SuspenseListComponent && // keep track of whether it suspended or not.
+            } else if (node.tag === SuspenseListComponent && // revealOrder undefined can't be trusted because it don't
+            // keep track of whether it suspended or not.
             node.memoizedProps.revealOrder !== undefined) {
                 var didSuspend = (node.flags & DidCapture) !== NoFlags;
                 if (didSuspend) return node;
@@ -19985,13 +20525,13 @@ module.exports = require("./cjs/react-dom.development.js");
     var didWarnUncachedGetSnapshot;
     didWarnAboutMismatchedHooksForComponent = new Set();
     // These are set right before calling the component.
-    var renderLanes1 = NoLanes; // The work-in-progress fiber. I've named it differently to distinguish it from
+    var renderLanes = NoLanes; // The work-in-progress fiber. I've named it differently to distinguish it from
     // the work-in-progress hook.
     var currentlyRenderingFiber$1 = null; // Hooks are stored as a linked list on the fiber's memoizedState field. The
     // current hook list is the list that belongs to the current fiber. The
     // work-in-progress hook list is a new list that will be added to the
     // work-in-progress fiber.
-    var currentHook1 = null;
+    var currentHook = null;
     var workInProgressHook = null; // Whether an update was scheduled at any point during the render phase. This
     // does not get reset if we do another render pass; only when we're completely
     // finished evaluating this component. This is an optimization so we know
@@ -20031,7 +20571,7 @@ module.exports = require("./cjs/react-dom.development.js");
     function checkDepsAreArrayDev(deps) {
         if (deps !== undefined && deps !== null && !isArray(deps)) // Verify deps, but only on mount to avoid extra checks.
         // It's unlikely their type would change as usually you define them inline.
-        error1("%s received a final argument that is not an array (instead, received `%s`). When specified, the final argument must be an array.", currentHookNameInDev, typeof deps);
+        error("%s received a final argument that is not an array (instead, received `%s`). When specified, the final argument must be an array.", currentHookNameInDev, typeof deps);
     }
     function warnOnHookMismatchInDev(currentHookName) {
         var componentName = getComponentNameFromFiber(currentlyRenderingFiber$1);
@@ -20049,7 +20589,7 @@ module.exports = require("./cjs/react-dom.development.js");
                     row += newHookName + "\n";
                     table += row;
                 }
-                error1("React has detected a change in the order of Hooks called by %s. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://reactjs.org/link/rules-of-hooks\n\n   Previous render            Next render\n   ------------------------------------------------------\n%s   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n", componentName, table);
+                error("React has detected a change in the order of Hooks called by %s. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://reactjs.org/link/rules-of-hooks\n\n   Previous render            Next render\n   ------------------------------------------------------\n%s   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n", componentName, table);
             }
         }
     }
@@ -20060,12 +20600,12 @@ module.exports = require("./cjs/react-dom.development.js");
         if (ignorePreviousDependencies) // Only true when this component is being hot reloaded.
         return false;
         if (prevDeps === null) {
-            error1("%s received a final argument during this render, but not during the previous render. Even though the final argument is optional, its type cannot change between renders.", currentHookNameInDev);
+            error("%s received a final argument during this render, but not during the previous render. Even though the final argument is optional, its type cannot change between renders.", currentHookNameInDev);
             return false;
         }
         // Don't bother comparing lengths in prod because these arrays should be
         // passed inline.
-        if (nextDeps.length !== prevDeps.length) error1("The final argument passed to %s changed size between renders. The order and size of this array must remain constant.\n\nPrevious: %s\nIncoming: %s", currentHookNameInDev, "[" + prevDeps.join(", ") + "]", "[" + nextDeps.join(", ") + "]");
+        if (nextDeps.length !== prevDeps.length) error("The final argument passed to %s changed size between renders. The order and size of this array must remain constant.\n\nPrevious: %s\nIncoming: %s", currentHookNameInDev, "[" + prevDeps.join(", ") + "]", "[" + nextDeps.join(", ") + "]");
         for(var i = 0; i < prevDeps.length && i < nextDeps.length; i++){
             if (objectIs(nextDeps[i], prevDeps[i])) continue;
             return false;
@@ -20073,7 +20613,7 @@ module.exports = require("./cjs/react-dom.development.js");
         return true;
     }
     function renderWithHooks(current, workInProgress, Component, props, secondArg, nextRenderLanes) {
-        renderLanes1 = nextRenderLanes;
+        renderLanes = nextRenderLanes;
         currentlyRenderingFiber$1 = workInProgress;
         hookTypesDev = current !== null ? current._debugHookTypes : null;
         hookTypesUpdateIndexDev = -1; // Used for hot reloading:
@@ -20102,7 +20642,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 // Even when hot reloading, allow dependencies to stabilize
                 // after first render to prevent infinite render phase updates.
                 ignorePreviousDependencies = false;
-                currentHook1 = null;
+                currentHook = null;
                 workInProgressHook = null;
                 workInProgress.updateQueue = null;
                 // Also validate hook order for cascading updates.
@@ -20115,10 +20655,10 @@ module.exports = require("./cjs/react-dom.development.js");
         ReactCurrentDispatcher$1.current = ContextOnlyDispatcher;
         workInProgress._debugHookTypes = hookTypesDev;
         // hookTypesDev could catch more cases (e.g. context) but only in DEV bundles.
-        var didRenderTooFewHooks = currentHook1 !== null && currentHook1.next !== null;
-        renderLanes1 = NoLanes;
+        var didRenderTooFewHooks = currentHook !== null && currentHook.next !== null;
+        renderLanes = NoLanes;
         currentlyRenderingFiber$1 = null;
-        currentHook1 = null;
+        currentHook = null;
         workInProgressHook = null;
         currentHookNameInDev = null;
         hookTypesDev = null;
@@ -20126,11 +20666,12 @@ module.exports = require("./cjs/react-dom.development.js");
         // render. If this fires, it suggests that we incorrectly reset the static
         // flags in some other part of the codebase. This has happened before, for
         // example, in the SuspenseList implementation.
-        if (current !== null && (current.flags & StaticMask) !== (workInProgress.flags & StaticMask) && // and creates false positives. To make this work in legacy mode, we'd
+        if (current !== null && (current.flags & StaticMask) !== (workInProgress.flags & StaticMask) && // Disable this warning in legacy mode, because legacy Suspense is weird
+        // and creates false positives. To make this work in legacy mode, we'd
         // need to mark fibers that commit in an incomplete state, somehow. For
         // now I'll disable the warning that most of the bugs that would trigger
         // it are either exclusive to concurrent mode or exist in both.
-        (current.mode & ConcurrentMode) !== NoMode) error1("Internal React error: Expected static flag was missing. Please notify the React team.");
+        (current.mode & ConcurrentMode) !== NoMode) error("Internal React error: Expected static flag was missing. Please notify the React team.");
         didScheduleRenderPhaseUpdate = false; // This is reset by checkDidRenderIdHook
         // localIdCounter = 0;
         if (didRenderTooFewHooks) throw new Error("Rendered fewer hooks than expected. This may be caused by an accidental early return statement.");
@@ -20172,9 +20713,9 @@ module.exports = require("./cjs/react-dom.development.js");
             }
             didScheduleRenderPhaseUpdate = false;
         }
-        renderLanes1 = NoLanes;
+        renderLanes = NoLanes;
         currentlyRenderingFiber$1 = null;
-        currentHook1 = null;
+        currentHook = null;
         workInProgressHook = null;
         hookTypesDev = null;
         hookTypesUpdateIndexDev = -1;
@@ -20204,11 +20745,11 @@ module.exports = require("./cjs/react-dom.development.js");
         // use as a base. When we reach the end of the base list, we must switch to
         // the dispatcher used for mounts.
         var nextCurrentHook;
-        if (currentHook1 === null) {
+        if (currentHook === null) {
             var current = currentlyRenderingFiber$1.alternate;
             if (current !== null) nextCurrentHook = current.memoizedState;
             else nextCurrentHook = null;
-        } else nextCurrentHook = currentHook1.next;
+        } else nextCurrentHook = currentHook.next;
         var nextWorkInProgressHook;
         if (workInProgressHook === null) nextWorkInProgressHook = currentlyRenderingFiber$1.memoizedState;
         else nextWorkInProgressHook = workInProgressHook.next;
@@ -20216,16 +20757,16 @@ module.exports = require("./cjs/react-dom.development.js");
             // There's already a work-in-progress. Reuse it.
             workInProgressHook = nextWorkInProgressHook;
             nextWorkInProgressHook = workInProgressHook.next;
-            currentHook1 = nextCurrentHook;
+            currentHook = nextCurrentHook;
         } else {
             // Clone from the current hook.
             if (nextCurrentHook === null) throw new Error("Rendered more hooks than during the previous render.");
-            currentHook1 = nextCurrentHook;
+            currentHook = nextCurrentHook;
             var newHook = {
-                memoizedState: currentHook1.memoizedState,
-                baseState: currentHook1.baseState,
-                baseQueue: currentHook1.baseQueue,
-                queue: currentHook1.queue,
+                memoizedState: currentHook.memoizedState,
+                baseState: currentHook.baseState,
+                baseQueue: currentHook.baseQueue,
+                queue: currentHook.queue,
                 next: null
             };
             if (workInProgressHook === null) // This is the first hook in the list.
@@ -20271,7 +20812,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var queue = hook.queue;
         if (queue === null) throw new Error("Should have a queue. This is likely a bug in React. Please file an issue.");
         queue.lastRenderedReducer = reducer;
-        var current = currentHook1; // The last rebase update that is NOT part of the base state.
+        var current = currentHook; // The last rebase update that is NOT part of the base state.
         var baseQueue = current.baseQueue; // The last pending update that hasn't been processed yet.
         var pendingQueue = queue.pending;
         if (pendingQueue !== null) {
@@ -20286,7 +20827,7 @@ module.exports = require("./cjs/react-dom.development.js");
             }
             if (current.baseQueue !== baseQueue) // Internal invariant that should never happen, but feasibly could in
             // the future if we implement resuming, or some form of that.
-            error1("Internal error: Expected work-in-progress queue to be a clone. This is a bug in React.");
+            error("Internal error: Expected work-in-progress queue to be a clone. This is a bug in React.");
             current.baseQueue = baseQueue = pendingQueue;
             queue.pending = null;
         }
@@ -20300,7 +20841,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var update = first;
             do {
                 var updateLane = update.lane;
-                if (!isSubsetOfLanes(renderLanes1, updateLane)) {
+                if (!isSubsetOfLanes(renderLanes, updateLane)) {
                     // Priority is insufficient. Skip this update. If this is the first
                     // skipped update, the previous update/state is the new base
                     // update/state.
@@ -20427,7 +20968,7 @@ module.exports = require("./cjs/react-dom.development.js");
             nextSnapshot = getServerSnapshot();
             if (!didWarnUncachedGetSnapshot) {
                 if (nextSnapshot !== getServerSnapshot()) {
-                    error1("The result of getServerSnapshot should be cached to avoid an infinite loop");
+                    error("The result of getServerSnapshot should be cached to avoid an infinite loop");
                     didWarnUncachedGetSnapshot = true;
                 }
             }
@@ -20436,7 +20977,7 @@ module.exports = require("./cjs/react-dom.development.js");
             if (!didWarnUncachedGetSnapshot) {
                 var cachedSnapshot = getSnapshot();
                 if (!objectIs(nextSnapshot, cachedSnapshot)) {
-                    error1("The result of getSnapshot should be cached to avoid an infinite loop");
+                    error("The result of getSnapshot should be cached to avoid an infinite loop");
                     didWarnUncachedGetSnapshot = true;
                 }
             }
@@ -20448,7 +20989,7 @@ module.exports = require("./cjs/react-dom.development.js");
             // it up in a passive effect.
             var root = getWorkInProgressRoot();
             if (root === null) throw new Error("Expected a work-in-progress root. This is a bug in React. Please file an issue.");
-            if (!includesBlockingLane(root, renderLanes1)) pushStoreConsistencyCheck(fiber, getSnapshot, nextSnapshot);
+            if (!includesBlockingLane(root, renderLanes)) pushStoreConsistencyCheck(fiber, getSnapshot, nextSnapshot);
         } // Read the current snapshot from the store on every render. This breaks the
         // normal rules of React, and only works because store updates are
         // always synchronous.
@@ -20480,7 +21021,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (!didWarnUncachedGetSnapshot) {
             var cachedSnapshot = getSnapshot();
             if (!objectIs(nextSnapshot, cachedSnapshot)) {
-                error1("The result of getSnapshot should be cached to avoid an infinite loop");
+                error("The result of getSnapshot should be cached to avoid an infinite loop");
                 didWarnUncachedGetSnapshot = true;
             }
         }
@@ -20497,7 +21038,8 @@ module.exports = require("./cjs/react-dom.development.js");
         // commit phase if there was an interleaved mutation. In concurrent mode
         // this can happen all the time, but even in synchronous mode, an earlier
         // effect may have mutated the store.
-        if (inst.getSnapshot !== getSnapshot || snapshotChanged || // checking whether we scheduled a subscription effect above.
+        if (inst.getSnapshot !== getSnapshot || snapshotChanged || // Check if the susbcribe function changed. We can save some memory by
+        // checking whether we scheduled a subscription effect above.
         workInProgressHook !== null && workInProgressHook.memoizedState.tag & HasEffect) {
             fiber.flags |= Passive;
             pushEffect(HasEffect | Passive$1, updateStoreInstance.bind(null, fiber, inst, nextSnapshot, getSnapshot), undefined, null); // Unless we're rendering a blocking lane, schedule a consistency check.
@@ -20505,7 +21047,7 @@ module.exports = require("./cjs/react-dom.development.js");
             // stores were mutated.
             var root = getWorkInProgressRoot();
             if (root === null) throw new Error("Expected a work-in-progress root. This is a bug in React. Please file an issue.");
-            if (!includesBlockingLane(root, renderLanes1)) pushStoreConsistencyCheck(fiber, getSnapshot, nextSnapshot);
+            if (!includesBlockingLane(root, renderLanes)) pushStoreConsistencyCheck(fiber, getSnapshot, nextSnapshot);
         }
         return nextSnapshot;
     }
@@ -20637,8 +21179,8 @@ module.exports = require("./cjs/react-dom.development.js");
         var hook = updateWorkInProgressHook();
         var nextDeps = deps === undefined ? null : deps;
         var destroy = undefined;
-        if (currentHook1 !== null) {
-            var prevEffect = currentHook1.memoizedState;
+        if (currentHook !== null) {
+            var prevEffect = currentHook.memoizedState;
             destroy = prevEffect.destroy;
             if (nextDeps !== null) {
                 var prevDeps = prevEffect.deps;
@@ -20683,7 +21225,7 @@ module.exports = require("./cjs/react-dom.development.js");
             };
         } else if (ref !== null && ref !== undefined) {
             var refObject = ref;
-            if (!refObject.hasOwnProperty("current")) error1("Expected useImperativeHandle() first argument to either be a ref callback or React.createRef() object. Instead received: %s.", "an object with keys {" + Object.keys(refObject).join(", ") + "}");
+            if (!refObject.hasOwnProperty("current")) error("Expected useImperativeHandle() first argument to either be a ref callback or React.createRef() object. Instead received: %s.", "an object with keys {" + Object.keys(refObject).join(", ") + "}");
             var _inst2 = create();
             refObject.current = _inst2;
             return function() {
@@ -20692,7 +21234,7 @@ module.exports = require("./cjs/react-dom.development.js");
         }
     }
     function mountImperativeHandle(ref, create, deps) {
-        if (typeof create !== "function") error1("Expected useImperativeHandle() second argument to be a function that creates a handle. Instead received: %s.", create !== null ? typeof create : "null");
+        if (typeof create !== "function") error("Expected useImperativeHandle() second argument to be a function that creates a handle. Instead received: %s.", create !== null ? typeof create : "null");
         var effectDeps = deps !== null && deps !== undefined ? deps.concat([
             ref
         ]) : null;
@@ -20702,7 +21244,7 @@ module.exports = require("./cjs/react-dom.development.js");
         return mountEffectImpl(fiberFlags, Layout, imperativeHandleEffect.bind(null, create, ref), effectDeps);
     }
     function updateImperativeHandle(ref, create, deps) {
-        if (typeof create !== "function") error1("Expected useImperativeHandle() second argument to be a function that creates a handle. Instead received: %s.", create !== null ? typeof create : "null");
+        if (typeof create !== "function") error("Expected useImperativeHandle() second argument to be a function that creates a handle. Instead received: %s.", create !== null ? typeof create : "null");
         var effectDeps = deps !== null && deps !== undefined ? deps.concat([
             ref
         ]) : null;
@@ -20773,24 +21315,24 @@ module.exports = require("./cjs/react-dom.development.js");
     }
     function updateDeferredValue(value) {
         var hook = updateWorkInProgressHook();
-        var resolvedCurrentHook = currentHook1;
+        var resolvedCurrentHook = currentHook;
         var prevValue = resolvedCurrentHook.memoizedState;
         return updateDeferredValueImpl(hook, prevValue, value);
     }
     function rerenderDeferredValue(value) {
         var hook = updateWorkInProgressHook();
-        if (currentHook1 === null) {
+        if (currentHook === null) {
             // This is a rerender during a mount.
             hook.memoizedState = value;
             return value;
         } else {
             // This is a rerender during an update.
-            var prevValue = currentHook1.memoizedState;
+            var prevValue = currentHook.memoizedState;
             return updateDeferredValueImpl(hook, prevValue, value);
         }
     }
     function updateDeferredValueImpl(hook, prevValue, value) {
-        var shouldDeferValue = !includesOnlyNonUrgentLanes(renderLanes1);
+        var shouldDeferValue = !includesOnlyNonUrgentLanes(renderLanes);
         if (shouldDeferValue) {
             // This is an urgent update. If the value has changed, keep using the
             // previous value and spawn a deferred render to update it later.
@@ -20907,7 +21449,7 @@ module.exports = require("./cjs/react-dom.development.js");
         return id;
     }
     function dispatchReducerAction(fiber, queue, action) {
-        if (typeof arguments[3] === "function") error1("State updates from the useState() and useReducer() Hooks don't support the second callback argument. To execute a side effect after rendering, declare it in the component body with useEffect().");
+        if (typeof arguments[3] === "function") error("State updates from the useState() and useReducer() Hooks don't support the second callback argument. To execute a side effect after rendering, declare it in the component body with useEffect().");
         var lane = requestUpdateLane(fiber);
         var update = {
             lane: lane,
@@ -20928,7 +21470,7 @@ module.exports = require("./cjs/react-dom.development.js");
         markUpdateInDevTools(fiber, lane);
     }
     function dispatchSetState(fiber, queue, action) {
-        if (typeof arguments[3] === "function") error1("State updates from the useState() and useReducer() Hooks don't support the second callback argument. To execute a side effect after rendering, declare it in the component body with useEffect().");
+        if (typeof arguments[3] === "function") error("State updates from the useState() and useReducer() Hooks don't support the second callback argument. To execute a side effect after rendering, declare it in the component body with useEffect().");
         var lane = requestUpdateLane(fiber);
         var update = {
             lane: lane,
@@ -21044,10 +21586,10 @@ module.exports = require("./cjs/react-dom.development.js");
     var InvalidNestedHooksDispatcherOnUpdateInDEV = null;
     var InvalidNestedHooksDispatcherOnRerenderInDEV = null;
     var warnInvalidContextAccess = function() {
-        error1("Context can only be read while React is rendering. In classes, you can read it in the render method or getDerivedStateFromProps. In function components, you can read it directly in the function body, but not inside Hooks like useReducer() or useMemo().");
+        error("Context can only be read while React is rendering. In classes, you can read it in the render method or getDerivedStateFromProps. In function components, you can read it directly in the function body, but not inside Hooks like useReducer() or useMemo().");
     };
     var warnInvalidHookAccess = function() {
-        error1("Do not call Hooks inside useEffect(...), useMemo(...), or other built-in Hooks. You can only call Hooks at the top level of your React function. For more information, see https://reactjs.org/link/rules-of-hooks");
+        error("Do not call Hooks inside useEffect(...), useMemo(...), or other built-in Hooks. You can only call Hooks at the top level of your React function. For more information, see https://reactjs.org/link/rules-of-hooks");
     };
     HooksDispatcherOnMountInDEV = {
         readContext: function(context) {
@@ -21835,7 +22377,7 @@ module.exports = require("./cjs/react-dom.development.js");
         unstable_isNewReconciler: enableNewReconciler
     };
     var now$1 = Scheduler.unstable_now;
-    var commitTime1 = 0;
+    var commitTime = 0;
     var layoutEffectStartTime = -1;
     var profilerStartTime = -1;
     var passiveEffectStartTime = -1;
@@ -21871,10 +22413,10 @@ module.exports = require("./cjs/react-dom.development.js");
         nestedUpdateScheduled = false;
     }
     function getCommitTime() {
-        return commitTime1;
+        return commitTime;
     }
     function recordCommitTime() {
-        commitTime1 = now$1();
+        commitTime = now$1();
     }
     function startProfilerTimer(fiber) {
         profilerStartTime = now$1();
@@ -22071,7 +22613,7 @@ module.exports = require("./cjs/react-dom.development.js");
             // then it needs to call setState to recover from errors.
             // If no state update is scheduled then the boundary will swallow the error.
             {
-                if (!includesSomeLane(fiber.lanes, SyncLane)) error1("%s: Error boundaries should implement getDerivedStateFromError(). In that method, return a state update to display an error message or fallback UI.", getComponentNameFromFiber(fiber) || "Unknown");
+                if (!includesSomeLane(fiber.lanes, SyncLane)) error("%s: Error boundaries should implement getDerivedStateFromError(). In that method, return a state update to display an error message or fallback UI.", getComponentNameFromFiber(fiber) || "Unknown");
             }
         };
         return update;
@@ -22372,7 +22914,7 @@ module.exports = require("./cjs/react-dom.development.js");
         // the clone algorithm to create a copy of all the current children.
         // If we had any progressed work already, that is invalid at this point so
         // let's throw it out.
-        workInProgress.child = reconcileChildFibers1(workInProgress, current.child, nextChildren, renderLanes);
+        workInProgress.child = reconcileChildFibers(workInProgress, current.child, nextChildren, renderLanes);
     }
     function forceUnmountCurrentAndReconcile(current, workInProgress, nextChildren, renderLanes) {
         // This function is fork of reconcileChildren. It's used in cases where we
@@ -22383,11 +22925,11 @@ module.exports = require("./cjs/react-dom.development.js");
         // To do this, we're going to go through the reconcile algorithm twice. In
         // the first pass, we schedule a deletion for all the current children by
         // passing null.
-        workInProgress.child = reconcileChildFibers1(workInProgress, current.child, null, renderLanes); // In the second pass, we mount the new children. The trick here is that we
+        workInProgress.child = reconcileChildFibers(workInProgress, current.child, null, renderLanes); // In the second pass, we mount the new children. The trick here is that we
         // pass null in place of where we usually pass the current child set. This has
         // the effect of remounting all children regardless of whether their
         // identities match.
-        workInProgress.child = reconcileChildFibers1(workInProgress, null, nextChildren, renderLanes);
+        workInProgress.child = reconcileChildFibers(workInProgress, null, nextChildren, renderLanes);
     }
     function updateForwardRef(current, workInProgress, Component, nextProps, renderLanes) {
         if (workInProgress.type !== workInProgress.elementType) {
@@ -22430,7 +22972,8 @@ module.exports = require("./cjs/react-dom.development.js");
     function updateMemoComponent(current, workInProgress, Component, nextProps, renderLanes) {
         if (current === null) {
             var type = Component.type;
-            if (isSimpleFunctionComponent(type) && Component.compare === null && Component.defaultProps === undefined) {
+            if (isSimpleFunctionComponent(type) && Component.compare === null && // SimpleMemoComponent codepath doesn't resolve outer props either.
+            Component.defaultProps === undefined) {
                 var resolvedType = type;
                 resolvedType = resolveFunctionForHotReloading(type);
                 // and with only the default shallow comparison, we upgrade it
@@ -22600,7 +23143,7 @@ module.exports = require("./cjs/react-dom.development.js");
         reconcileChildren(current, workInProgress, nextChildren, renderLanes);
         return workInProgress.child;
     } // Note: These happen to have identical begin phases, for now. We shouldn't hold
-    function updateFragment1(current, workInProgress, renderLanes) {
+    function updateFragment(current, workInProgress, renderLanes) {
         var nextChildren = workInProgress.pendingProps;
         reconcileChildren(current, workInProgress, nextChildren, renderLanes);
         return workInProgress.child;
@@ -22717,7 +23260,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var nextUnitOfWork = finishClassComponent(current, workInProgress, Component, shouldUpdate, hasContext, renderLanes);
         var inst = workInProgress.stateNode;
         if (shouldUpdate && inst.props !== nextProps) {
-            if (!didWarnAboutReassigningProps) error1("It looks like %s is reassigning its own `this.props` while rendering. This is not supported and can lead to confusing bugs.", getComponentNameFromFiber(workInProgress) || "a component");
+            if (!didWarnAboutReassigningProps) error("It looks like %s is reassigning its own `this.props` while rendering. This is not supported and can lead to confusing bugs.", getComponentNameFromFiber(workInProgress) || "a component");
             didWarnAboutReassigningProps = true;
         }
         return nextUnitOfWork;
@@ -22941,7 +23484,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (Component.prototype && typeof Component.prototype.render === "function") {
             var componentName = getComponentNameFromType(Component) || "Unknown";
             if (!didWarnAboutBadClass[componentName]) {
-                error1("The <%s /> component appears to have a render method, but doesn't extend React.Component. This is likely to cause errors. Change %s to extend React.Component instead.", componentName, componentName);
+                error("The <%s /> component appears to have a render method, but doesn't extend React.Component. This is likely to cause errors. Change %s to extend React.Component instead.", componentName, componentName);
                 didWarnAboutBadClass[componentName] = true;
             }
         }
@@ -22958,7 +23501,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (typeof value === "object" && value !== null && typeof value.render === "function" && value.$$typeof === undefined) {
             var _componentName = getComponentNameFromType(Component) || "Unknown";
             if (!didWarnAboutModulePatternComponent[_componentName]) {
-                error1("The <%s /> component appears to be a function component that returns a class instance. Change %s to a class that extends React.Component instead. If you can't use a class try assigning the prototype on the function as a workaround. `%s.prototype = React.Component.prototype`. Don't use an arrow function since it cannot be called with `new` by React.", _componentName, _componentName, _componentName);
+                error("The <%s /> component appears to be a function component that returns a class instance. Change %s to a class that extends React.Component instead. If you can't use a class try assigning the prototype on the function as a workaround. `%s.prototype = React.Component.prototype`. Don't use an arrow function since it cannot be called with `new` by React.", _componentName, _componentName, _componentName);
                 didWarnAboutModulePatternComponent[_componentName] = true;
             }
         }
@@ -22966,7 +23509,7 @@ module.exports = require("./cjs/react-dom.development.js");
         typeof value === "object" && value !== null && typeof value.render === "function" && value.$$typeof === undefined) {
             var _componentName2 = getComponentNameFromType(Component) || "Unknown";
             if (!didWarnAboutModulePatternComponent[_componentName2]) {
-                error1("The <%s /> component appears to be a function component that returns a class instance. Change %s to a class that extends React.Component instead. If you can't use a class try assigning the prototype on the function as a workaround. `%s.prototype = React.Component.prototype`. Don't use an arrow function since it cannot be called with `new` by React.", _componentName2, _componentName2, _componentName2);
+                error("The <%s /> component appears to be a function component that returns a class instance. Change %s to a class that extends React.Component instead. If you can't use a class try assigning the prototype on the function as a workaround. `%s.prototype = React.Component.prototype`. Don't use an arrow function since it cannot be called with `new` by React.", _componentName2, _componentName2, _componentName2);
                 didWarnAboutModulePatternComponent[_componentName2] = true;
             }
             workInProgress.tag = ClassComponent; // Throw out any hooks that were used.
@@ -23004,7 +23547,7 @@ module.exports = require("./cjs/react-dom.development.js");
     }
     function validateFunctionComponentInDev(workInProgress, Component) {
         if (Component) {
-            if (Component.childContextTypes) error1("%s(...): childContextTypes cannot be defined on a function component.", Component.displayName || Component.name || "Component");
+            if (Component.childContextTypes) error("%s(...): childContextTypes cannot be defined on a function component.", Component.displayName || Component.name || "Component");
         }
         if (workInProgress.ref !== null) {
             var info = "";
@@ -23015,20 +23558,20 @@ module.exports = require("./cjs/react-dom.development.js");
             if (debugSource) warningKey = debugSource.fileName + ":" + debugSource.lineNumber;
             if (!didWarnAboutFunctionRefs[warningKey]) {
                 didWarnAboutFunctionRefs[warningKey] = true;
-                error1("Function components cannot be given refs. Attempts to access this ref will fail. Did you mean to use React.forwardRef()?%s", info);
+                error("Function components cannot be given refs. Attempts to access this ref will fail. Did you mean to use React.forwardRef()?%s", info);
             }
         }
         if (typeof Component.getDerivedStateFromProps === "function") {
             var _componentName3 = getComponentNameFromType(Component) || "Unknown";
             if (!didWarnAboutGetDerivedStateOnFunctionComponent[_componentName3]) {
-                error1("%s: Function components do not support getDerivedStateFromProps.", _componentName3);
+                error("%s: Function components do not support getDerivedStateFromProps.", _componentName3);
                 didWarnAboutGetDerivedStateOnFunctionComponent[_componentName3] = true;
             }
         }
         if (typeof Component.contextType === "object" && Component.contextType !== null) {
             var _componentName4 = getComponentNameFromType(Component) || "Unknown";
             if (!didWarnAboutContextTypeOnFunctionComponent[_componentName4]) {
-                error1("%s: Function components do not support contextType.", _componentName4);
+                error("%s: Function components do not support contextType.", _componentName4);
                 didWarnAboutContextTypeOnFunctionComponent[_componentName4] = true;
             }
         }
@@ -23242,7 +23785,8 @@ module.exports = require("./cjs/react-dom.development.js");
         };
         var primaryChildFragment;
         if (// completed, even though it's in an inconsistent state.
-        (mode & ConcurrentMode) === NoMode && // already cloned. In legacy mode, the only case where this isn't true is
+        (mode & ConcurrentMode) === NoMode && // Make sure we're on the second pass, i.e. the primary child fragment was
+        // already cloned. In legacy mode, the only case where this isn't true is
         // when DevTools forces us to display a fallback; we skip the first render
         // pass entirely and go straight to rendering the fallback. (In Concurrent
         // Mode, SuspenseList can also trigger this scenario, but this is a legacy-
@@ -23294,7 +23838,7 @@ module.exports = require("./cjs/react-dom.development.js");
         // out is legacy mode; every concurrent path provides an error).
         if (recoverableError !== null) queueHydrationError(recoverableError);
          // This will add the old fiber to the deletion list
-        reconcileChildFibers1(workInProgress, current.child, null, renderLanes); // We're now not suspended nor dehydrated.
+        reconcileChildFibers(workInProgress, current.child, null, renderLanes); // We're now not suspended nor dehydrated.
         var nextProps = workInProgress.pendingProps;
         var primaryChildren = nextProps.children;
         var primaryChildFragment = mountSuspensePrimaryChildren(workInProgress, primaryChildren); // Needs a placement effect because the parent (the Suspense boundary) already
@@ -23319,14 +23863,14 @@ module.exports = require("./cjs/react-dom.development.js");
         workInProgress.child = primaryChildFragment;
         if ((workInProgress.mode & ConcurrentMode) !== NoMode) // We will have dropped the effect list which contains the
         // deletion. We need to reconcile to delete the current child.
-        reconcileChildFibers1(workInProgress, current.child, null, renderLanes);
+        reconcileChildFibers(workInProgress, current.child, null, renderLanes);
         return fallbackChildFragment;
     }
     function mountDehydratedSuspenseComponent(workInProgress, suspenseInstance, renderLanes) {
         // During the first pass, we'll bail out and not drill into the children.
         // Instead, we'll leave the content in place and try to hydrate it later.
         if ((workInProgress.mode & ConcurrentMode) === NoMode) {
-            error1("Cannot hydrate Suspense in legacy mode. Switch from ReactDOM.hydrate(element, container) to ReactDOMClient.hydrateRoot(container, <App />).render(element) or remove the Suspense components from the server rendered components.");
+            error("Cannot hydrate Suspense in legacy mode. Switch from ReactDOM.hydrate(element, container) to ReactDOMClient.hydrateRoot(container, <App />).render(element) or remove the Suspense components from the server rendered components.");
             workInProgress.lanes = laneToLanes(SyncLane);
         } else if (isSuspenseInstanceFallback(suspenseInstance)) // This is a client-only boundary. Since we won't get any content from the server
         // for this, we need to schedule that at a higher priority based on when it would
@@ -23510,27 +24054,27 @@ module.exports = require("./cjs/react-dom.development.js");
                 case "together":
                 case "forwards":
                 case "backwards":
-                    error1('"%s" is not a valid value for revealOrder on <SuspenseList />. Use lowercase "%s" instead.', revealOrder, revealOrder.toLowerCase());
+                    error('"%s" is not a valid value for revealOrder on <SuspenseList />. Use lowercase "%s" instead.', revealOrder, revealOrder.toLowerCase());
                     break;
                 case "forward":
                 case "backward":
-                    error1('"%s" is not a valid value for revealOrder on <SuspenseList />. React uses the -s suffix in the spelling. Use "%ss" instead.', revealOrder, revealOrder.toLowerCase());
+                    error('"%s" is not a valid value for revealOrder on <SuspenseList />. React uses the -s suffix in the spelling. Use "%ss" instead.', revealOrder, revealOrder.toLowerCase());
                     break;
                 default:
-                    error1('"%s" is not a supported revealOrder on <SuspenseList />. Did you mean "together", "forwards" or "backwards"?', revealOrder);
+                    error('"%s" is not a supported revealOrder on <SuspenseList />. Did you mean "together", "forwards" or "backwards"?', revealOrder);
                     break;
             }
-            else error1('%s is not a supported value for revealOrder on <SuspenseList />. Did you mean "together", "forwards" or "backwards"?', revealOrder);
+            else error('%s is not a supported value for revealOrder on <SuspenseList />. Did you mean "together", "forwards" or "backwards"?', revealOrder);
         }
     }
     function validateTailOptions(tailMode, revealOrder) {
         if (tailMode !== undefined && !didWarnAboutTailOptions[tailMode]) {
             if (tailMode !== "collapsed" && tailMode !== "hidden") {
                 didWarnAboutTailOptions[tailMode] = true;
-                error1('"%s" is not a supported value for tail on <SuspenseList />. Did you mean "collapsed" or "hidden"?', tailMode);
+                error('"%s" is not a supported value for tail on <SuspenseList />. Did you mean "collapsed" or "hidden"?', tailMode);
             } else if (revealOrder !== "forwards" && revealOrder !== "backwards") {
                 didWarnAboutTailOptions[tailMode] = true;
-                error1('<SuspenseList tail="%s" /> is only valid if revealOrder is "forwards" or "backwards". Did you mean to specify revealOrder="forwards"?', tailMode);
+                error('<SuspenseList tail="%s" /> is only valid if revealOrder is "forwards" or "backwards". Did you mean to specify revealOrder="forwards"?', tailMode);
             }
         }
     }
@@ -23539,7 +24083,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var isIterable = !isAnArray && typeof getIteratorFn(childSlot) === "function";
         if (isAnArray || isIterable) {
             var type = isAnArray ? "array" : "iterable";
-            error1("A nested %s was passed to row #%s in <SuspenseList />. Wrap it in an additional SuspenseList to configure its revealOrder: <SuspenseList revealOrder=...> ... <SuspenseList revealOrder=...>{%s}</SuspenseList> ... </SuspenseList>", type, index, type);
+            error("A nested %s was passed to row #%s in <SuspenseList />. Wrap it in an additional SuspenseList to configure its revealOrder: <SuspenseList revealOrder=...> ... <SuspenseList revealOrder=...>{%s}</SuspenseList> ... </SuspenseList>", type, index, type);
             return false;
         }
         return true;
@@ -23561,7 +24105,7 @@ module.exports = require("./cjs/react-dom.development.js");
                             _i++;
                         }
                     }
-                } else error1('A single row was passed to a <SuspenseList revealOrder="%s" />. This is not useful since it needs multiple rows. Did you mean to pass multiple children or an array?', revealOrder);
+                } else error('A single row was passed to a <SuspenseList revealOrder="%s" />. This is not useful since it needs multiple rows. Did you mean to pass multiple children or an array?', revealOrder);
             }
         }
     }
@@ -23674,7 +24218,7 @@ module.exports = require("./cjs/react-dom.development.js");
         // flow doesn't do during mount. This doesn't happen at the root because
         // the root always starts with a "current" with a null child.
         // TODO: Consider unifying this with how the root works.
-        workInProgress.child = reconcileChildFibers1(workInProgress, null, nextChildren, renderLanes);
+        workInProgress.child = reconcileChildFibers(workInProgress, null, nextChildren, renderLanes);
         else reconcileChildren(current, workInProgress, nextChildren, renderLanes);
         return workInProgress.child;
     }
@@ -23688,7 +24232,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (!("value" in newProps)) {
             if (!hasWarnedAboutUsingNoValuePropOnContextProvider) {
                 hasWarnedAboutUsingNoValuePropOnContextProvider = true;
-                error1("The `value` prop is required for the `<Context.Provider>`. Did you misspell it or forget to pass it?");
+                error("The `value` prop is required for the `<Context.Provider>`. Did you misspell it or forget to pass it?");
             }
         }
         var providerPropTypes = workInProgress.type.propTypes;
@@ -23698,7 +24242,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var oldValue = oldProps.value;
             if (objectIs(oldValue, newValue)) {
                 // No change. Bailout early if children are the same.
-                if (oldProps.children === newProps.children && !hasContextChanged1()) return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
+                if (oldProps.children === newProps.children && !hasContextChanged()) return bailoutOnAlreadyFinishedWork(current, workInProgress, renderLanes);
             } else // The context value changed. Search for matching consumers and schedule
             // them to update.
             propagateContextChange(workInProgress, context, renderLanes);
@@ -23717,13 +24261,13 @@ module.exports = require("./cjs/react-dom.development.js");
             if (context !== context.Consumer) {
                 if (!hasWarnedAboutUsingContextAsConsumer) {
                     hasWarnedAboutUsingContextAsConsumer = true;
-                    error1("Rendering <Context> directly is not supported and will be removed in a future major release. Did you mean to render <Context.Consumer> instead?");
+                    error("Rendering <Context> directly is not supported and will be removed in a future major release. Did you mean to render <Context.Consumer> instead?");
                 }
             }
         } else context = context._context;
         var newProps = workInProgress.pendingProps;
         var render = newProps.children;
-        if (typeof render !== "function") error1("A context consumer was rendered with multiple children, or a child that isn't a function. A context consumer expects a single child that is a function. If you did pass a function, make sure there is no trailing or leading whitespace around it.");
+        if (typeof render !== "function") error("A context consumer was rendered with multiple children, or a child that isn't a function. A context consumer expects a single child that is a function. If you did pass a function, make sure there is no trailing or leading whitespace around it.");
         prepareToReadContext(workInProgress, renderLanes);
         var newValue = readContext(context);
         markComponentRenderStarted(workInProgress);
@@ -23930,14 +24474,15 @@ module.exports = require("./cjs/react-dom.development.js");
         if (current !== null) {
             var oldProps = current.memoizedProps;
             var newProps = workInProgress.pendingProps;
-            if (oldProps !== newProps || hasContextChanged1() || workInProgress.type !== current.type) // If props or context changed, mark the fiber as having performed work.
+            if (oldProps !== newProps || hasContextChanged() || workInProgress.type !== current.type) // If props or context changed, mark the fiber as having performed work.
             // This may be unset if the props are determined to be equal later (memo).
             didReceiveUpdate = true;
             else {
                 // Neither props nor legacy context changes. Check if there's a pending
                 // update or context change.
                 var hasScheduledUpdateOrContext = checkScheduledUpdateOrContext(current, renderLanes);
-                if (!hasScheduledUpdateOrContext && // may not be work scheduled on `current`, so we check for this flag.
+                if (!hasScheduledUpdateOrContext && // If this is the second pass of an error or suspense boundary, there
+                // may not be work scheduled on `current`, so we check for this flag.
                 (workInProgress.flags & DidCapture) === NoFlags) {
                     // No pending updates or context. Bail out now.
                     didReceiveUpdate = false;
@@ -24006,7 +24551,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 var _resolvedProps2 = workInProgress.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current, workInProgress, type, _resolvedProps2, renderLanes);
             case Fragment:
-                return updateFragment1(current, workInProgress, renderLanes);
+                return updateFragment(current, workInProgress, renderLanes);
             case Mode:
                 return updateMode(current, workInProgress, renderLanes);
             case Profiler:
@@ -24329,7 +24874,8 @@ module.exports = require("./cjs/react-dom.development.js");
                     markUpdate(workInProgress);
                     else if (current !== null) {
                         var prevState = current.memoizedState;
-                        if (!prevState.isDehydrated || (workInProgress.flags & ForceClientRender) !== NoFlags) {
+                        if (!prevState.isDehydrated || // Check if we reverted to client rendering (e.g. due to an error)
+                        (workInProgress.flags & ForceClientRender) !== NoFlags) {
                             // Schedule an effect to clear this container at the start of the
                             // next commit. This handles the case of React rendering into a
                             // container with previous children. It's also safe to do for
@@ -24665,7 +25211,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 if (!nextIsHidden || (workInProgress.mode & ConcurrentMode) === NoMode) bubbleProperties(workInProgress);
                 else // Don't bubble properties for hidden children unless we're rendering
                 // at offscreen priority.
-                if (includesSomeLane(subtreeRenderLanes1, OffscreenLane)) {
+                if (includesSomeLane(subtreeRenderLanes, OffscreenLane)) {
                     bubbleProperties(workInProgress);
                     // Check if there was an insertion or update in the hidden subtree.
                     // If so, we need to hide those nodes in the commit phase, so
@@ -24859,7 +25405,7 @@ module.exports = require("./cjs/react-dom.development.js");
                 } catch (error) {
                     captureCommitPhaseError(current, nearestMountedAncestor, error);
                 }
-                if (typeof retVal === "function") error1("Unexpected return value from a callback ref in %s. A callback ref should not return a function.", getComponentNameFromFiber(current));
+                if (typeof retVal === "function") error("Unexpected return value from a callback ref in %s. A callback ref should not return a function.", getComponentNameFromFiber(current));
             } else ref.current = null;
         }
     }
@@ -24926,14 +25472,14 @@ module.exports = require("./cjs/react-dom.development.js");
                         var prevState = current.memoizedState;
                         var instance = finishedWork.stateNode; // We could update instance props and state here,
                         if (finishedWork.type === finishedWork.elementType && !didWarnAboutReassigningProps) {
-                            if (instance.props !== finishedWork.memoizedProps) error1("Expected %s props to match memoized props before getSnapshotBeforeUpdate. This might either be because of a bug in React, or because a component reassigns its own `this.props`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
-                            if (instance.state !== finishedWork.memoizedState) error1("Expected %s state to match memoized state before getSnapshotBeforeUpdate. This might either be because of a bug in React, or because a component reassigns its own `this.state`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
+                            if (instance.props !== finishedWork.memoizedProps) error("Expected %s props to match memoized props before getSnapshotBeforeUpdate. This might either be because of a bug in React, or because a component reassigns its own `this.props`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
+                            if (instance.state !== finishedWork.memoizedState) error("Expected %s state to match memoized state before getSnapshotBeforeUpdate. This might either be because of a bug in React, or because a component reassigns its own `this.state`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
                         }
                         var snapshot = instance.getSnapshotBeforeUpdate(finishedWork.elementType === finishedWork.type ? prevProps : resolveDefaultProps(finishedWork.type, prevProps), prevState);
                         var didWarnSet = didWarnAboutUndefinedSnapshotBeforeUpdate;
                         if (snapshot === undefined && !didWarnSet.has(finishedWork.type)) {
                             didWarnSet.add(finishedWork.type);
-                            error1("%s.getSnapshotBeforeUpdate(): A snapshot value (or null) must be returned. You have returned undefined.", getComponentNameFromFiber(finishedWork));
+                            error("%s.getSnapshotBeforeUpdate(): A snapshot value (or null) must be returned. You have returned undefined.", getComponentNameFromFiber(finishedWork));
                         }
                         instance.__reactInternalSnapshotBeforeUpdate = snapshot;
                     }
@@ -25004,7 +25550,7 @@ module.exports = require("./cjs/react-dom.development.js");
                         if (destroy === null) addendum = " You returned null. If your effect does not require clean up, return undefined (or nothing).";
                         else if (typeof destroy.then === "function") addendum = "\n\nIt looks like you wrote " + hookName + "(async () => ...) or returned a Promise. " + "Instead, write the async function inside your effect " + "and call it immediately:\n\n" + hookName + "(() => {\n" + "  async function fetchData() {\n" + "    // You can await here\n" + "    const response = await MyAPI.getData(someId);\n" + "    // ...\n" + "  }\n" + "  fetchData();\n" + "}, [someId]); // Or [] if effect doesn't need props or state\n\n" + "Learn more about data fetching with Hooks: https://reactjs.org/link/hooks-data-fetching";
                         else addendum = " You returned: " + destroy;
-                        error1("%s must not return anything besides a function, which is used for clean-up.%s", hookName, addendum);
+                        error("%s must not return anything besides a function, which is used for clean-up.%s", hookName, addendum);
                     }
                 }
                 effect = effect.next;
@@ -25066,8 +25612,8 @@ module.exports = require("./cjs/react-dom.development.js");
                     if (!offscreenSubtreeWasHidden) {
                         if (current === null) {
                             if (finishedWork.type === finishedWork.elementType && !didWarnAboutReassigningProps) {
-                                if (instance.props !== finishedWork.memoizedProps) error1("Expected %s props to match memoized props before componentDidMount. This might either be because of a bug in React, or because a component reassigns its own `this.props`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
-                                if (instance.state !== finishedWork.memoizedState) error1("Expected %s state to match memoized state before componentDidMount. This might either be because of a bug in React, or because a component reassigns its own `this.state`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
+                                if (instance.props !== finishedWork.memoizedProps) error("Expected %s props to match memoized props before componentDidMount. This might either be because of a bug in React, or because a component reassigns its own `this.props`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
+                                if (instance.state !== finishedWork.memoizedState) error("Expected %s state to match memoized state before componentDidMount. This might either be because of a bug in React, or because a component reassigns its own `this.state`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
                             }
                             if (finishedWork.mode & ProfileMode) try {
                                 startLayoutEffectTimer();
@@ -25080,8 +25626,8 @@ module.exports = require("./cjs/react-dom.development.js");
                             var prevProps = finishedWork.elementType === finishedWork.type ? current.memoizedProps : resolveDefaultProps(finishedWork.type, current.memoizedProps);
                             var prevState = current.memoizedState; // We could update instance props and state here,
                             if (finishedWork.type === finishedWork.elementType && !didWarnAboutReassigningProps) {
-                                if (instance.props !== finishedWork.memoizedProps) error1("Expected %s props to match memoized props before componentDidUpdate. This might either be because of a bug in React, or because a component reassigns its own `this.props`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
-                                if (instance.state !== finishedWork.memoizedState) error1("Expected %s state to match memoized state before componentDidUpdate. This might either be because of a bug in React, or because a component reassigns its own `this.state`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
+                                if (instance.props !== finishedWork.memoizedProps) error("Expected %s props to match memoized props before componentDidUpdate. This might either be because of a bug in React, or because a component reassigns its own `this.props`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
+                                if (instance.state !== finishedWork.memoizedState) error("Expected %s state to match memoized state before componentDidUpdate. This might either be because of a bug in React, or because a component reassigns its own `this.state`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
                             }
                             if (finishedWork.mode & ProfileMode) try {
                                 startLayoutEffectTimer();
@@ -25097,8 +25643,8 @@ module.exports = require("./cjs/react-dom.development.js");
                 var updateQueue = finishedWork.updateQueue;
                 if (updateQueue !== null) {
                     if (finishedWork.type === finishedWork.elementType && !didWarnAboutReassigningProps) {
-                        if (instance.props !== finishedWork.memoizedProps) error1("Expected %s props to match memoized props before processing the update queue. This might either be because of a bug in React, or because a component reassigns its own `this.props`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
-                        if (instance.state !== finishedWork.memoizedState) error1("Expected %s state to match memoized state before processing the update queue. This might either be because of a bug in React, or because a component reassigns its own `this.state`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
+                        if (instance.props !== finishedWork.memoizedProps) error("Expected %s props to match memoized props before processing the update queue. This might either be because of a bug in React, or because a component reassigns its own `this.props`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
+                        if (instance.state !== finishedWork.memoizedState) error("Expected %s state to match memoized state before processing the update queue. This might either be because of a bug in React, or because a component reassigns its own `this.state`. Please file an issue.", getComponentNameFromFiber(finishedWork) || "instance");
                     }
                     // but instead we rely on them being set during last render.
                     // TODO: revisit this when we implement resuming.
@@ -25271,9 +25817,9 @@ module.exports = require("./cjs/react-dom.development.js");
                     recordLayoutEffectDuration(finishedWork);
                 }
                 else retVal = ref(instanceToUse);
-                if (typeof retVal === "function") error1("Unexpected return value from a callback ref in %s. A callback ref should not return a function.", getComponentNameFromFiber(finishedWork));
+                if (typeof retVal === "function") error("Unexpected return value from a callback ref in %s. A callback ref should not return a function.", getComponentNameFromFiber(finishedWork));
             } else {
-                if (!ref.hasOwnProperty("current")) error1("Unexpected ref object provided for %s. Use either a ref-setter function or React.createRef().", getComponentNameFromFiber(finishedWork));
+                if (!ref.hasOwnProperty("current")) error("Unexpected ref object provided for %s. Use either a ref-setter function or React.createRef().", getComponentNameFromFiber(finishedWork));
                 ref.current = instanceToUse;
             }
         }
@@ -25709,8 +26255,8 @@ module.exports = require("./cjs/react-dom.development.js");
                         recordLayoutEffectDuration(finishedWork);
                     } else try {
                         commitHookEffectListUnmount(Layout | HasEffect, finishedWork, finishedWork.return);
-                    } catch (error2) {
-                        captureCommitPhaseError(finishedWork, finishedWork.return, error2);
+                    } catch (error) {
+                        captureCommitPhaseError(finishedWork, finishedWork.return, error);
                     }
                 }
                 return;
@@ -26273,8 +26819,8 @@ module.exports = require("./cjs/react-dom.development.js");
                 var instance = fiber.stateNode;
                 try {
                     instance.componentDidMount();
-                } catch (error3) {
-                    captureCommitPhaseError(fiber, fiber.return, error3);
+                } catch (error) {
+                    captureCommitPhaseError(fiber, fiber.return, error);
                 }
                 break;
         }
@@ -26359,7 +26905,7 @@ module.exports = require("./cjs/react-dom.development.js");
     function isConcurrentActEnvironment() {
         var isReactActEnvironmentGlobal = typeof IS_REACT_ACT_ENVIRONMENT !== "undefined" ? IS_REACT_ACT_ENVIRONMENT : undefined;
         if (!isReactActEnvironmentGlobal && ReactCurrentActQueue.current !== null) // TODO: Include link to relevant documentation page.
-        error1("The current testing environment is not configured to support act(...)");
+        error("The current testing environment is not configured to support act(...)");
         return isReactActEnvironmentGlobal;
     }
     var ceil = Math.ceil;
@@ -26377,7 +26923,7 @@ module.exports = require("./cjs/react-dom.development.js");
     var RootDidNotComplete = 6; // Describes where we are in the React execution stack
     var executionContext = NoContext; // The root we're working on
     var workInProgressRoot = null; // The fiber we're working on
-    var workInProgress1 = null; // The lanes we're rendering
+    var workInProgress = null; // The lanes we're rendering
     var workInProgressRootRenderLanes = NoLanes; // Stack that allows components to change the render lanes for its subtree
     // This is a superset of the lanes we started working on at the root. The only
     // case where it's different from `workInProgressRootRenderLanes` is when we
@@ -26386,7 +26932,7 @@ module.exports = require("./cjs/react-dom.development.js");
     //
     // Most things in the work loop should deal with workInProgressRootRenderLanes.
     // Most things in begin/complete phases should deal with subtreeRenderLanes.
-    var subtreeRenderLanes1 = NoLanes;
+    var subtreeRenderLanes = NoLanes;
     var subtreeRenderLanesCursor = createCursor(NoLanes); // Whether to root completed, errored, suspended, etc.
     var workInProgressRootExitStatus = RootInProgress; // A fatal error, if one is thrown
     var workInProgressRootFatalError = null; // "Included" lanes refer to lanes that were worked on during this render. It's
@@ -26507,7 +27053,7 @@ module.exports = require("./cjs/react-dom.development.js");
     }
     function scheduleUpdateOnFiber(root, fiber, lane, eventTime) {
         checkForNestedUpdates();
-        if (isRunningInsertionEffect) error1("useInsertionEffect must not schedule updates.");
+        if (isRunningInsertionEffect) error("useInsertionEffect must not schedule updates.");
         if (isFlushingPassiveEffects) didScheduleUpdateDuringPassiveEffects = true;
         markRootUpdated(root, lane, eventTime);
         if ((executionContext & RenderContext) !== NoLanes && root === workInProgressRoot) // This update was dispatched during the render phase. This is a mistake
@@ -26535,7 +27081,8 @@ module.exports = require("./cjs/react-dom.development.js");
                 markRootSuspended$1(root, workInProgressRootRenderLanes);
             }
             ensureRootIsScheduled(root, eventTime);
-            if (lane === SyncLane && executionContext === NoContext && (fiber.mode & ConcurrentMode) === NoMode && !ReactCurrentActQueue$1.isBatchingLegacy) {
+            if (lane === SyncLane && executionContext === NoContext && (fiber.mode & ConcurrentMode) === NoMode && // Treat `act` as if it's inside `batchedUpdates`, even in legacy mode.
+            !ReactCurrentActQueue$1.isBatchingLegacy) {
                 // Flush the synchronous work now, unless we're already working or inside
                 // a batch. This is intentionally inside scheduleUpdateOnFiber instead of
                 // scheduleCallbackForFiber to preserve the ability to schedule a callback
@@ -26585,13 +27132,14 @@ module.exports = require("./cjs/react-dom.development.js");
         } // We use the highest priority lane to represent the priority of the callback.
         var newCallbackPriority = getHighestPriorityLane(nextLanes); // Check if there's an existing task. We may be able to reuse it.
         var existingCallbackPriority = root.callbackPriority;
-        if (existingCallbackPriority === newCallbackPriority && // Scheduler task, rather than an `act` task, cancel it and re-scheduled
+        if (existingCallbackPriority === newCallbackPriority && // Special case related to `act`. If the currently scheduled task is a
+        // Scheduler task, rather than an `act` task, cancel it and re-scheduled
         // on the `act` queue.
         !(ReactCurrentActQueue$1.current !== null && existingCallbackNode !== fakeActCallbackNode)) {
             // If we're going to re-use an existing task, it needs to exist.
             // Assume that discrete update microtasks are non-cancellable and null.
             // TODO: Temporary until we confirm this warning is not fired.
-            if (existingCallbackNode == null && existingCallbackPriority !== SyncLane) error1("Expected scheduled callback to exist. This error is likely caused by a bug in React. Please file an issue.");
+            if (existingCallbackNode == null && existingCallbackPriority !== SyncLane) error("Expected scheduled callback to exist. This error is likely caused by a bug in React. Please file an issue.");
             return;
         }
         if (existingCallbackNode != null) // Cancel the existing callback. We'll schedule a new one below.
@@ -26797,7 +27345,8 @@ module.exports = require("./cjs/react-dom.development.js");
             case RootSuspended:
                 markRootSuspended$1(root, lanes); // We have an acceptable loading state. We need to figure out if we
                 // should immediately commit it or wait a bit.
-                if (includesOnlyRetries(lanes) && !shouldForceFlushFallbacksInDEV()) {
+                if (includesOnlyRetries(lanes) && // do not delay if we're inside an act() scope
+                !shouldForceFlushFallbacksInDEV()) {
                     // This render only included retries, no updates. Throttle committing
                     // retries so that we don't show too many loading states too quickly.
                     var msUntilTimeout = globalMostRecentFallbackTime + FALLBACK_THROTTLE_MS - now(); // Don't bother with a very short suspense time.
@@ -26963,7 +27512,8 @@ module.exports = require("./cjs/react-dom.development.js");
         } finally{
             executionContext = prevExecutionContext; // If there were legacy sync updates, flush them at the end of the outer
             // most batchedUpdates-like method.
-            if (executionContext === NoContext && !ReactCurrentActQueue$1.isBatchingLegacy) {
+            if (executionContext === NoContext && // Treat `act` as if it's inside `batchedUpdates`, even in legacy mode.
+            !ReactCurrentActQueue$1.isBatchingLegacy) {
                 resetRenderTimer();
                 flushSyncCallbacksOnlyInLegacyMode();
             }
@@ -27012,12 +27562,12 @@ module.exports = require("./cjs/react-dom.development.js");
         return (executionContext & (RenderContext | CommitContext)) !== NoContext;
     }
     function pushRenderLanes(fiber, lanes) {
-        push(subtreeRenderLanesCursor, subtreeRenderLanes1, fiber);
-        subtreeRenderLanes1 = mergeLanes(subtreeRenderLanes1, lanes);
+        push(subtreeRenderLanesCursor, subtreeRenderLanes, fiber);
+        subtreeRenderLanes = mergeLanes(subtreeRenderLanes, lanes);
         workInProgressRootIncludedLanes = mergeLanes(workInProgressRootIncludedLanes, lanes);
     }
     function popRenderLanes(fiber) {
-        subtreeRenderLanes1 = subtreeRenderLanesCursor.current;
+        subtreeRenderLanes = subtreeRenderLanesCursor.current;
         pop(subtreeRenderLanesCursor, fiber);
     }
     function prepareFreshStack(root, lanes) {
@@ -27030,8 +27580,8 @@ module.exports = require("./cjs/react-dom.development.js");
             root.timeoutHandle = noTimeout; // $FlowFixMe Complains noTimeout is not a TimeoutID, despite the check above
             cancelTimeout(timeoutHandle);
         }
-        if (workInProgress1 !== null) {
-            var interruptedWork = workInProgress1.return;
+        if (workInProgress !== null) {
+            var interruptedWork = workInProgress.return;
             while(interruptedWork !== null){
                 var current = interruptedWork.alternate;
                 unwindInterruptedWork(current, interruptedWork);
@@ -27040,8 +27590,8 @@ module.exports = require("./cjs/react-dom.development.js");
         }
         workInProgressRoot = root;
         var rootWorkInProgress = createWorkInProgress(root.current, null);
-        workInProgress1 = rootWorkInProgress;
-        workInProgressRootRenderLanes = subtreeRenderLanes1 = workInProgressRootIncludedLanes = lanes;
+        workInProgress = rootWorkInProgress;
+        workInProgressRootRenderLanes = subtreeRenderLanes = workInProgressRootIncludedLanes = lanes;
         workInProgressRootExitStatus = RootInProgress;
         workInProgressRootFatalError = null;
         workInProgressRootSkippedLanes = NoLanes;
@@ -27055,7 +27605,7 @@ module.exports = require("./cjs/react-dom.development.js");
     }
     function handleError(root, thrownValue) {
         do {
-            var erroredWork = workInProgress1;
+            var erroredWork = workInProgress;
             try {
                 // Reset module-level state that was set during the render phase.
                 resetContextDependencies();
@@ -27075,7 +27625,7 @@ module.exports = require("./cjs/react-dom.development.js");
                     // handled by `completeUnitOfWork` or `unwindWork`, but since we're
                     // intentionally not calling those, we need set it here.
                     // TODO: Consider calling `unwindWork` to pop the contexts.
-                    workInProgress1 = null;
+                    workInProgress = null;
                     return;
                 }
                 if (enableProfilerTimer && erroredWork.mode & ProfileMode) // Record the time spent rendering before an error was thrown. This
@@ -27094,12 +27644,12 @@ module.exports = require("./cjs/react-dom.development.js");
             } catch (yetAnotherThrownValue) {
                 // Something in the return path also threw.
                 thrownValue = yetAnotherThrownValue;
-                if (workInProgress1 === erroredWork && erroredWork !== null) {
+                if (workInProgress === erroredWork && erroredWork !== null) {
                     // If this boundary has already errored, then we had trouble processing
                     // the error. Bubble it to the next boundary.
                     erroredWork = erroredWork.return;
-                    workInProgress1 = erroredWork;
-                } else erroredWork = workInProgress1;
+                    workInProgress = erroredWork;
+                } else erroredWork = workInProgress;
                 continue;
             } // Return to the normal work loop.
             return;
@@ -27182,7 +27732,7 @@ module.exports = require("./cjs/react-dom.development.js");
         resetContextDependencies();
         executionContext = prevExecutionContext;
         popDispatcher(prevDispatcher);
-        if (workInProgress1 !== null) // This is a sync render, so we should have finished the whole tree.
+        if (workInProgress !== null) // This is a sync render, so we should have finished the whole tree.
         throw new Error("Cannot commit an incomplete root. This error is likely caused by a bug in React. Please file an issue.");
         markRenderStopped();
         workInProgressRoot = null;
@@ -27191,7 +27741,7 @@ module.exports = require("./cjs/react-dom.development.js");
     } // The work loop is an extremely hot path. Tell Closure not to inline it.
     /** @noinline */ function workLoopSync() {
         // Already timed out, so perform work without checking if we need to yield.
-        while(workInProgress1 !== null)performUnitOfWork(workInProgress1);
+        while(workInProgress !== null)performUnitOfWork(workInProgress);
     }
     function renderRootConcurrent(root, lanes) {
         var prevExecutionContext = executionContext;
@@ -27224,7 +27774,7 @@ module.exports = require("./cjs/react-dom.development.js");
         resetContextDependencies();
         popDispatcher(prevDispatcher);
         executionContext = prevExecutionContext;
-        if (workInProgress1 !== null) {
+        if (workInProgress !== null) {
             markRenderYielded();
             return RootInProgress;
         } else {
@@ -27236,7 +27786,7 @@ module.exports = require("./cjs/react-dom.development.js");
     }
     /** @noinline */ function workLoopConcurrent() {
         // Perform work until Scheduler asks us to yield
-        while(workInProgress1 !== null && !shouldYield())performUnitOfWork(workInProgress1);
+        while(workInProgress !== null && !shouldYield())performUnitOfWork(workInProgress);
     }
     function performUnitOfWork(unitOfWork) {
         // The current, flushed, state of this fiber is the alternate. Ideally
@@ -27247,14 +27797,14 @@ module.exports = require("./cjs/react-dom.development.js");
         var next;
         if ((unitOfWork.mode & ProfileMode) !== NoMode) {
             startProfilerTimer(unitOfWork);
-            next = beginWork$1(current, unitOfWork, subtreeRenderLanes1);
+            next = beginWork$1(current, unitOfWork, subtreeRenderLanes);
             stopProfilerTimerIfRunningAndRecordDelta(unitOfWork, true);
-        } else next = beginWork$1(current, unitOfWork, subtreeRenderLanes1);
+        } else next = beginWork$1(current, unitOfWork, subtreeRenderLanes);
         resetCurrentFiber();
         unitOfWork.memoizedProps = unitOfWork.pendingProps;
         if (next === null) // If this doesn't spawn new work, complete the current work.
         completeUnitOfWork(unitOfWork);
-        else workInProgress1 = next;
+        else workInProgress = next;
         ReactCurrentOwner$2.current = null;
     }
     function completeUnitOfWork(unitOfWork) {
@@ -27270,16 +27820,16 @@ module.exports = require("./cjs/react-dom.development.js");
             if ((completedWork.flags & Incomplete) === NoFlags) {
                 setCurrentFiber(completedWork);
                 var next = void 0;
-                if ((completedWork.mode & ProfileMode) === NoMode) next = completeWork(current, completedWork, subtreeRenderLanes1);
+                if ((completedWork.mode & ProfileMode) === NoMode) next = completeWork(current, completedWork, subtreeRenderLanes);
                 else {
                     startProfilerTimer(completedWork);
-                    next = completeWork(current, completedWork, subtreeRenderLanes1); // Update render duration assuming we didn't error.
+                    next = completeWork(current, completedWork, subtreeRenderLanes); // Update render duration assuming we didn't error.
                     stopProfilerTimerIfRunningAndRecordDelta(completedWork, false);
                 }
                 resetCurrentFiber();
                 if (next !== null) {
                     // Completing this fiber spawned new work. Work on that next.
-                    workInProgress1 = next;
+                    workInProgress = next;
                     return;
                 }
             } else {
@@ -27293,7 +27843,7 @@ module.exports = require("./cjs/react-dom.development.js");
                     // Since we're restarting, remove anything that is not a host effect
                     // from the effect tag.
                     _next.flags &= HostEffectMask;
-                    workInProgress1 = _next;
+                    workInProgress = _next;
                     return;
                 }
                 if ((completedWork.mode & ProfileMode) !== NoMode) {
@@ -27315,18 +27865,18 @@ module.exports = require("./cjs/react-dom.development.js");
                 } else {
                     // We've unwound all the way to the root.
                     workInProgressRootExitStatus = RootDidNotComplete;
-                    workInProgress1 = null;
+                    workInProgress = null;
                     return;
                 }
             }
             var siblingFiber = completedWork.sibling;
             if (siblingFiber !== null) {
                 // If there is more work to do in this returnFiber, do that next.
-                workInProgress1 = siblingFiber;
+                workInProgress = siblingFiber;
                 return;
             } // Otherwise, return to the parent
             completedWork = returnFiber; // Update the next thing we're working on in case something throws.
-            workInProgress1 = completedWork;
+            workInProgress = completedWork;
         }while (completedWork !== null); // We've reached the root.
         if (workInProgressRootExitStatus === RootInProgress) workInProgressRootExitStatus = RootCompleted;
     }
@@ -27362,7 +27912,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (finishedWork === null) {
             markCommitStopped();
             return null;
-        } else if (lanes === NoLanes) error1("root.finishedLanes should not be empty during a commit. This is a bug in React.");
+        } else if (lanes === NoLanes) error("root.finishedLanes should not be empty during a commit. This is a bug in React.");
         root.finishedWork = null;
         root.finishedLanes = NoLanes;
         if (finishedWork === root.current) throw new Error("Cannot commit the same tree as before. This error is likely caused by a bug in React. Please file an issue.");
@@ -27376,7 +27926,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (root === workInProgressRoot) {
             // We can reset these now that they are finished.
             workInProgressRoot = null;
-            workInProgress1 = null;
+            workInProgress = null;
             workInProgressRootRenderLanes = NoLanes;
         } // If there are pending passive effects, schedule a callback to process them.
         // Do this as early as possible, so it is queued before anything else that
@@ -27658,7 +28208,7 @@ module.exports = require("./cjs/react-dom.development.js");
         // trees. What it should instead do is propagate the error to the parent of
         // the deleted tree. In the meantime, do not add this warning to the
         // allowlist; this is only for our internal use.
-        error1("Internal React error: Attempted to capture a commit phase error inside a detached tree. This indicates a bug in React. Likely causes include deleting the same fiber more than once, committing an already-finished tree, or an inconsistent return pointer.\n\nError message:\n\n%s", error$1);
+        error("Internal React error: Attempted to capture a commit phase error inside a detached tree. This indicates a bug in React. Likely causes include deleting the same fiber more than once, committing an already-finished tree, or an inconsistent return pointer.\n\nError message:\n\n%s", error$1);
     }
     function pingSuspendedRoot(root, wakeable, pingedLanes) {
         var pingCache = root.pingCache;
@@ -27746,7 +28296,7 @@ module.exports = require("./cjs/react-dom.development.js");
         if (nestedPassiveUpdateCount > NESTED_PASSIVE_UPDATE_LIMIT) {
             nestedPassiveUpdateCount = 0;
             rootWithPassiveNestedUpdates = null;
-            error1("Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.");
+            error("Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.");
         }
     }
     function flushRenderPhaseStrictModeWarningsInDEV() {
@@ -27796,10 +28346,10 @@ module.exports = require("./cjs/react-dom.development.js");
         } else didWarnStateUpdateForNotYetMountedComponent = new Set([
             componentName
         ]);
-        var previousFiber = current1;
+        var previousFiber = current;
         try {
             setCurrentFiber(fiber);
-            error1("Can't perform a React state update on a component that hasn't mounted yet. This indicates that you have a side-effect in your render function that asynchronously later calls tries to update the component. Move this work to useEffect instead.");
+            error("Can't perform a React state update on a component that hasn't mounted yet. This indicates that you have a side-effect in your render function that asynchronously later calls tries to update the component. Move this work to useEffect instead.");
         } finally{
             if (previousFiber) setCurrentFiber(fiber);
             else resetCurrentFiber();
@@ -27849,17 +28399,17 @@ module.exports = require("./cjs/react-dom.development.js");
             case FunctionComponent:
             case ForwardRef:
             case SimpleMemoComponent:
-                var renderingComponentName = workInProgress1 && getComponentNameFromFiber(workInProgress1) || "Unknown"; // Dedupe by the rendering component because it's the one that needs to be fixed.
+                var renderingComponentName = workInProgress && getComponentNameFromFiber(workInProgress) || "Unknown"; // Dedupe by the rendering component because it's the one that needs to be fixed.
                 var dedupeKey = renderingComponentName;
                 if (!didWarnAboutUpdateInRenderForAnotherComponent.has(dedupeKey)) {
                     didWarnAboutUpdateInRenderForAnotherComponent.add(dedupeKey);
                     var setStateComponentName = getComponentNameFromFiber(fiber) || "Unknown";
-                    error1("Cannot update a component (`%s`) while rendering a different component (`%s`). To locate the bad setState() call inside `%s`, follow the stack trace as described in https://reactjs.org/link/setstate-in-render", setStateComponentName, renderingComponentName, renderingComponentName);
+                    error("Cannot update a component (`%s`) while rendering a different component (`%s`). To locate the bad setState() call inside `%s`, follow the stack trace as described in https://reactjs.org/link/setstate-in-render", setStateComponentName, renderingComponentName, renderingComponentName);
                 }
                 break;
             case ClassComponent:
                 if (!didWarnAboutUpdateInRender) {
-                    error1("Cannot update during an existing state transition (such as within `render`). Render methods should be a pure function of props and state.");
+                    error("Cannot update during an existing state transition (such as within `render`). Render methods should be a pure function of props and state.");
                     didWarnAboutUpdateInRender = true;
                 }
                 break;
@@ -27910,10 +28460,10 @@ module.exports = require("./cjs/react-dom.development.js");
             return;
         }
         if (ReactCurrentActQueue$1.current === null) {
-            var previousFiber = current1;
+            var previousFiber = current;
             try {
                 setCurrentFiber(fiber);
-                error1("An update to %s inside a test was not wrapped in act(...).\n\nWhen testing, code that causes React state updates should be wrapped into act(...):\n\nact(() => {\n  /* fire events that update state */\n});\n/* assert on the output */\n\nThis ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act", getComponentNameFromFiber(fiber));
+                error("An update to %s inside a test was not wrapped in act(...).\n\nWhen testing, code that causes React state updates should be wrapped into act(...):\n\nact(() => {\n  /* fire events that update state */\n});\n/* assert on the output */\n\nThis ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act", getComponentNameFromFiber(fiber));
             } finally{
                 if (previousFiber) setCurrentFiber(fiber);
                 else resetCurrentFiber();
@@ -27921,7 +28471,7 @@ module.exports = require("./cjs/react-dom.development.js");
         }
     }
     function warnIfSuspenseResolutionNotWrappedWithActDEV(root) {
-        if (root.tag !== LegacyRoot && isConcurrentActEnvironment() && ReactCurrentActQueue$1.current === null) error1("A suspended resource finished loading inside a test, but the event was not wrapped in act(...).\n\nWhen testing, code that resolves suspended data should be wrapped into act(...):\n\nact(() => {\n  /* finish loading suspended data */\n});\n/* assert on the output */\n\nThis ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act");
+        if (root.tag !== LegacyRoot && isConcurrentActEnvironment() && ReactCurrentActQueue$1.current === null) error("A suspended resource finished loading inside a test, but the event was not wrapped in act(...).\n\nWhen testing, code that resolves suspended data should be wrapped into act(...):\n\nact(() => {\n  /* finish loading suspended data */\n});\n/* assert on the output */\n\nThis ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act");
     }
     function setIsRunningInsertionEffect(isRunning) {
         isRunningInsertionEffect = isRunning;
@@ -28472,7 +29022,7 @@ module.exports = require("./cjs/react-dom.development.js");
         return fiber;
     }
     function createFiberFromProfiler(pendingProps, mode, lanes, key) {
-        if (typeof pendingProps.id !== "string") error1('Profiler must specify an "id" of type `string` as a prop. Received the type `%s` instead.', typeof pendingProps.id);
+        if (typeof pendingProps.id !== "string") error('Profiler must specify an "id" of type `string` as a prop. Received the type `%s` instead.', typeof pendingProps.id);
         var fiber = createFiber(Profiler, pendingProps, key, mode | ProfileMode);
         fiber.elementType = REACT_PROFILER_TYPE;
         fiber.lanes = lanes;
@@ -28651,7 +29201,7 @@ module.exports = require("./cjs/react-dom.development.js");
     didWarnAboutFindNodeInStrictMode = {};
     function getContextForSubtree(parentComponent) {
         if (!parentComponent) return emptyContextObject;
-        var fiber = get1(parentComponent);
+        var fiber = get(parentComponent);
         var parentContext = findCurrentUnmaskedContext(fiber);
         if (fiber.tag === ClassComponent) {
             var Component = fiber.type;
@@ -28660,7 +29210,7 @@ module.exports = require("./cjs/react-dom.development.js");
         return parentContext;
     }
     function findHostInstanceWithWarning(component, methodName) {
-        var fiber = get1(component);
+        var fiber = get(component);
         if (fiber === undefined) {
             if (typeof component.render === "function") throw new Error("Unable to find node on an unmounted component.");
             else {
@@ -28674,11 +29224,11 @@ module.exports = require("./cjs/react-dom.development.js");
             var componentName = getComponentNameFromFiber(fiber) || "Component";
             if (!didWarnAboutFindNodeInStrictMode[componentName]) {
                 didWarnAboutFindNodeInStrictMode[componentName] = true;
-                var previousFiber = current1;
+                var previousFiber = current;
                 try {
                     setCurrentFiber(hostFiber);
-                    if (fiber.mode & StrictLegacyMode) error1("%s is deprecated in StrictMode. %s was passed an instance of %s which is inside StrictMode. Instead, add a ref directly to the element you want to reference. Learn more about using refs safely here: https://reactjs.org/link/strict-mode-find-node", methodName, methodName, componentName);
-                    else error1("%s is deprecated in StrictMode. %s was passed an instance of %s which renders StrictMode children. Instead, add a ref directly to the element you want to reference. Learn more about using refs safely here: https://reactjs.org/link/strict-mode-find-node", methodName, methodName, componentName);
+                    if (fiber.mode & StrictLegacyMode) error("%s is deprecated in StrictMode. %s was passed an instance of %s which is inside StrictMode. Instead, add a ref directly to the element you want to reference. Learn more about using refs safely here: https://reactjs.org/link/strict-mode-find-node", methodName, methodName, componentName);
+                    else error("%s is deprecated in StrictMode. %s was passed an instance of %s which renders StrictMode children. Instead, add a ref directly to the element you want to reference. Learn more about using refs safely here: https://reactjs.org/link/strict-mode-find-node", methodName, methodName, componentName);
                 } finally{
                     // Ideally this should reset to previous but this shouldn't be called in
                     // render and there's another warning for that anyway.
@@ -28721,9 +29271,9 @@ module.exports = require("./cjs/react-dom.development.js");
         var context = getContextForSubtree(parentComponent);
         if (container.context === null) container.context = context;
         else container.pendingContext = context;
-        if (isRendering && current1 !== null && !didWarnAboutNestedUpdates) {
+        if (isRendering && current !== null && !didWarnAboutNestedUpdates) {
             didWarnAboutNestedUpdates = true;
-            error1("Render methods should be a pure function of props and state; triggering nested component updates from render is not allowed. If necessary, trigger nested updates in componentDidUpdate.\n\nCheck the render method of %s.", getComponentNameFromFiber(current1) || "Unknown");
+            error("Render methods should be a pure function of props and state; triggering nested component updates from render is not allowed. If necessary, trigger nested updates in componentDidUpdate.\n\nCheck the render method of %s.", getComponentNameFromFiber(current) || "Unknown");
         }
         var update = createUpdate(eventTime, lane); // Caution: React DevTools currently depends on this property
         // being called "element".
@@ -28732,7 +29282,7 @@ module.exports = require("./cjs/react-dom.development.js");
         };
         callback = callback === undefined ? null : callback;
         if (callback !== null) {
-            if (typeof callback !== "function") error1("render(...): Expected the last optional `callback` argument to be a function. Instead received: %s.", callback);
+            if (typeof callback !== "function") error("render(...): Expected the last optional `callback` argument to be a function. Instead received: %s.", callback);
             update.callback = callback;
         }
         var root = enqueueUpdate(current$1, update, lane);
@@ -28755,11 +29305,11 @@ module.exports = require("./cjs/react-dom.development.js");
     function attemptSynchronousHydration$1(fiber) {
         switch(fiber.tag){
             case HostRoot:
-                var root2 = fiber.stateNode;
-                if (isRootDehydrated(root2)) {
+                var root = fiber.stateNode;
+                if (isRootDehydrated(root)) {
                     // Flush the first scheduled "update".
-                    var lanes = getHighestPriorityPendingLanes(root2);
-                    flushRoot(root2, lanes);
+                    var lanes = getHighestPriorityPendingLanes(root);
+                    flushRoot(root, lanes);
                 }
                 break;
             case SuspenseComponent:
@@ -28978,7 +29528,7 @@ module.exports = require("./cjs/react-dom.development.js");
         return null;
     }
     function getCurrentFiberForDevTools() {
-        return current1;
+        return current;
     }
     function injectIntoDevTools(devToolsConfig) {
         var findFiberByHostInstance = devToolsConfig.findFiberByHostInstance;
@@ -29024,25 +29574,25 @@ module.exports = require("./cjs/react-dom.development.js");
     ReactDOMHydrationRoot.prototype.render = ReactDOMRoot.prototype.render = function(children) {
         var root = this._internalRoot;
         if (root === null) throw new Error("Cannot update an unmounted root.");
-        if (typeof arguments[1] === "function") error1("render(...): does not support the second callback argument. To execute a side effect after rendering, declare it in a component body with useEffect().");
-        else if (isValidContainer(arguments[1])) error1("You passed a container to the second argument of root.render(...). You don't need to pass it again since you already passed it to create the root.");
-        else if (typeof arguments[1] !== "undefined") error1("You passed a second argument to root.render(...) but it only accepts one argument.");
+        if (typeof arguments[1] === "function") error("render(...): does not support the second callback argument. To execute a side effect after rendering, declare it in a component body with useEffect().");
+        else if (isValidContainer(arguments[1])) error("You passed a container to the second argument of root.render(...). You don't need to pass it again since you already passed it to create the root.");
+        else if (typeof arguments[1] !== "undefined") error("You passed a second argument to root.render(...) but it only accepts one argument.");
         var container = root.containerInfo;
         if (container.nodeType !== COMMENT_NODE) {
             var hostInstance = findHostInstanceWithNoPortals(root.current);
             if (hostInstance) {
-                if (hostInstance.parentNode !== container) error1("render(...): It looks like the React-rendered content of the root container was removed without using React. This is not supported and will cause errors. Instead, call root.unmount() to empty a root's container.");
+                if (hostInstance.parentNode !== container) error("render(...): It looks like the React-rendered content of the root container was removed without using React. This is not supported and will cause errors. Instead, call root.unmount() to empty a root's container.");
             }
         }
         updateContainer(children, root, null, null);
     };
     ReactDOMHydrationRoot.prototype.unmount = ReactDOMRoot.prototype.unmount = function() {
-        if (typeof arguments[0] === "function") error1("unmount(...): does not support a callback argument. To execute a side effect after rendering, declare it in a component body with useEffect().");
+        if (typeof arguments[0] === "function") error("unmount(...): does not support a callback argument. To execute a side effect after rendering, declare it in a component body with useEffect().");
         var root = this._internalRoot;
         if (root !== null) {
             this._internalRoot = null;
             var container = root.containerInfo;
-            if (isAlreadyRendering()) error1("Attempted to synchronously unmount a root while React was already rendering. React cannot finish unmounting the root until the current render has completed, which may lead to a race condition.");
+            if (isAlreadyRendering()) error("Attempted to synchronously unmount a root while React was already rendering. React cannot finish unmounting the root until the current render has completed, which may lead to a race condition.");
             flushSync(function() {
                 updateContainer(null, root, null, null);
             });
@@ -29059,7 +29609,7 @@ module.exports = require("./cjs/react-dom.development.js");
         var transitionCallbacks = null;
         if (options !== null && options !== undefined) {
             if (options.hydrate) warn("hydrate through createRoot is deprecated. Use ReactDOMClient.hydrateRoot(container, <App />) instead.");
-            else if (typeof options === "object" && options !== null && options.$$typeof === REACT_ELEMENT_TYPE) error1("You passed a JSX element to createRoot. You probably meant to call root.render instead. Example usage:\n\n  let root = createRoot(domContainer);\n  root.render(<App />);");
+            else if (typeof options === "object" && options !== null && options.$$typeof === REACT_ELEMENT_TYPE) error("You passed a JSX element to createRoot. You probably meant to call root.render instead. Example usage:\n\n  let root = createRoot(domContainer);\n  root.render(<App />);");
             if (options.unstable_strictMode === true) isStrictMode = true;
             if (options.identifierPrefix !== undefined) identifierPrefix = options.identifierPrefix;
             if (options.onRecoverableError !== undefined) onRecoverableError = options.onRecoverableError;
@@ -29081,7 +29631,7 @@ module.exports = require("./cjs/react-dom.development.js");
     function hydrateRoot(container, initialChildren, options) {
         if (!isValidContainer(container)) throw new Error("hydrateRoot(...): Target container is not a DOM element.");
         warnIfReactDOMContainerInDEV(container);
-        if (initialChildren === undefined) error1("Must provide initial children as second argument to hydrateRoot. Example usage: hydrateRoot(domContainer, <App />)");
+        if (initialChildren === undefined) error("Must provide initial children as second argument to hydrateRoot. Example usage: hydrateRoot(domContainer, <App />)");
         // the hydration callbacks.
         var hydrationCallbacks = options != null ? options : null; // TODO: Delete this option
         var mutableSources = options != null && options.hydratedSources || null;
@@ -29111,10 +29661,10 @@ module.exports = require("./cjs/react-dom.development.js");
         return !!(node && (node.nodeType === ELEMENT_NODE || node.nodeType === DOCUMENT_NODE || node.nodeType === DOCUMENT_FRAGMENT_NODE || node.nodeType === COMMENT_NODE && node.nodeValue === " react-mount-point-unstable "));
     }
     function warnIfReactDOMContainerInDEV(container) {
-        if (container.nodeType === ELEMENT_NODE && container.tagName && container.tagName.toUpperCase() === "BODY") error1("createRoot(): Creating roots directly with document.body is discouraged, since its children are often manipulated by third-party scripts and browser extensions. This may lead to subtle reconciliation issues. Try using a container element created for your app.");
+        if (container.nodeType === ELEMENT_NODE && container.tagName && container.tagName.toUpperCase() === "BODY") error("createRoot(): Creating roots directly with document.body is discouraged, since its children are often manipulated by third-party scripts and browser extensions. This may lead to subtle reconciliation issues. Try using a container element created for your app.");
         if (isContainerMarkedAsRoot(container)) {
-            if (container._reactRootContainer) error1("You are calling ReactDOMClient.createRoot() on a container that was previously passed to ReactDOM.render(). This is not supported.");
-            else error1("You are calling ReactDOMClient.createRoot() on a container that has already been passed to createRoot() before. Instead, call root.render() on the existing root instead if you want to update it.");
+            if (container._reactRootContainer) error("You are calling ReactDOMClient.createRoot() on a container that was previously passed to ReactDOM.render(). This is not supported.");
+            else error("You are calling ReactDOMClient.createRoot() on a container that has already been passed to createRoot() before. Instead, call root.render() on the existing root instead if you want to update it.");
         }
     }
     var ReactCurrentOwner$3 = ReactSharedInternals.ReactCurrentOwner;
@@ -29123,14 +29673,14 @@ module.exports = require("./cjs/react-dom.development.js");
         if (container._reactRootContainer && container.nodeType !== COMMENT_NODE) {
             var hostInstance = findHostInstanceWithNoPortals(container._reactRootContainer.current);
             if (hostInstance) {
-                if (hostInstance.parentNode !== container) error1("render(...): It looks like the React-rendered content of this container was removed without using React. This is not supported and will cause errors. Instead, call ReactDOM.unmountComponentAtNode to empty a container.");
+                if (hostInstance.parentNode !== container) error("render(...): It looks like the React-rendered content of this container was removed without using React. This is not supported and will cause errors. Instead, call ReactDOM.unmountComponentAtNode to empty a container.");
             }
         }
         var isRootRenderedBySomeReact = !!container._reactRootContainer;
         var rootEl = getReactRootElementInContainer(container);
         var hasNonRootReactChild = !!(rootEl && getInstanceFromNode(rootEl));
-        if (hasNonRootReactChild && !isRootRenderedBySomeReact) error1("render(...): Replacing React-rendered children with a new root component. If you intended to update the children of this node, you should instead have the existing children update their state and render the new components instead of calling ReactDOM.render.");
-        if (container.nodeType === ELEMENT_NODE && container.tagName && container.tagName.toUpperCase() === "BODY") error1("render(): Rendering components directly into document.body is discouraged, since its children are often manipulated by third-party scripts and browser extensions. This may lead to subtle reconciliation issues. Try rendering into a container element created for your app.");
+        if (hasNonRootReactChild && !isRootRenderedBySomeReact) error("render(...): Replacing React-rendered children with a new root component. If you intended to update the children of this node, you should instead have the existing children update their state and render the new components instead of calling ReactDOM.render.");
+        if (container.nodeType === ELEMENT_NODE && container.tagName && container.tagName.toUpperCase() === "BODY") error("render(): Rendering components directly into document.body is discouraged, since its children are often manipulated by third-party scripts and browser extensions. This may lead to subtle reconciliation issues. Try rendering into a container element created for your app.");
     };
     function getReactRootElementInContainer(container) {
         if (!container) return null;
@@ -29179,7 +29729,7 @@ module.exports = require("./cjs/react-dom.development.js");
         }
     }
     function warnOnInvalidCallback$1(callback, callerName) {
-        if (callback !== null && typeof callback !== "function") error1("%s(...): Expected the last optional `callback` argument to be a function. Instead received: %s.", callerName, callback);
+        if (callback !== null && typeof callback !== "function") error("%s(...): Expected the last optional `callback` argument to be a function. Instead received: %s.", callerName, callback);
     }
     function legacyRenderSubtreeIntoContainer(parentComponent, children, container, forceHydrate, callback) {
         topLevelUpdateWarnings(container);
@@ -29205,41 +29755,41 @@ module.exports = require("./cjs/react-dom.development.js");
         var owner = ReactCurrentOwner$3.current;
         if (owner !== null && owner.stateNode !== null) {
             var warnedAboutRefsInRender = owner.stateNode._warnedAboutRefsInRender;
-            if (!warnedAboutRefsInRender) error1("%s is accessing findDOMNode inside its render(). render() should be a pure function of props and state. It should never access something that requires stale data from the previous render, such as refs. Move this logic to componentDidMount and componentDidUpdate instead.", getComponentNameFromType(owner.type) || "A component");
+            if (!warnedAboutRefsInRender) error("%s is accessing findDOMNode inside its render(). render() should be a pure function of props and state. It should never access something that requires stale data from the previous render, such as refs. Move this logic to componentDidMount and componentDidUpdate instead.", getComponentNameFromType(owner.type) || "A component");
             owner.stateNode._warnedAboutRefsInRender = true;
         }
         if (componentOrElement == null) return null;
         if (componentOrElement.nodeType === ELEMENT_NODE) return componentOrElement;
         return findHostInstanceWithWarning(componentOrElement, "findDOMNode");
     }
-    function hydrate1(element, container, callback) {
-        error1("ReactDOM.hydrate is no longer supported in React 18. Use hydrateRoot instead. Until you switch to the new API, your app will behave as if it's running React 17. Learn more: https://reactjs.org/link/switch-to-createroot");
+    function hydrate(element, container, callback) {
+        error("ReactDOM.hydrate is no longer supported in React 18. Use hydrateRoot instead. Until you switch to the new API, your app will behave as if it's running React 17. Learn more: https://reactjs.org/link/switch-to-createroot");
         if (!isValidContainerLegacy(container)) throw new Error("Target container is not a DOM element.");
         var isModernRoot = isContainerMarkedAsRoot(container) && container._reactRootContainer === undefined;
-        if (isModernRoot) error1("You are calling ReactDOM.hydrate() on a container that was previously passed to ReactDOMClient.createRoot(). This is not supported. Did you mean to call hydrateRoot(container, element)?");
+        if (isModernRoot) error("You are calling ReactDOM.hydrate() on a container that was previously passed to ReactDOMClient.createRoot(). This is not supported. Did you mean to call hydrateRoot(container, element)?");
         return legacyRenderSubtreeIntoContainer(null, element, container, true, callback);
     }
-    function render1(element, container, callback) {
-        error1("ReactDOM.render is no longer supported in React 18. Use createRoot instead. Until you switch to the new API, your app will behave as if it's running React 17. Learn more: https://reactjs.org/link/switch-to-createroot");
+    function render(element, container, callback) {
+        error("ReactDOM.render is no longer supported in React 18. Use createRoot instead. Until you switch to the new API, your app will behave as if it's running React 17. Learn more: https://reactjs.org/link/switch-to-createroot");
         if (!isValidContainerLegacy(container)) throw new Error("Target container is not a DOM element.");
         var isModernRoot = isContainerMarkedAsRoot(container) && container._reactRootContainer === undefined;
-        if (isModernRoot) error1("You are calling ReactDOM.render() on a container that was previously passed to ReactDOMClient.createRoot(). This is not supported. Did you mean to call root.render(element)?");
+        if (isModernRoot) error("You are calling ReactDOM.render() on a container that was previously passed to ReactDOMClient.createRoot(). This is not supported. Did you mean to call root.render(element)?");
         return legacyRenderSubtreeIntoContainer(null, element, container, false, callback);
     }
     function unstable_renderSubtreeIntoContainer(parentComponent, element, containerNode, callback) {
-        error1("ReactDOM.unstable_renderSubtreeIntoContainer() is no longer supported in React 18. Consider using a portal instead. Until you switch to the createRoot API, your app will behave as if it's running React 17. Learn more: https://reactjs.org/link/switch-to-createroot");
+        error("ReactDOM.unstable_renderSubtreeIntoContainer() is no longer supported in React 18. Consider using a portal instead. Until you switch to the createRoot API, your app will behave as if it's running React 17. Learn more: https://reactjs.org/link/switch-to-createroot");
         if (!isValidContainerLegacy(containerNode)) throw new Error("Target container is not a DOM element.");
-        if (parentComponent == null || !has1(parentComponent)) throw new Error("parentComponent must be a valid React Component");
+        if (parentComponent == null || !has(parentComponent)) throw new Error("parentComponent must be a valid React Component");
         return legacyRenderSubtreeIntoContainer(parentComponent, element, containerNode, false, callback);
     }
     function unmountComponentAtNode(container) {
         if (!isValidContainerLegacy(container)) throw new Error("unmountComponentAtNode(...): Target container is not a DOM element.");
         var isModernRoot = isContainerMarkedAsRoot(container) && container._reactRootContainer === undefined;
-        if (isModernRoot) error1("You are calling ReactDOM.unmountComponentAtNode() on a container that was previously passed to ReactDOMClient.createRoot(). This is not supported. Did you mean to call root.unmount()?");
+        if (isModernRoot) error("You are calling ReactDOM.unmountComponentAtNode() on a container that was previously passed to ReactDOMClient.createRoot(). This is not supported. Did you mean to call root.unmount()?");
         if (container._reactRootContainer) {
             var rootEl = getReactRootElementInContainer(container);
             var renderedByDifferentReact = rootEl && !getInstanceFromNode(rootEl);
-            if (renderedByDifferentReact) error1("unmountComponentAtNode(): The node you're attempting to unmount was rendered by another copy of React.");
+            if (renderedByDifferentReact) error("unmountComponentAtNode(): The node you're attempting to unmount was rendered by another copy of React.");
             flushSync(function() {
                 legacyRenderSubtreeIntoContainer(null, null, container, false, function() {
                     // $FlowFixMe This should probably use `delete container._reactRootContainer`
@@ -29253,7 +29803,7 @@ module.exports = require("./cjs/react-dom.development.js");
             var _rootEl = getReactRootElementInContainer(container);
             var hasNonRootReactChild = !!(_rootEl && getInstanceFromNode(_rootEl)); // Check if the container itself is a React root node.
             var isContainerReactRoot = container.nodeType === ELEMENT_NODE && isValidContainerLegacy(container.parentNode) && !!container.parentNode._reactRootContainer;
-            if (hasNonRootReactChild) error1("unmountComponentAtNode(): The node you're attempting to unmount was rendered by React and is not a top-level container. %s", isContainerReactRoot ? "You may have accidentally passed in a React root node instead of its container." : "Instead, have the parent component update its state and rerender in order to remove this component.");
+            if (hasNonRootReactChild) error("unmountComponentAtNode(): The node you're attempting to unmount was rendered by React and is not a top-level container. %s", isContainerReactRoot ? "You may have accidentally passed in a React root node instead of its container." : "Instead, have the parent component update its state and rerender in order to remove this component.");
             return false;
         }
     }
@@ -29262,7 +29812,9 @@ module.exports = require("./cjs/react-dom.development.js");
     setAttemptHydrationAtCurrentPriority(attemptHydrationAtCurrentPriority$1);
     setGetCurrentUpdatePriority(getCurrentUpdatePriority);
     setAttemptHydrationAtPriority(runWithPriority);
-    if (typeof Map !== "function" || Map.prototype == null || typeof Map.prototype.forEach !== "function" || typeof Set !== "function" || Set.prototype == null || typeof Set.prototype.clear !== "function" || typeof Set.prototype.forEach !== "function") error1("React depends on Map and Set built-in types. Make sure that you load a polyfill in older browsers. https://reactjs.org/link/react-polyfills");
+    if (typeof Map !== "function" || // $FlowIssue Flow incorrectly thinks Map has no prototype
+    Map.prototype == null || typeof Map.prototype.forEach !== "function" || typeof Set !== "function" || // $FlowIssue Flow incorrectly thinks Set has no prototype
+    Set.prototype == null || typeof Set.prototype.clear !== "function" || typeof Set.prototype.forEach !== "function") error("React depends on Map and Set built-in types. Make sure that you load a polyfill in older browsers. https://reactjs.org/link/react-polyfills");
     setRestoreImplementation(restoreControlledState$3);
     setBatchingImplementation(batchedUpdates$1, discreteUpdates, flushSync);
     function createPortal$1(children, container) {
@@ -29289,17 +29841,17 @@ module.exports = require("./cjs/react-dom.development.js");
         ]
     };
     function createRoot$1(container, options) {
-        if (!Internals.usingClientEntryPoint && true) error1('You are importing createRoot from "react-dom" which is not supported. You should instead import it from "react-dom/client".');
+        if (!Internals.usingClientEntryPoint && true) error('You are importing createRoot from "react-dom" which is not supported. You should instead import it from "react-dom/client".');
         return createRoot(container, options);
     }
     function hydrateRoot$1(container, initialChildren, options) {
-        if (!Internals.usingClientEntryPoint && true) error1('You are importing hydrateRoot from "react-dom" which is not supported. You should instead import it from "react-dom/client".');
+        if (!Internals.usingClientEntryPoint && true) error('You are importing hydrateRoot from "react-dom" which is not supported. You should instead import it from "react-dom/client".');
         return hydrateRoot(container, initialChildren, options);
     } // Overload the definition to the two valid signatures.
     // Warning, this opts-out of checking the function body.
     // eslint-disable-next-line no-redeclare
     function flushSync$1(fn) {
-        if (isAlreadyRendering()) error1("flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.");
+        if (isAlreadyRendering()) error("flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.");
         return flushSync(fn);
     }
     var foundDevTools = injectIntoDevTools({
@@ -29321,9 +29873,9 @@ module.exports = require("./cjs/react-dom.development.js");
     exports.createRoot = createRoot$1;
     exports.findDOMNode = findDOMNode;
     exports.flushSync = flushSync$1;
-    exports.hydrate = hydrate1;
+    exports.hydrate = hydrate;
     exports.hydrateRoot = hydrateRoot$1;
-    exports.render = render1;
+    exports.render = render;
     exports.unmountComponentAtNode = unmountComponentAtNode;
     exports.unstable_batchedUpdates = batchedUpdates$1;
     exports.unstable_renderSubtreeIntoContainer = renderSubtreeIntoContainer;
@@ -29331,11 +29883,11 @@ module.exports = require("./cjs/react-dom.development.js");
     /* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */ if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop === "function") __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(new Error());
 })();
 
-},{"react":"3IZzP","scheduler":"krXlk"}],"krXlk":[function(require,module,exports) {
+},{"bc023b7d791778c6":"3IZzP","b4fe22f87f4f8ad1":"krXlk"}],"krXlk":[function(require,module,exports) {
 "use strict";
-module.exports = require("./cjs/scheduler.development.js");
+module.exports = require("3cb340f9971f652e");
 
-},{"./cjs/scheduler.development.js":"8tevJ"}],"8tevJ":[function(require,module,exports) {
+},{"3cb340f9971f652e":"8tevJ"}],"8tevJ":[function(require,module,exports) {
 /**
  * @license React
  * scheduler.development.js
@@ -29676,9 +30228,9 @@ module.exports = require("./cjs/scheduler.development.js");
     // It does not attempt to align with frame boundaries, since most tasks don't
     // need to be frame aligned; for those that do, use requestAnimationFrame.
     var frameInterval = frameYieldMs;
-    var startTime1 = -1;
+    var startTime = -1;
     function shouldYieldToHost() {
-        var timeElapsed = exports.unstable_now() - startTime1;
+        var timeElapsed = exports.unstable_now() - startTime;
         if (timeElapsed < frameInterval) // The main thread has only been blocked for a really short amount of time;
         // smaller than a single frame. Don't yield yet.
         return false;
@@ -29700,7 +30252,7 @@ module.exports = require("./cjs/scheduler.development.js");
         if (scheduledHostCallback !== null) {
             var currentTime = exports.unstable_now(); // Keep track of the start time so we can measure how long the main thread
             // has been blocked.
-            startTime1 = currentTime;
+            startTime = currentTime;
             var hasTimeRemaining = true; // If a scheduler task throws, exit the current browser task so the
             // error can be observed.
             //
@@ -29789,42 +30341,127 @@ module.exports = require("./cjs/scheduler.development.js");
     /* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */ if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop === "function") __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(new Error());
 })();
 
-},{}],"km3Ru":[function(require,module,exports) {
+},{}],"8m4a8":[function(require,module,exports) {
+var $parcel$ReactRefreshHelpers$6ef3 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
+var prevRefreshReg = window.$RefreshReg$;
+var prevRefreshSig = window.$RefreshSig$;
+$parcel$ReactRefreshHelpers$6ef3.prelude(module);
+
+try {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "Pause", ()=>Pause);
+parcelHelpers.export(exports, "Play", ()=>Play);
+var _react = require("react");
+const ICON_HEIGHT = "40";
+const ICON_WIDTH = "40";
+const Play = ()=>{
+    return /*#__PURE__*/ _react.createElement("svg", {
+        xmlns: "http://www.w3.org/2000/svg",
+        id: "play-icon",
+        version: "1.1",
+        fill: "teal",
+        height: ICON_HEIGHT,
+        width: ICON_WIDTH,
+        viewBox: "0 0 1200 1200",
+        __source: {
+            fileName: "Icons.tsx",
+            lineNumber: 7,
+            columnNumber: 12
+        },
+        __self: undefined
+    }, /*#__PURE__*/ _react.createElement("path", {
+        d: "M 600,1200 C 268.65,1200 0,931.35 0,600 0,268.65 268.65,0 600,0 c 331.35,0 600,268.65 600,600 0,331.35 -268.65,600 -600,600 z M 450,300.45 450,899.55 900,600 450,300.45 z",
+        id: "path16995",
+        __source: {
+            fileName: "Icons.tsx",
+            lineNumber: 15,
+            columnNumber: 9
+        },
+        __self: undefined
+    }));
+};
+const Pause = ()=>{
+    return /*#__PURE__*/ _react.createElement("svg", {
+        xmlns: "http://www.w3.org/2000/svg",
+        id: "pause-icon",
+        version: "1.1",
+        fill: "teal",
+        height: ICON_HEIGHT,
+        width: ICON_WIDTH,
+        viewBox: "0 0 1200 1200",
+        __source: {
+            fileName: "Icons.tsx",
+            lineNumber: 22,
+            columnNumber: 12
+        },
+        __self: undefined
+    }, /*#__PURE__*/ _react.createElement("path", {
+        id: "path15778",
+        d: "M 600,0 C 268.62914,0 0,268.62914 0,600 c 0,331.37086 268.62914,600 600,600 331.37086,0 600,-268.62914 600,-600 C 1200,268.62914 931.37086,0 600,0 z m -269.16515,289.38 181.71397,0 0,621.24 -181.71397,0 0,-621.24 z m 356.61633,0 181.71399,0 0,621.24 -181.71399,0 0,-621.24 z",
+        __source: {
+            fileName: "Icons.tsx",
+            lineNumber: 30,
+            columnNumber: 9
+        },
+        __self: undefined
+    }));
+};
+
+  $parcel$ReactRefreshHelpers$6ef3.postlude(module);
+} finally {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+},{"react":"3IZzP","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"km3Ru":[function(require,module,exports) {
 "use strict";
-var Refresh = require("react-refresh/runtime");
+var Refresh = require("d2d8e790c91b7f74");
 function debounce(func, delay) {
-    var args1;
-    var timeout = undefined;
-    return function(args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(function() {
-            timeout = undefined;
-            func.call(null, args);
-        }, delay);
-    };
+    {
+        let timeout = undefined;
+        let lastTime = 0;
+        return function(args) {
+            // Call immediately if last call was more than the delay ago.
+            // Otherwise, set a timeout. This means the first call is fast
+            // (for the common case of a single update), and subsequent updates
+            // are batched.
+            let now = Date.now();
+            if (now - lastTime > delay) {
+                lastTime = now;
+                func.call(null, args);
+            } else {
+                clearTimeout(timeout);
+                timeout = setTimeout(function() {
+                    timeout = undefined;
+                    lastTime = Date.now();
+                    func.call(null, args);
+                }, delay);
+            }
+        };
+    }
 }
 var enqueueUpdate = debounce(function() {
     Refresh.performReactRefresh();
 }, 30); // Everthing below is either adapted or copied from
 // https://github.com/facebook/metro/blob/61de16bd1edd7e738dd0311c89555a644023ab2d/packages/metro/src/lib/polyfills/require.js
 // MIT License - Copyright (c) Facebook, Inc. and its affiliates.
-module.exports.prelude = function(module) {
+module.exports.prelude = function(module1) {
     window.$RefreshReg$ = function(type, id) {
-        Refresh.register(type, module.id + " " + id);
+        Refresh.register(type, module1.id + " " + id);
     };
     window.$RefreshSig$ = Refresh.createSignatureFunctionForTransform;
 };
-module.exports.postlude = function(module) {
-    if (isReactRefreshBoundary(module.exports)) {
-        registerExportsForReactRefresh(module);
-        if (module.hot) {
-            module.hot.dispose(function(data) {
+module.exports.postlude = function(module1) {
+    if (isReactRefreshBoundary(module1.exports)) {
+        registerExportsForReactRefresh(module1);
+        if (module1.hot) {
+            module1.hot.dispose(function(data) {
                 if (Refresh.hasUnrecoverableErrors()) window.location.reload();
-                data.prevExports = module.exports;
+                data.prevExports = module1.exports;
             });
-            module.hot.accept(function(getParents) {
-                var prevExports = module.hot.data.prevExports;
-                var nextExports = module.exports; // Since we just executed the code for it, it's possible
+            module1.hot.accept(function(getParents) {
+                var prevExports = module1.hot.data.prevExports;
+                var nextExports = module1.exports; // Since we just executed the code for it, it's possible
                 // that the new exports make it ineligible for being a boundary.
                 var isNoLongerABoundary = !isReactRefreshBoundary(nextExports); // It can also become ineligible if its exports are incompatible
                 // with the previous exports.
@@ -29894,8 +30531,8 @@ function getRefreshBoundarySignature(exports) {
     }
     return signature;
 }
-function registerExportsForReactRefresh(module) {
-    var exports = module.exports, id = module.id;
+function registerExportsForReactRefresh(module1) {
+    var exports = module1.exports, id = module1.id;
     Refresh.register(exports, id + " %exports%");
     if (exports == null || typeof exports !== "object") // Exit if we can't iterate over exports.
     // (This is important for legacy environments.)
@@ -29909,11 +30546,11 @@ function registerExportsForReactRefresh(module) {
     }
 }
 
-},{"react-refresh/runtime":"786KC"}],"786KC":[function(require,module,exports) {
+},{"d2d8e790c91b7f74":"786KC"}],"786KC":[function(require,module,exports) {
 "use strict";
-module.exports = require("./cjs/react-refresh-runtime.development.js");
+module.exports = require("ae504b6ae88d5502");
 
-},{"./cjs/react-refresh-runtime.development.js":"hdge7"}],"hdge7":[function(require,module,exports) {
+},{"ae504b6ae88d5502":"hdge7"}],"hdge7":[function(require,module,exports) {
 /** @license React v0.9.0
  * react-refresh-runtime.development.js
  *
@@ -30373,79 +31010,7 @@ module.exports = require("./cjs/react-refresh-runtime.development.js");
     exports.setSignature = setSignature;
 })();
 
-},{}],"7N9bM":[function() {},{}],"8m4a8":[function(require,module,exports) {
-var $parcel$ReactRefreshHelpers$6ef3 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
-var prevRefreshReg = window.$RefreshReg$;
-var prevRefreshSig = window.$RefreshSig$;
-$parcel$ReactRefreshHelpers$6ef3.prelude(module);
-
-try {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "Pause", ()=>Pause);
-parcelHelpers.export(exports, "Play", ()=>Play);
-var _react = require("react");
-const ICON_HEIGHT = "40";
-const ICON_WIDTH = "40";
-const Play = ()=>{
-    return /*#__PURE__*/ _react.createElement("svg", {
-        xmlns: "http://www.w3.org/2000/svg",
-        id: "play-icon",
-        version: "1.1",
-        fill: "teal",
-        height: ICON_HEIGHT,
-        width: ICON_WIDTH,
-        viewBox: "0 0 1200 1200",
-        __source: {
-            fileName: "Icons.tsx",
-            lineNumber: 7,
-            columnNumber: 12
-        },
-        __self: undefined
-    }, /*#__PURE__*/ _react.createElement("path", {
-        d: "M 600,1200 C 268.65,1200 0,931.35 0,600 0,268.65 268.65,0 600,0 c 331.35,0 600,268.65 600,600 0,331.35 -268.65,600 -600,600 z M 450,300.45 450,899.55 900,600 450,300.45 z",
-        id: "path16995",
-        __source: {
-            fileName: "Icons.tsx",
-            lineNumber: 15,
-            columnNumber: 9
-        },
-        __self: undefined
-    }));
-};
-const Pause = ()=>{
-    return /*#__PURE__*/ _react.createElement("svg", {
-        xmlns: "http://www.w3.org/2000/svg",
-        id: "pause-icon",
-        version: "1.1",
-        fill: "teal",
-        height: ICON_HEIGHT,
-        width: ICON_WIDTH,
-        viewBox: "0 0 1200 1200",
-        __source: {
-            fileName: "Icons.tsx",
-            lineNumber: 22,
-            columnNumber: 12
-        },
-        __self: undefined
-    }, /*#__PURE__*/ _react.createElement("path", {
-        id: "path15778",
-        d: "M 600,0 C 268.62914,0 0,268.62914 0,600 c 0,331.37086 268.62914,600 600,600 331.37086,0 600,-268.62914 600,-600 C 1200,268.62914 931.37086,0 600,0 z m -269.16515,289.38 181.71397,0 0,621.24 -181.71397,0 0,-621.24 z m 356.61633,0 181.71399,0 0,621.24 -181.71399,0 0,-621.24 z",
-        __source: {
-            fileName: "Icons.tsx",
-            lineNumber: 30,
-            columnNumber: 9
-        },
-        __self: undefined
-    }));
-};
-
-  $parcel$ReactRefreshHelpers$6ef3.postlude(module);
-} finally {
-  window.$RefreshReg$ = prevRefreshReg;
-  window.$RefreshSig$ = prevRefreshSig;
-}
-},{"react":"3IZzP","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"dEsKZ":[function(require,module,exports) {
+},{}],"dEsKZ":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "DotSpinners", ()=>(0, _dotSpinnersDefault.default));
@@ -30473,7 +31038,7 @@ var _roundedSpinnersDefault = parcelHelpers.interopDefault(_roundedSpinners);
 var _wobblingSpinners = require("./WobblingSpinners");
 var _wobblingSpinnersDefault = parcelHelpers.interopDefault(_wobblingSpinners);
 
-},{"./BarSpinners":"8hISV","./ClassicSpinners":"4qsJa","./ContinuousSpinners":"bkf0B","./DotSpinners":"iE2H4","./InfinitySpinners":"btwOU","./ProgressSpinners":"egIBH","./RoundedSpinners":"hU59A","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./WobblingSpinners":"TUWv2"}],"8hISV":[function(require,module,exports) {
+},{"./BarSpinners":"8hISV","./ClassicSpinners":"4qsJa","./ContinuousSpinners":"bkf0B","./DotSpinners":"iE2H4","./InfinitySpinners":"btwOU","./ProgressSpinners":"egIBH","./RoundedSpinners":"hU59A","./WobblingSpinners":"TUWv2","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"8hISV":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$f1fe = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -30484,23 +31049,13 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
-var _helper = require("../Common/Helper");
+var _demoContext = require("../context/DemoContext");
 const barSpinnerColor = "#991b1b";
 function BarSpinners({ stop , speed  }) {
     const [sampleCode, setSampleCode] = _react.useState("&lt;BarSpinner /&gt;");
+    const { showDemo  } = _react.useContext((0, _demoContext.DemoContext));
     const barSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner1), {
-            color: barSpinnerColor,
-            stop: stop,
-            speed: speed,
-            __source: {
-                fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 16,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner2), {
             color: barSpinnerColor,
             stop: stop,
             speed: speed,
@@ -30511,7 +31066,7 @@ function BarSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner3), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner2), {
             color: barSpinnerColor,
             stop: stop,
             speed: speed,
@@ -30522,7 +31077,7 @@ function BarSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner4), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner3), {
             color: barSpinnerColor,
             stop: stop,
             speed: speed,
@@ -30533,7 +31088,7 @@ function BarSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner5), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner4), {
             color: barSpinnerColor,
             stop: stop,
             speed: speed,
@@ -30544,7 +31099,7 @@ function BarSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner6), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner5), {
             color: barSpinnerColor,
             stop: stop,
             speed: speed,
@@ -30555,7 +31110,7 @@ function BarSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner7), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner6), {
             color: barSpinnerColor,
             stop: stop,
             speed: speed,
@@ -30566,7 +31121,7 @@ function BarSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner8), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner7), {
             color: barSpinnerColor,
             stop: stop,
             speed: speed,
@@ -30577,7 +31132,7 @@ function BarSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner9), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner8), {
             color: barSpinnerColor,
             stop: stop,
             speed: speed,
@@ -30588,13 +31143,24 @@ function BarSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner10), {
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner9), {
             color: barSpinnerColor,
             stop: stop,
             speed: speed,
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
                 lineNumber: 25,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.BarSpinner10), {
+            color: barSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/BarSpinners.tsx",
+                lineNumber: 26,
                 columnNumber: 9
             },
             __self: this
@@ -30607,14 +31173,14 @@ function BarSpinners({ stop , speed  }) {
         },
         __source: {
             fileName: "components/Spinners/BarSpinners.tsx",
-            lineNumber: 30,
+            lineNumber: 31,
             columnNumber: 13
         },
         __self: this
     }, /*#__PURE__*/ _react.createElement("span", {
         __source: {
             fileName: "components/Spinners/BarSpinners.tsx",
-            lineNumber: 31,
+            lineNumber: 32,
             columnNumber: 17
         },
         __self: this
@@ -30624,7 +31190,7 @@ function BarSpinners({ stop , speed  }) {
         className: "spinner_header_link",
         __source: {
             fileName: "components/Spinners/BarSpinners.tsx",
-            lineNumber: 32,
+            lineNumber: 33,
             columnNumber: 17
         },
         __self: this
@@ -30632,7 +31198,7 @@ function BarSpinners({ stop , speed  }) {
         className: "example",
         __source: {
             fileName: "components/Spinners/BarSpinners.tsx",
-            lineNumber: 37,
+            lineNumber: 38,
             columnNumber: 13
         },
         __self: this
@@ -30641,7 +31207,7 @@ function BarSpinners({ stop , speed  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 40,
+                lineNumber: 41,
                 columnNumber: 25
             },
             __self: this
@@ -30649,15 +31215,15 @@ function BarSpinners({ stop , speed  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 41,
+                lineNumber: 42,
                 columnNumber: 29
             },
             __self: this
         }, m), /*#__PURE__*/ _react.createElement("div", {
-            className: "code",
+            className: "demo",
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 44,
+                lineNumber: 46,
                 columnNumber: 29
             },
             __self: this
@@ -30665,15 +31231,15 @@ function BarSpinners({ stop , speed  }) {
             type: "button",
             className: "showcode-button",
             onClick: ()=>{
-                setSampleCode(`&lt;BarSpinner ${(0, _helper.prepareString)(m.props)} /&gt;`);
+                showDemo(m);
             },
             __source: {
                 fileName: "components/Spinners/BarSpinners.tsx",
-                lineNumber: 45,
+                lineNumber: 47,
                 columnNumber: 33
             },
             __self: this
-        }, "Show Code"))))));
+        }, "Demo"))))));
 }
 exports.default = BarSpinners;
 
@@ -30682,11 +31248,11 @@ exports.default = BarSpinners;
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","../Common/Helper":"9C5Db"}],"2jjMk":[function(require,module,exports) {
+},{"react":"3IZzP","../../../dist":"2jjMk","../context/DemoContext":"dHgQL","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"2jjMk":[function(require,module,exports) {
 "use strict";
-module.exports = require("./r-spinners.cjs.development.js");
+module.exports = require("b321f9fc5dab82cf");
 
-},{"./r-spinners.cjs.development.js":"k6Cub"}],"k6Cub":[function(require,module,exports) {
+},{"b321f9fc5dab82cf":"k6Cub"}],"k6Cub":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$c9f1 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -30697,12 +31263,16 @@ try {
 Object.defineProperty(exports, "__esModule", {
     value: true
 });
-function _interopDefault(ex) {
-    return ex && typeof ex === "object" && "default" in ex ? ex["default"] : ex;
+var React = require("695b40a359d5540b");
+var styled = require("cc3b45ccebc3165d");
+function _interopDefaultLegacy(e) {
+    return e && typeof e === "object" && "default" in e ? e : {
+        "default": e
+    };
 }
-var React = _interopDefault(require("react"));
-var styled = require("styled-components");
-var styled__default = _interopDefault(styled);
+var React__default = /*#__PURE__*/ _interopDefaultLegacy(React);
+_c = React__default;
+var styled__default = /*#__PURE__*/ _interopDefaultLegacy(styled);
 function _extends() {
     _extends = Object.assign ? Object.assign.bind() : function(target) {
         for(var i = 1; i < arguments.length; i++){
@@ -30718,30 +31288,30 @@ function _taggedTemplateLiteralLoose(strings, raw) {
     strings.raw = raw;
     return strings;
 }
-var _templateObject, _templateObject2;
-var animation = /*#__PURE__*/ styled.keyframes(_templateObject || (_templateObject = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+var _templateObject$1f, _templateObject2$1f;
+var animation$19 = /*#__PURE__*/ styled.keyframes(_templateObject$1f || (_templateObject$1f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to {\n    opacity: 0;\n  }\n"
 ])));
-var ClassicSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner1Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
         color: props["color"] || "#000"
     };
-})(_templateObject2 || (_templateObject2 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  font-weight: bold;\n  font-family: monospace;\n  animation-name: ',
-    ";\n  animation-timing-function: linear;\n  animation-iteration-count: infinite;\n  animation-direction: alternate;\n  color: ",
+})(_templateObject2$1f || (_templateObject2$1f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	font-weight: bold;\n	font-family: monospace;\n	animation-name: ",
+    ";\n	animation-timing-function: linear;\n	animation-iteration-count: infinite;\n	animation-direction: alternate;\n	color: ",
     ";\n"
 ])), function(props) {
     return props.text;
-}, animation, function(props) {
+}, animation$19, function(props) {
     return props.color;
 });
-_c = ClassicSpinner1Wrapper;
+_c1 = ClassicSpinner1Wrapper;
 function ClassicSpinner1(_ref) {
     var text = _ref.text, color = _ref.color, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ClassicSpinner1Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner1Wrapper, {
         text: text,
         color: color,
         style: _extends({
@@ -30751,31 +31321,31 @@ function ClassicSpinner1(_ref) {
         }, style)
     });
 }
-_c1 = ClassicSpinner1;
-var _templateObject$1, _templateObject2$1;
-var animation$1 = /*#__PURE__*/ styled.keyframes(_templateObject$1 || (_templateObject$1 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c2 = ClassicSpinner1;
+var _templateObject$1e, _templateObject2$1e;
+var animation$18 = /*#__PURE__*/ styled.keyframes(_templateObject$1e || (_templateObject$1e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to {\n    background-size: 100% 3px;\n  }\n"
 ])));
-var ClassicSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner2Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
         color: props["color"] || "#000"
     };
-})(_templateObject2$1 || (_templateObject2$1 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  font-weight: bold;\n  font-family: monospace;\n  background: linear-gradient(currentColor 0 0) bottom left/0% 3px no-repeat;\n  padding-bottom: 8px;\n  animation-name: ',
-    ";\n  animation-timing-function: linear;\n  animation-iteration-count: infinite;\n  color: ",
+})(_templateObject2$1e || (_templateObject2$1e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	font-weight: bold;\n	font-family: monospace;\n	background: linear-gradient(currentColor 0 0) bottom left/0% 3px no-repeat;\n	padding-bottom: 8px;\n	animation-name: ",
+    ";\n	animation-timing-function: linear;\n	animation-iteration-count: infinite;\n	color: ",
     ";\n"
 ])), function(props) {
     return props.text;
-}, animation$1, function(props) {
+}, animation$18, function(props) {
     return props.color;
 });
-_c2 = ClassicSpinner2Wrapper;
+_c3 = ClassicSpinner2Wrapper;
 function ClassicSpinner2(_ref) {
     var text = _ref.text, color = _ref.color, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ClassicSpinner2Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner2Wrapper, {
         color: color,
         text: text,
         style: _extends({
@@ -30785,31 +31355,31 @@ function ClassicSpinner2(_ref) {
         }, style)
     });
 }
-_c3 = ClassicSpinner2;
-var _templateObject$2, _templateObject2$2;
-var animation$2 = /*#__PURE__*/ styled.keyframes(_templateObject$2 || (_templateObject$2 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c4 = ClassicSpinner2;
+var _templateObject$1d, _templateObject2$1d;
+var animation$17 = /*#__PURE__*/ styled.keyframes(_templateObject$1d || (_templateObject$1d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to {\n    background-position: 80% 100%\n  }\n"
 ])));
-var ClassicSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner3Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
         color: props["color"] || "#000"
     };
-})(_templateObject2$2 || (_templateObject2$2 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  font-weight: bold;\n  font-family: monospace;\n  background: repeating-linear-gradient(90deg, currentColor 0 8%, #0000 0 10%) 200% 100%/200% 3px no-repeat;\n  padding: 0 5px 8px 0;\n  animation-name: ',
-    ";\n  animation-iteration-count: infinite;\n  color: ",
+})(_templateObject2$1d || (_templateObject2$1d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	font-weight: bold;\n	font-family: monospace;\n	background: repeating-linear-gradient(90deg, currentColor 0 8%, #0000 0 10%)\n		200% 100%/200% 3px no-repeat;\n	padding: 0 5px 8px 0;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	color: ",
     ";\n"
 ])), function(props) {
     return props.text;
-}, animation$2, function(props) {
+}, animation$17, function(props) {
     return props.color;
 });
-_c4 = ClassicSpinner3Wrapper;
+_c5 = ClassicSpinner3Wrapper;
 function ClassicSpinner3(_ref) {
     var text = _ref.text, color = _ref.color, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ClassicSpinner3Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner3Wrapper, {
         color: color,
         text: text,
         style: _extends({
@@ -30820,31 +31390,31 @@ function ClassicSpinner3(_ref) {
         }, style)
     });
 }
-_c5 = ClassicSpinner3;
-var _templateObject$3, _templateObject2$3;
-var animation$3 = /*#__PURE__*/ styled.keyframes(_templateObject$3 || (_templateObject$3 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c6 = ClassicSpinner3;
+var _templateObject$1c, _templateObject2$1c;
+var animation$16 = /*#__PURE__*/ styled.keyframes(_templateObject$1c || (_templateObject$1c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to {\n    clip-path: inset(0 -1ch 0 0);\n  }\n"
 ])));
-var ClassicSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner4Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
         color: props["color"] || "#000"
     };
-})(_templateObject2$3 || (_templateObject2$3 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  font-weight: bold;\n  font-family: monospace;\n  animation-name: ',
-    ";\n  animation-iteration-count: infinite;\n  color: ",
+})(_templateObject2$1c || (_templateObject2$1c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	font-weight: bold;\n	font-family: monospace;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	color: ",
     ";\n"
 ])), function(props) {
     return props.text;
-}, animation$3, function(props) {
+}, animation$16, function(props) {
     return props.color;
 });
-_c6 = ClassicSpinner4Wrapper;
+_c7 = ClassicSpinner4Wrapper;
 function ClassicSpinner4(_ref) {
     var text = _ref.text, color = _ref.color, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$noOfCharactersTo = _ref.noOfCharactersToBlinkAtLast, noOfCharactersToBlinkAtLast = _ref$noOfCharactersTo === void 0 ? 3 : _ref$noOfCharactersTo, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ClassicSpinner4Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner4Wrapper, {
         text: text,
         color: color,
         style: _extends({
@@ -30856,31 +31426,31 @@ function ClassicSpinner4(_ref) {
         }, style)
     });
 }
-_c7 = ClassicSpinner4;
-var _templateObject$4, _templateObject2$4;
-var animation$4 = /*#__PURE__*/ styled.keyframes(_templateObject$4 || (_templateObject$4 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c8 = ClassicSpinner4;
+var _templateObject$1b, _templateObject2$1b;
+var animation$15 = /*#__PURE__*/ styled.keyframes(_templateObject$1b || (_templateObject$1b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to {\n    clip-path: inset(0 -1ch 0 0);\n  }\n"
 ])));
-var ClassicSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner5Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
         color: props["color"] || "#000"
     };
-})(_templateObject2$4 || (_templateObject2$4 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  font-weight: bold;\n  font-family: monospace;\n  animation-name: ',
-    ";\n  clip-path: inset(0 100% 0 0);\n  animation-iteration-count: infinite;\n  color: ",
+})(_templateObject2$1b || (_templateObject2$1b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	font-weight: bold;\n	font-family: monospace;\n	animation-name: ",
+    ";\n	clip-path: inset(0 100% 0 0);\n	animation-iteration-count: infinite;\n	color: ",
     ";\n"
 ])), function(props) {
     return props.text;
-}, animation$4, function(props) {
+}, animation$15, function(props) {
     return props.color;
 });
-_c8 = ClassicSpinner5Wrapper;
+_c9 = ClassicSpinner5Wrapper;
 function ClassicSpinner5(_ref) {
     var text = _ref.text, color = _ref.color, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ClassicSpinner5Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner5Wrapper, {
         text: text,
         color: color,
         style: _extends({
@@ -30891,36 +31461,36 @@ function ClassicSpinner5(_ref) {
         }, style)
     });
 }
-_c9 = ClassicSpinner5;
-var _templateObject$5, _templateObject2$5;
-var animation$5 = function animation(characters) {
-    return styled.keyframes(_templateObject$5 || (_templateObject$5 = _taggedTemplateLiteralLoose([
+_c10 = ClassicSpinner5;
+var _templateObject$1a, _templateObject2$1a;
+var animation$14 = function animation(characters) {
+    return styled.keyframes(_templateObject$1a || (_templateObject$1a = _taggedTemplateLiteralLoose([
         "\n  to {\n    text-shadow: -",
         "ch 0 var(--c), 0ch 0 var(--c) };\n  }\n"
     ])), characters + 1);
 };
-var ClassicSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner6Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
         color: props["color"] || "#000"
     };
-})(_templateObject2$5 || (_templateObject2$5 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  --c: ',
-    ";\n  color: #0000;\n  overflow: hidden;\n  font-weight: bold;\n  font-family: monospace;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$1a || (_templateObject2$1a = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	--c: ",
+    ";\n	color: #0000;\n	overflow: hidden;\n	font-weight: bold;\n	font-family: monospace;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.text;
 }, function(props) {
     return props.color;
 }, function(props) {
-    return animation$5(props.text.length);
+    return animation$14(props.text.length);
 });
-_c10 = ClassicSpinner6Wrapper;
+_c11 = ClassicSpinner6Wrapper;
 function ClassicSpinner6(_ref) {
     var text = _ref.text, color = _ref.color, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ClassicSpinner6Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner6Wrapper, {
         text: text,
         color: color,
         style: _extends({
@@ -30931,37 +31501,37 @@ function ClassicSpinner6(_ref) {
         }, style)
     });
 }
-_c11 = ClassicSpinner6;
-var _templateObject$6, _templateObject2$6;
-var animation$6 = function animation() {
-    return styled.keyframes(_templateObject$6 || (_templateObject$6 = _taggedTemplateLiteralLoose([
+_c12 = ClassicSpinner6;
+var _templateObject$19, _templateObject2$19;
+var animation$13 = function animation() {
+    return styled.keyframes(_templateObject$19 || (_templateObject$19 = _taggedTemplateLiteralLoose([
         "\n  to {\n    background-position: left;\n  }\n"
     ])));
 };
-var ClassicSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner7Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
         color: props["color"] || "#000",
         animationColor: props["animationColor"]
     };
-})(_templateObject2$6 || (_templateObject2$6 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  color: #0000;\n  font-weight: bold;\n  font-family: monospace;\n  background: linear-gradient(90deg, ',
-    " calc(50% + 0.5ch), ",
-    " 0) right/calc(200% + 1ch) 100%;\n  -webkit-background-clip: text;\n  background-clip: text;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$19 || (_templateObject2$19 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	color: #0000;\n	font-weight: bold;\n	font-family: monospace;\n	background: linear-gradient(\n			90deg,\n			",
+    " calc(50% + 0.5ch),\n			",
+    " 0\n		)\n		right/calc(200% + 1ch) 100%;\n	-webkit-background-clip: text;\n	background-clip: text;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.text;
 }, function(props) {
     return props.animationColor;
 }, function(props) {
     return props.color;
-}, animation$6);
-_c12 = ClassicSpinner7Wrapper;
+}, animation$13);
+_c13 = ClassicSpinner7Wrapper;
 function ClassicSpinner7(_ref) {
     var text = _ref.text, color = _ref.color, animationColor = _ref.animationColor, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ClassicSpinner7Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner7Wrapper, {
         text: text,
         color: color,
         animationColor: animationColor,
@@ -30973,26 +31543,26 @@ function ClassicSpinner7(_ref) {
         }, style)
     });
 }
-_c13 = ClassicSpinner7;
-var _templateObject$7, _templateObject2$7;
-var animation$7 = function animation() {
-    return styled.keyframes(_templateObject$7 || (_templateObject$7 = _taggedTemplateLiteralLoose([
+_c14 = ClassicSpinner7;
+var _templateObject$18, _templateObject2$18;
+var animation$12 = function animation() {
+    return styled.keyframes(_templateObject$18 || (_templateObject$18 = _taggedTemplateLiteralLoose([
         "\n  to {\n    background-position: left;\n  }\n"
     ])));
 };
-var ClassicSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner8Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
         color: props["color"] || "#000",
         animationColor: props["animationColor"]
     };
-})(_templateObject2$7 || (_templateObject2$7 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  color: #0000;\n  font-weight: bold;\n  font-family: monospace;\n  background: linear-gradient(90deg, ',
-    " calc(50% - 0.5ch), ",
-    " 0 calc(50% + 0.5ch), ",
-    " 0) right/calc(200% + 1ch) 100%;\n  -webkit-background-clip: text;\n  background-clip: text;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$18 || (_templateObject2$18 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	color: #0000;\n	font-weight: bold;\n	font-family: monospace;\n	background: linear-gradient(\n			90deg,\n			",
+    " calc(50% - 0.5ch),\n			",
+    " 0 calc(50% + 0.5ch),\n			",
+    " 0\n		)\n		right/calc(200% + 1ch) 100%;\n	-webkit-background-clip: text;\n	background-clip: text;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.text;
 }, function(props) {
@@ -31001,12 +31571,12 @@ var ClassicSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(pr
     return props.animationColor;
 }, function(props) {
     return props.color;
-}, animation$7);
-_c14 = ClassicSpinner8Wrapper;
+}, animation$12);
+_c15 = ClassicSpinner8Wrapper;
 function ClassicSpinner8(_ref) {
     var text = _ref.text, color = _ref.color, animationColor = _ref.animationColor, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ClassicSpinner8Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner8Wrapper, {
         text: text,
         color: color,
         animationColor: animationColor,
@@ -31018,10 +31588,10 @@ function ClassicSpinner8(_ref) {
         }, style)
     });
 }
-_c15 = ClassicSpinner8;
-var _templateObject$8, _templateObject2$8;
-var animation$8 = function animation(colors, text) {
-    return styled.keyframes(_templateObject$8 || (_templateObject$8 = _taggedTemplateLiteralLoose([
+_c16 = ClassicSpinner8;
+var _templateObject$17, _templateObject2$17;
+var animation$11 = function animation(colors, text) {
+    return styled.keyframes(_templateObject$17 || (_templateObject$17 = _taggedTemplateLiteralLoose([
         "\n  25% {text-shadow: -",
         "ch 0 ",
         ", 0ch 0 ",
@@ -31061,30 +31631,30 @@ var animation$8 = function animation(colors, text) {
         "}\n"
     ])), text.length + 1, colors[0], colors[1], text.length + 1, colors[2], text.length + 2, colors[3], text.length + 3, colors[0], text.length + 2, colors[0], text.length + 1, colors[1], colors[2], text.length + 1, colors[3], text.length + 2, colors[0], text.length + 3, colors[0], text.length + 2, colors[1], text.length + 1, colors[2], colors[3], text.length + 1, colors[0], text.length + 4, colors[0], text.length + 3, colors[1], text.length + 2, colors[2], text.length + 1, colors[3], colors[0]);
 };
-var defaultColors = [
+var defaultColors$1 = [
     "#000",
     "#b91c1c",
     "#0369a1",
     "#15803d"
 ];
-var ClassicSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner9Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
-        colors: (props["colors"] && props["colors"].length === 4 ? props["colors"] : defaultColors) || defaultColors
+        colors: (props["colors"] && props["colors"].length === 4 ? props["colors"] : defaultColors$1) || defaultColors$1
     };
-})(_templateObject2$8 || (_templateObject2$8 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  color: #0000;\n  font-weight: bold;\n  font-family: monospace;\n  overflow: hidden;\n  text-shadow: 0 0 ',
-    ", ",
+})(_templateObject2$17 || (_templateObject2$17 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	color: #0000;\n	font-weight: bold;\n	font-family: monospace;\n	overflow: hidden;\n	text-shadow: 0 0 ",
+    ",\n		",
     "ch 0 ",
-    ", ",
+    ",\n		",
     "ch 0 ",
-    ", ",
+    ",\n		",
     "ch 0 ",
-    ", ",
+    ",\n		",
     "ch 0 ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: cubic-bezier(0.3, 1, 0, 1);\n"
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: cubic-bezier(0.3, 1, 0, 1);\n"
 ])), function(props) {
     return props.text;
 }, function(props) {
@@ -31106,13 +31676,13 @@ var ClassicSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(pr
 }, function(props) {
     return props.colors[0];
 }, function(props) {
-    return animation$8(props.colors, props.text);
+    return animation$11(props.colors, props.text);
 });
-_c16 = ClassicSpinner9Wrapper;
+_c17 = ClassicSpinner9Wrapper;
 function ClassicSpinner9(_ref) {
     var text = _ref.text, colors = _ref.colors, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 5 : 5 / speed;
-    return React.createElement(ClassicSpinner9Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner9Wrapper, {
         text: text,
         colors: colors,
         style: _extends({
@@ -31122,30 +31692,30 @@ function ClassicSpinner9(_ref) {
         }, style)
     });
 }
-_c17 = ClassicSpinner9;
-var _templateObject$9, _templateObject2$9;
-var animation$9 = /*#__PURE__*/ styled.keyframes(_templateObject$9 || (_templateObject$9 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c18 = ClassicSpinner9;
+var _templateObject$16, _templateObject2$16;
+var animation$10 = /*#__PURE__*/ styled.keyframes(_templateObject$16 || (_templateObject$16 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  25% { background-position: calc(1*100%/3) 0 }\n  50% { background-position: calc(2*100%/3) 0 }\n  75% { background-position: calc(3*100%/3) 0 }\n  100% { background-position: calc(4*100%/3) 0 }\n"
 ])));
-var defaultColors$1 = [
+var defaultColors = [
     "#000",
     "#b91c1c",
     "#0369a1",
     "#15803d"
 ];
-var ClassicSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ClassicSpinner10Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         text: props["text"],
-        colors: (props["colors"] && props["colors"].length === 4 ? props["colors"] : defaultColors$1) || defaultColors$1
+        colors: (props["colors"] && props["colors"].length === 4 ? props["colors"] : defaultColors) || defaultColors
     };
-})(_templateObject2$9 || (_templateObject2$9 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    '\n  &:before {\n    content: "',
-    '";\n  }\n  color: #0000;\n  font-weight: bold; \n  font-family: monospace;\n  background: linear-gradient(90deg, ',
-    " 25%, ",
-    " 0 50%, ",
-    " 0 75%, ",
-    " 0) 0 0/400% 100%;\n  -webkit-background-clip: text;\n  background-clip: text;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: cubic-bezier(0.3, 1, 0, 1);\n"
+})(_templateObject2$16 || (_templateObject2$16 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	&:before {\n		content: '",
+    "';\n	}\n	color: #0000;\n	font-weight: bold;\n	font-family: monospace;\n	background: linear-gradient(\n			90deg,\n			",
+    " 25%,\n			",
+    " 0 50%,\n			",
+    " 0 75%,\n			",
+    " 0\n		)\n		0 0/400% 100%;\n	-webkit-background-clip: text;\n	background-clip: text;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: cubic-bezier(0.3, 1, 0, 1);\n"
 ])), function(props) {
     return props.text;
 }, function(props) {
@@ -31156,12 +31726,12 @@ var ClassicSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.colors[2];
 }, function(props) {
     return props.colors[3];
-}, animation$9);
-_c18 = ClassicSpinner10Wrapper;
+}, animation$10);
+_c19 = ClassicSpinner10Wrapper;
 function ClassicSpinner10(_ref) {
     var text = _ref.text, colors = _ref.colors, _ref$size = _ref.size, size = _ref$size === void 0 ? "1rem" : _ref$size, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 5 : 5 / speed;
-    return React.createElement(ClassicSpinner10Wrapper, {
+    return React__default["default"].createElement(ClassicSpinner10Wrapper, {
         text: text,
         colors: colors,
         style: _extends({
@@ -31171,35 +31741,35 @@ function ClassicSpinner10(_ref) {
         }, style)
     });
 }
-_c19 = ClassicSpinner10;
-var _templateObject$a, _templateObject2$a;
-var animation$a = /*#__PURE__*/ styled.keyframes(_templateObject$a || (_templateObject$a = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c20 = ClassicSpinner10;
+var _templateObject$15, _templateObject2$15;
+var animation$$ = /*#__PURE__*/ styled.keyframes(_templateObject$15 || (_templateObject$15 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: right };\n"
 ])));
-var InfinitySpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner1Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "14px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "90px"
     };
-})(_templateObject2$a || (_templateObject2$a = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: repeating-linear-gradient(90deg, ",
-    " 0 calc(25% - 5px), #0000 0 25%) left/calc(4*100%/3) 100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$15 || (_templateObject2$15 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: repeating-linear-gradient(\n			90deg,\n			",
+    " 0 calc(25% - 5px),\n			#0000 0 25%\n		)\n		left/calc(4 * 100%/3) 100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, animation$a);
-_c20 = InfinitySpinner1Wrapper;
+}, animation$$);
+_c21 = InfinitySpinner1Wrapper;
 function InfinitySpinner1(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 0.5 : 0.5 / speed;
-    return React.createElement(InfinitySpinner1Wrapper, {
+    return React__default["default"].createElement(InfinitySpinner1Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -31209,35 +31779,35 @@ function InfinitySpinner1(_ref) {
         }, style)
     });
 }
-_c21 = InfinitySpinner1;
-var _templateObject$b, _templateObject2$b;
-var animation$b = /*#__PURE__*/ styled.keyframes(_templateObject$b || (_templateObject$b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c22 = InfinitySpinner1;
+var _templateObject$14, _templateObject2$14;
+var animation$_ = /*#__PURE__*/ styled.keyframes(_templateObject$14 || (_templateObject$14 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: 0 0 };\n"
 ])));
-var InfinitySpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner2Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "14px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "90px"
     };
-})(_templateObject2$b || (_templateObject2$b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: radial-gradient(circle closest-side, ",
-    " 92%,#0000 ) calc(100%/3) 0/calc(100%/4) 100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$14 || (_templateObject2$14 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: radial-gradient(\n			circle closest-side,\n			",
+    " 92%,\n			#0000\n		)\n		calc(100% / 3) 0 / calc(100% / 4) 100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, animation$b);
-_c22 = InfinitySpinner2Wrapper;
+}, animation$_);
+_c23 = InfinitySpinner2Wrapper;
 function InfinitySpinner2(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 0.5 : 0.5 / speed;
-    return React.createElement(InfinitySpinner2Wrapper, {
+    return React__default["default"].createElement(InfinitySpinner2Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -31247,35 +31817,35 @@ function InfinitySpinner2(_ref) {
         }, style)
     });
 }
-_c23 = InfinitySpinner2;
-var _templateObject$c, _templateObject2$c;
-var animation$c = /*#__PURE__*/ styled.keyframes(_templateObject$c || (_templateObject$c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c24 = InfinitySpinner2;
+var _templateObject$13, _templateObject2$13;
+var animation$Z = /*#__PURE__*/ styled.keyframes(_templateObject$13 || (_templateObject$13 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: right };\n"
 ])));
-var InfinitySpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner3Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "14px",
         width: props["width"] ? typeof props["width"] === "number" ? "calc(" + props["width"] + "px / 0.707)" : "calc(" + props["width"] + " / 0.707)" : "80px"
     };
-})(_templateObject2$c || (_templateObject2$c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: repeating-linear-gradient(-45deg, ",
-    " 0 15px,#0000 0 20px) left/200% 100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$13 || (_templateObject2$13 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: repeating-linear-gradient(\n			-45deg,\n			",
+    " 0 15px,\n			#0000 0 20px\n		)\n		left/200% 100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, animation$c);
-_c24 = InfinitySpinner3Wrapper;
+}, animation$Z);
+_c25 = InfinitySpinner3Wrapper;
 function InfinitySpinner3(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(InfinitySpinner3Wrapper, {
+    return React__default["default"].createElement(InfinitySpinner3Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -31285,24 +31855,24 @@ function InfinitySpinner3(_ref) {
         }, style)
     });
 }
-_c25 = InfinitySpinner3;
-var _templateObject$d, _templateObject2$d;
-var animation$d = /*#__PURE__*/ styled.keyframes(_templateObject$d || (_templateObject$d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c26 = InfinitySpinner3;
+var _templateObject$12, _templateObject2$12;
+var animation$Y = /*#__PURE__*/ styled.keyframes(_templateObject$12 || (_templateObject$12 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: top right, bottom right };\n"
 ])));
-var InfinitySpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner4Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "14px",
         width: props["width"] ? typeof props["width"] === "number" ? "calc(" + props["width"] + "px / 0.707)" : "calc(" + props["width"] + " / cos(45deg))" : "80px"
     };
-})(_templateObject2$d || (_templateObject2$d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: repeating-linear-gradient(135deg, ",
-    " 0 15px,#0000 0 20px) left top, \n              repeating-linear-gradient(45deg, ",
-    " 0 15px, #0000 0 20px) left bottom;\n  background-size: 200% 50%;\n  background-repeat: no-repeat;\n  animation-name: ",
-    ";\n  animation-timing-function: linear;\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$12 || (_templateObject2$12 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: repeating-linear-gradient(\n				135deg,\n				",
+    " 0 15px,\n				#0000 0 20px\n			)\n			left top,\n		repeating-linear-gradient(\n				45deg,\n				",
+    " 0 15px,\n				#0000 0 20px\n			)\n			left bottom;\n	background-size: 200% 50%;\n	background-repeat: no-repeat;\n	animation-name: ",
+    ";\n	animation-timing-function: linear;\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -31311,12 +31881,12 @@ var InfinitySpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$d);
-_c26 = InfinitySpinner4Wrapper;
+}, animation$Y);
+_c27 = InfinitySpinner4Wrapper;
 function InfinitySpinner4(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(InfinitySpinner4Wrapper, {
+    return React__default["default"].createElement(InfinitySpinner4Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -31326,24 +31896,24 @@ function InfinitySpinner4(_ref) {
         }, style)
     });
 }
-_c27 = InfinitySpinner4;
-var _templateObject$e, _templateObject2$e;
-var animation$e = /*#__PURE__*/ styled.keyframes(_templateObject$e || (_templateObject$e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c28 = InfinitySpinner4;
+var _templateObject$11, _templateObject2$11;
+var animation$X = /*#__PURE__*/ styled.keyframes(_templateObject$11 || (_templateObject$11 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: 0% 0% };\n"
 ])));
-var InfinitySpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner5Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "14px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "80px"
     };
-})(_templateObject2$e || (_templateObject2$e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: radial-gradient(circle 10px at right 7px top 50%, #0000 92%, ",
-    "),\n              radial-gradient(circle 10px at right 0   top 50%, ",
-    " 92%, #0000);\n  background-size: calc(100%/3) 100%; \n  background-position: 50% 0%;\n  animation-name: ",
-    ";\n  animation-timing-function: linear;\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$11 || (_templateObject2$11 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: radial-gradient(\n			circle 10px at right 7px top 50%,\n			#0000 92%,\n			",
+    "\n		),\n		radial-gradient(\n			circle 10px at right 0 top 50%,\n			",
+    " 92%,\n			#0000\n		);\n	background-size: calc(100% / 3) 100%;\n	background-position: 50% 0%;\n	animation-name: ",
+    ";\n	animation-timing-function: linear;\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -31352,12 +31922,12 @@ var InfinitySpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$e);
-_c28 = InfinitySpinner5Wrapper;
+}, animation$X);
+_c29 = InfinitySpinner5Wrapper;
 function InfinitySpinner5(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 0.5 : 0.5 / speed;
-    return React.createElement(InfinitySpinner5Wrapper, {
+    return React__default["default"].createElement(InfinitySpinner5Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -31367,24 +31937,24 @@ function InfinitySpinner5(_ref) {
         }, style)
     });
 }
-_c29 = InfinitySpinner5;
-var _templateObject$f, _templateObject2$f;
-var animation$f = /*#__PURE__*/ styled.keyframes(_templateObject$f || (_templateObject$f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c30 = InfinitySpinner5;
+var _templateObject$10, _templateObject2$10;
+var animation$W = /*#__PURE__*/ styled.keyframes(_templateObject$10 || (_templateObject$10 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: 0 0 };\n"
 ])));
-var InfinitySpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner6Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "14px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "90px"
     };
-})(_templateObject2$f || (_templateObject2$f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: conic-gradient(from 45deg at calc(100% - 7px) 50%, ",
-    " 90deg, #0000 0),\n              conic-gradient(from -135deg at 7px 50%, ",
-    " 90deg, #0000 0);\n  background-position: calc(100%/3) 0;\n  background-size:calc(100%/4) 100%;\n  animation-name: ",
-    ";\n  animation-timing-function: linear;\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$10 || (_templateObject2$10 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: conic-gradient(\n			from 45deg at calc(100% - 7px) 50%,\n			",
+    " 90deg,\n			#0000 0\n		),\n		conic-gradient(\n			from -135deg at 7px 50%,\n			",
+    " 90deg,\n			#0000 0\n		);\n	background-position: calc(100% / 3) 0;\n	background-size: calc(100% / 4) 100%;\n	animation-name: ",
+    ";\n	animation-timing-function: linear;\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -31393,12 +31963,12 @@ var InfinitySpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$f);
-_c30 = InfinitySpinner6Wrapper;
+}, animation$W);
+_c31 = InfinitySpinner6Wrapper;
 function InfinitySpinner6(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 0.5 : 0.5 / speed;
-    return React.createElement(InfinitySpinner6Wrapper, {
+    return React__default["default"].createElement(InfinitySpinner6Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -31408,24 +31978,24 @@ function InfinitySpinner6(_ref) {
         }, style)
     });
 }
-_c31 = InfinitySpinner6;
-var _templateObject$g, _templateObject2$g;
-var animation$g = /*#__PURE__*/ styled.keyframes(_templateObject$g || (_templateObject$g = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c32 = InfinitySpinner6;
+var _templateObject$$, _templateObject2$$;
+var animation$V = /*#__PURE__*/ styled.keyframes(_templateObject$$ || (_templateObject$$ = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: 0 50% };\n"
 ])));
-var InfinitySpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner7Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "14px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "90px"
     };
-})(_templateObject2$g || (_templateObject2$g = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: linear-gradient(90deg, ",
-    " 50%,#0000 0) repeat-x,\n              conic-gradient(from 45deg at right 7px top  50%, ",
-    " 90deg, #0000 0);\n  background-position: calc(100%/3) 50%;\n  background-size:calc(100%/4) 60%,calc(100%/4) 100%;\n  animation-name: ",
-    ";\n  animation-timing-function: linear;\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$$ || (_templateObject2$$ = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(90deg, ",
+    " 50%, #0000 0)\n			repeat-x,\n		conic-gradient(\n			from 45deg at right 7px top 50%,\n			",
+    " 90deg,\n			#0000 0\n		);\n	background-position: calc(100% / 3) 50%;\n	background-size: calc(100% / 4) 60%, calc(100% / 4) 100%;\n	animation-name: ",
+    ";\n	animation-timing-function: linear;\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -31434,12 +32004,12 @@ var InfinitySpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$g);
-_c32 = InfinitySpinner7Wrapper;
+}, animation$V);
+_c33 = InfinitySpinner7Wrapper;
 function InfinitySpinner7(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 0.5 : 0.5 / speed;
-    return React.createElement(InfinitySpinner7Wrapper, {
+    return React__default["default"].createElement(InfinitySpinner7Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -31449,25 +32019,25 @@ function InfinitySpinner7(_ref) {
         }, style)
     });
 }
-_c33 = InfinitySpinner7;
-var _templateObject$h, _templateObject2$h;
-var animation$h = /*#__PURE__*/ styled.keyframes(_templateObject$h || (_templateObject$h = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c34 = InfinitySpinner7;
+var _templateObject$_, _templateObject2$_;
+var animation$U = /*#__PURE__*/ styled.keyframes(_templateObject$_ || (_templateObject$_ = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: -8px 0%,-8px 50%,-8px 100% };\n"
 ])));
-var InfinitySpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner8Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "12px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "90px"
     };
-})(_templateObject2$h || (_templateObject2$h = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: linear-gradient(90deg , ",
-    " 50%, #0000 0) 0 0%,\n              linear-gradient(-90deg, ",
-    " 50%, #0000 0) 0 50%,\n              linear-gradient(90deg , ",
-    " 50%, #0000 0) 0 100%;\n  background-size: 8px calc(100%/3);\n  background-repeat: repeat-x;\n  animation-name: ",
-    ";\n  animation-timing-function: linear;\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$_ || (_templateObject2$_ = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(90deg, ",
+    " 50%, #0000 0) 0 0%,\n		linear-gradient(-90deg, ",
+    " 50%, #0000 0) 0 50%,\n		linear-gradient(90deg, ",
+    " 50%, #0000 0) 0 100%;\n	background-size: 8px calc(100% / 3);\n	background-repeat: repeat-x;\n	animation-name: ",
+    ";\n	animation-timing-function: linear;\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -31478,12 +32048,12 @@ var InfinitySpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$h);
-_c34 = InfinitySpinner8Wrapper;
+}, animation$U);
+_c35 = InfinitySpinner8Wrapper;
 function InfinitySpinner8(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 0.5 : 0.5 / speed;
-    return React.createElement(InfinitySpinner8Wrapper, {
+    return React__default["default"].createElement(InfinitySpinner8Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -31493,26 +32063,26 @@ function InfinitySpinner8(_ref) {
         }, style)
     });
 }
-_c35 = InfinitySpinner8;
-var _templateObject$i, _templateObject2$i;
-var animation$i = /*#__PURE__*/ styled.keyframes(_templateObject$i || (_templateObject$i = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c36 = InfinitySpinner8;
+var _templateObject$Z, _templateObject2$Z;
+var animation$T = /*#__PURE__*/ styled.keyframes(_templateObject$Z || (_templateObject$Z = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: -300% 0 };\n"
 ])));
-var InfinitySpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner9Wrapper$1 = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "14px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "90px"
     };
-})(_templateObject2$i || (_templateObject2$i = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: linear-gradient(90deg, #0000 16px, ",
-    " 0 30px, #0000 0),\n              radial-gradient(circle closest-side at 68% 50%, ",
-    " 92%, #0000),\n              conic-gradient(from 45deg at calc(100% - 7px) 50%, ",
-    " 90deg, #0000 0),\n              conic-gradient(from -135deg at 7px  50%, ",
-    " 90deg, #0000 0);\n  background-position: 0 0;\n  background-size: calc(3*100%/4) 100%;\n  background-repeat: repeat-x;\n  animation-name: ",
-    ";\n  animation-timing-function: linear;\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$Z || (_templateObject2$Z = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(\n			90deg,\n			#0000 16px,\n			",
+    " 0 30px,\n			#0000 0\n		),\n		radial-gradient(\n			circle closest-side at 68% 50%,\n			",
+    " 92%,\n			#0000\n		),\n		conic-gradient(\n			from 45deg at calc(100% - 7px) 50%,\n			",
+    " 90deg,\n			#0000 0\n		),\n		conic-gradient(\n			from -135deg at 7px 50%,\n			",
+    " 90deg,\n			#0000 0\n		);\n	background-position: 0 0;\n	background-size: calc(3 * 100% / 4) 100%;\n	background-repeat: repeat-x;\n	animation-name: ",
+    ";\n	animation-timing-function: linear;\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -31525,12 +32095,12 @@ var InfinitySpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$i);
-_c36 = InfinitySpinner9Wrapper;
-function InfinitySpinner9(_ref) {
+}, animation$T);
+_c37 = InfinitySpinner9Wrapper$1;
+function InfinitySpinner9$1(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(InfinitySpinner9Wrapper, {
+    return React__default["default"].createElement(InfinitySpinner9Wrapper$1, {
         height: height,
         width: width,
         color: color,
@@ -31540,24 +32110,24 @@ function InfinitySpinner9(_ref) {
         }, style)
     });
 }
-_c37 = InfinitySpinner9;
-var _templateObject$j, _templateObject2$j;
-var animation$j = /*#__PURE__*/ styled.keyframes(_templateObject$j || (_templateObject$j = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c38 = InfinitySpinner9$1;
+var _templateObject$Y, _templateObject2$Y;
+var animation$S = /*#__PURE__*/ styled.keyframes(_templateObject$Y || (_templateObject$Y = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: -20px 0%, 20px 0% };\n"
 ])));
-var InfinitySpinner9Wrapper$1 = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var InfinitySpinner9Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "12px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "90px"
     };
-})(_templateObject2$j || (_templateObject2$j = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: linear-gradient( 90deg, ",
-    " 50%, #0000 0) 0 0%,\n              linear-gradient(-90deg, ",
-    " 50%, #0000 0) 0 0%;\n  background-size: 20px 100%;\n  background-repeat: repeat-x;\n  animation-name: ",
-    ";\n  animation-timing-function: linear;\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$Y || (_templateObject2$Y = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(90deg, ",
+    " 50%, #0000 0) 0 0%,\n		linear-gradient(-90deg, ",
+    " 50%, #0000 0) 0 0%;\n	background-size: 20px 100%;\n	background-repeat: repeat-x;\n	animation-name: ",
+    ";\n	animation-timing-function: linear;\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -31566,12 +32136,12 @@ var InfinitySpinner9Wrapper$1 = /*#__PURE__*/ styled__default.div.attrs(function
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$j);
-_c38 = InfinitySpinner9Wrapper$1;
-function InfinitySpinner9$1(_ref) {
+}, animation$S);
+_c39 = InfinitySpinner9Wrapper;
+function InfinitySpinner9(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(InfinitySpinner9Wrapper$1, {
+    return React__default["default"].createElement(InfinitySpinner9Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -31581,31 +32151,31 @@ function InfinitySpinner9$1(_ref) {
         }, style)
     });
 }
-_c39 = InfinitySpinner9$1;
-var _templateObject$k, _templateObject2$k;
-var animation$k = /*#__PURE__*/ styled.keyframes(_templateObject$k || (_templateObject$k = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c40 = InfinitySpinner9;
+var _templateObject$X, _templateObject2$X;
+var animation$R = /*#__PURE__*/ styled.keyframes(_templateObject$X || (_templateObject$X = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  { \n    to { clip-path: inset(0 -34% 0 0) } \n  }\n"
 ])));
-var DotSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner1Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "60px"
     };
-})(_templateObject2$k || (_templateObject2$k = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 4;\n  background: radial-gradient(circle closest-side, ",
-    " 90%, #0000) 0/calc(100%/3) 100% space;\n  clip-path: inset(0 100% 0 0);\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$X || (_templateObject2$X = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 4;\n	background: radial-gradient(\n			circle closest-side,\n			",
+    " 90%,\n			#0000\n		)\n		0 / calc(100% / 3) 100% space;\n	clip-path: inset(0 100% 0 0);\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$k);
-_c40 = DotSpinner1Wrapper;
+}, animation$R);
+_c41 = DotSpinner1Wrapper;
 function DotSpinner1(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(DotSpinner1Wrapper, {
+    return React__default["default"].createElement(DotSpinner1Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -31615,31 +32185,31 @@ function DotSpinner1(_ref) {
         }, style)
     });
 }
-_c41 = DotSpinner1;
-var _templateObject$l, _templateObject2$l;
-var animation$l = /*#__PURE__*/ styled.keyframes(_templateObject$l || (_templateObject$l = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c42 = DotSpinner1;
+var _templateObject$W, _templateObject2$W;
+var animation$Q = /*#__PURE__*/ styled.keyframes(_templateObject$W || (_templateObject$W = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  { \n    to { background-position: 150% } \n  }\n"
 ])));
-var DotSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner2Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "60px"
     };
-})(_templateObject2$l || (_templateObject2$l = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 4;\n  background: radial-gradient(circle closest-side, ",
-    " 90%, #0000) 0/calc(100%/3) 100% no-repeat;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$W || (_templateObject2$W = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 4;\n	background: radial-gradient(\n			circle closest-side,\n			",
+    " 90%,\n			#0000\n		)\n		0 / calc(100% / 3) 100% no-repeat;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$l);
-_c42 = DotSpinner2Wrapper;
+}, animation$Q);
+_c43 = DotSpinner2Wrapper;
 function DotSpinner2(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(DotSpinner2Wrapper, {
+    return React__default["default"].createElement(DotSpinner2Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -31649,31 +32219,31 @@ function DotSpinner2(_ref) {
         }, style)
     });
 }
-_c43 = DotSpinner2;
-var _templateObject$m, _templateObject2$m;
-var animation$m = /*#__PURE__*/ styled.keyframes(_templateObject$m || (_templateObject$m = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c44 = DotSpinner2;
+var _templateObject$V, _templateObject2$V;
+var animation$P = /*#__PURE__*/ styled.keyframes(_templateObject$V || (_templateObject$V = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  20% { background-position: 0%   0%, 50%  50%, 100%  50% }\n  40% { background-position: 0% 100%, 50%   0%, 100%  50% }\n  60% { background-position: 0%  50%, 50% 100%, 100%   0% }\n  80% { background-position: 0%  50%, 50%  50%, 100% 100% }\n"
 ])));
-var DotSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner3Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "60px"
     };
-})(_templateObject2$m || (_templateObject2$m = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 2;\n  --_g: no-repeat radial-gradient(circle closest-side, ",
-    " 90%,#0000);\n  background: \n    var(--_g) 0%   50%,\n    var(--_g) 50%  50%,\n    var(--_g) 100% 50%;\n  background-size: calc(100%/3) 50%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$V || (_templateObject2$V = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 2;\n	--_g: no-repeat\n		radial-gradient(circle closest-side, ",
+    " 90%, #0000);\n	background: var(--_g) 0% 50%, var(--_g) 50% 50%, var(--_g) 100% 50%;\n	background-size: calc(100% / 3) 50%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$m);
-_c44 = DotSpinner3Wrapper;
+}, animation$P);
+_c45 = DotSpinner3Wrapper;
 function DotSpinner3(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(DotSpinner3Wrapper, {
+    return React__default["default"].createElement(DotSpinner3Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -31682,23 +32252,23 @@ function DotSpinner3(_ref) {
         }, style)
     });
 }
-_c45 = DotSpinner3;
-var _templateObject$n, _templateObject2$n;
-var animation$n = /*#__PURE__*/ styled.keyframes(_templateObject$n || (_templateObject$n = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c46 = DotSpinner3;
+var _templateObject$U, _templateObject2$U;
+var animation$O = /*#__PURE__*/ styled.keyframes(_templateObject$U || (_templateObject$U = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { \n    width:25px;\n    aspect-ratio: 1;\n  }\n"
 ])));
-var DotSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner4Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "60px"
     };
-})(_templateObject2$n || (_templateObject2$n = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 4;\n  background: \n    radial-gradient(circle closest-side at left  6px top 50%, ",
-    " 90%, #0000),\n    radial-gradient(circle closest-side                     , ",
-    " 90%, #0000),\n    radial-gradient(circle closest-side at right 6px top 50%, ",
-    " 90%, #0000);\n  background-size: 100% 100%;\n  background-repeat: no-repeat;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-direction: alternate;\n"
+})(_templateObject2$U || (_templateObject2$U = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 4;\n	background: radial-gradient(\n			circle closest-side at left 6px top 50%,\n			",
+    " 90%,\n			#0000\n		),\n		radial-gradient(circle closest-side, ",
+    " 90%, #0000),\n		radial-gradient(\n			circle closest-side at right 6px top 50%,\n			",
+    " 90%,\n			#0000\n		);\n	background-size: 100% 100%;\n	background-repeat: no-repeat;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-direction: alternate;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
@@ -31707,12 +32277,12 @@ var DotSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props)
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$n);
-_c46 = DotSpinner4Wrapper;
+}, animation$O);
+_c47 = DotSpinner4Wrapper;
 function DotSpinner4(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(DotSpinner4Wrapper, {
+    return React__default["default"].createElement(DotSpinner4Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -31721,10 +32291,10 @@ function DotSpinner4(_ref) {
         }, style)
     });
 }
-_c47 = DotSpinner4;
-var _templateObject$o, _templateObject2$o;
-var animation$o = function animation(color) {
-    return styled.keyframes(_templateObject$o || (_templateObject$o = _taggedTemplateLiteralLoose([
+_c48 = DotSpinner4;
+var _templateObject$T, _templateObject2$T;
+var animation$N = function animation(color) {
+    return styled.keyframes(_templateObject$T || (_templateObject$T = _taggedTemplateLiteralLoose([
         "\n  0%   { box-shadow: 20px 0 ",
         ", -20px 0 #0002; background: ",
         " }\n  33%  { box-shadow: 20px 0 ",
@@ -31734,25 +32304,25 @@ var animation$o = function animation(color) {
         " }\n"
     ])), color, color, color, color, color, color);
 };
-var DotSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner5Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "15px"
     };
-})(_templateObject2$o || (_templateObject2$o = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  border-radius: 50%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n  animation-direction: alternate;\n"
+})(_templateObject2$T || (_templateObject2$T = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	border-radius: 50%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n	animation-direction: alternate;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
-    return animation$o(props.color);
+    return animation$N(props.color);
 });
-_c48 = DotSpinner5Wrapper;
+_c49 = DotSpinner5Wrapper;
 function DotSpinner5(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(DotSpinner5Wrapper, {
+    return React__default["default"].createElement(DotSpinner5Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -31761,10 +32331,10 @@ function DotSpinner5(_ref) {
         }, style)
     });
 }
-_c49 = DotSpinner5;
-var _templateObject$p, _templateObject2$p;
-var animation$p = function animation(color) {
-    return styled.keyframes(_templateObject$p || (_templateObject$p = _taggedTemplateLiteralLoose([
+_c50 = DotSpinner5;
+var _templateObject$S, _templateObject2$S;
+var animation$M = function animation(color) {
+    return styled.keyframes(_templateObject$S || (_templateObject$S = _taggedTemplateLiteralLoose([
         "\n  0%  { box-shadow: 15px 0 ",
         ", -25px 0 ",
         " }\n  50% { box-shadow: 15px 0 ",
@@ -31774,28 +32344,28 @@ var animation$p = function animation(color) {
         " }\n"
     ])), color, color, color, color, color, color);
 };
-var DotSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner6Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "15px"
     };
-})(_templateObject2$p || (_templateObject2$p = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  background: ",
-    ";\n  border-radius: 50%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n  animation-direction: alternate;\n"
+})(_templateObject2$S || (_templateObject2$S = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	background: ",
+    ";\n	border-radius: 50%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n	animation-direction: alternate;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
 }, function(props) {
-    return animation$p(props.color);
+    return animation$M(props.color);
 });
-_c50 = DotSpinner6Wrapper;
+_c51 = DotSpinner6Wrapper;
 function DotSpinner6(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(DotSpinner6Wrapper, {
+    return React__default["default"].createElement(DotSpinner6Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -31804,33 +32374,33 @@ function DotSpinner6(_ref) {
         }, style)
     });
 }
-_c51 = DotSpinner6;
-var _templateObject$q, _templateObject2$q;
-var animation$q = function animation() {
-    return styled.keyframes(_templateObject$q || (_templateObject$q = _taggedTemplateLiteralLoose([
+_c52 = DotSpinner6;
+var _templateObject$R, _templateObject2$R;
+var animation$L = function animation() {
+    return styled.keyframes(_templateObject$R || (_templateObject$R = _taggedTemplateLiteralLoose([
         "\n  33% { background-size: calc(100%/3) 0%  , calc(100%/3) 100%, calc(100%/3) 100% }\n  50% { background-size: calc(100%/3) 100%, calc(100%/3) 0%  , calc(100%/3) 100% }\n  66% { background-size: calc(100%/3) 100%, calc(100%/3) 100%, calc(100%/3) 0%  }\n"
     ])));
 };
-var DotSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner7Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "60px"
     };
-})(_templateObject2$q || (_templateObject2$q = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 4;\n  --_g: no-repeat radial-gradient(circle closest-side, ",
-    " 90%, #0000);\n  background: \n    var(--_g) 0%   50%,\n    var(--_g) 50%  50%,\n    var(--_g) 100% 50%;\n  background-size: calc(100%/3) 100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$R || (_templateObject2$R = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 4;\n	--_g: no-repeat\n		radial-gradient(circle closest-side, ",
+    " 90%, #0000);\n	background: var(--_g) 0% 50%, var(--_g) 50% 50%, var(--_g) 100% 50%;\n	background-size: calc(100% / 3) 100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$q);
-_c52 = DotSpinner7Wrapper;
+}, animation$L);
+_c53 = DotSpinner7Wrapper;
 function DotSpinner7(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(DotSpinner7Wrapper, {
+    return React__default["default"].createElement(DotSpinner7Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -31839,30 +32409,30 @@ function DotSpinner7(_ref) {
         }, style)
     });
 }
-_c53 = DotSpinner7;
-var _templateObject$r, _templateObject2$r, _templateObject3;
-var animation1 = /*#__PURE__*/ styled.keyframes(_templateObject$r || (_templateObject$r = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c54 = DotSpinner7;
+var _templateObject$Q, _templateObject2$Q, _templateObject3$5;
+var animation1$5 = /*#__PURE__*/ styled.keyframes(_templateObject$Q || (_templateObject$Q = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { transform: translateX(25px) }\n"
 ])));
-var animation2 = /*#__PURE__*/ styled.keyframes(_templateObject2$r || (_templateObject2$r = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+var animation2$5 = /*#__PURE__*/ styled.keyframes(_templateObject2$Q || (_templateObject2$Q = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { transform: rotate(-180deg) translateX(25px) }\n"
 ])));
-var DotSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner8Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "15px",
         speed: props["speed"],
         animationPlayState: props["animationPlayState"]
     };
-})(_templateObject3 || (_templateObject3 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ';\n  aspect-ratio: 1;\n  position: relative;\n  \n  &:before,\n  &:after {\n    content: "";\n    position: absolute;\n    inset: 0;\n    border-radius: 50%;\n    background: ',
-    ";\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n    animation-duration: ",
-    "s;\n    animation-play-state: ",
-    ";\n  }\n  &:before {\n    box-shadow: -25px 0 ",
-    ";\n    animation-name: ",
-    ";\n  }\n  &:after {\n    transform: rotate(0deg) translateX(25px);\n    animation-name: ",
-    ";\n  }\n"
+})(_templateObject3$5 || (_templateObject3$5 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	position: relative;\n\n	&:before,\n	&:after {\n		content: '';\n		position: absolute;\n		inset: 0;\n		border-radius: 50%;\n		background: ",
+    ";\n		animation-iteration-count: infinite;\n		animation-timing-function: linear;\n		animation-duration: ",
+    "s;\n		animation-play-state: ",
+    ";\n	}\n	&:before {\n		box-shadow: -25px 0 ",
+    ";\n		animation-name: ",
+    ";\n	}\n	&:after {\n		transform: rotate(0deg) translateX(25px);\n		animation-name: ",
+    ";\n	}\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
@@ -31873,12 +32443,12 @@ var DotSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props)
     return props.animationPlayState;
 }, function(props) {
     return props.color;
-}, animation1, animation2);
-_c54 = DotSpinner8Wrapper;
+}, animation1$5, animation2$5);
+_c55 = DotSpinner8Wrapper;
 function DotSpinner8(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(DotSpinner8Wrapper, {
+    return React__default["default"].createElement(DotSpinner8Wrapper, {
         size: size,
         color: color,
         speed: updatedSpeed,
@@ -31886,21 +32456,21 @@ function DotSpinner8(_ref) {
         style: _extends({}, style)
     });
 }
-_c55 = DotSpinner8;
-var _templateObject$s, _templateObject2$s, _templateObject3$1, _templateObject4;
-var animation1$1 = /*#__PURE__*/ styled.keyframes(_templateObject$s || (_templateObject$s = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c56 = DotSpinner8;
+var _templateObject$P, _templateObject2$P, _templateObject3$4, _templateObject4;
+var animation1$4 = /*#__PURE__*/ styled.keyframes(_templateObject$P || (_templateObject$P = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  0% , 49.9% { transform: scale(1) }\n  50%, 100%  { transform: scale(-1) }\n"
 ])));
-var animation2$1 = function animation2(color) {
-    return styled.keyframes(_templateObject2$s || (_templateObject2$s = _taggedTemplateLiteralLoose([
+var animation2$4 = function animation2(color) {
+    return styled.keyframes(_templateObject2$P || (_templateObject2$P = _taggedTemplateLiteralLoose([
         "\n  100% { box-shadow: 52px 0 ",
         " }\n"
     ])), color);
 };
-var animation3 = /*#__PURE__*/ styled.keyframes(_templateObject3$1 || (_templateObject3$1 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+var animation3 = /*#__PURE__*/ styled.keyframes(_templateObject3$4 || (_templateObject3$4 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { transform: translateX(13px) rotate(-180deg) translateX(13px) }\n"
 ])));
-var DotSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner9Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "15px",
@@ -31908,19 +32478,19 @@ var DotSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props)
         animationPlayState: props["animationPlayState"]
     };
 })(_templateObject4 || (_templateObject4 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  position: relative;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-play-state: ",
-    ';\n\n  &:before,\n  &:after {\n    content: "";\n    position: absolute;\n    inset: 0;\n    border-radius: 50%;\n    background: ',
-    ";\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n    animation-direction: alternate;\n    animation-duration: ",
-    "s;\n    animation-play-state: ",
-    ";\n  }\n  &:before {\n    box-shadow: 26px 0 ",
-    ";\n    transform: translateX(-26px);\n    animation-name: ",
-    ";\n  }\n  &:after {\n    animation-name: ",
-    ";\n    transform: translateX(13px) rotate(0deg) translateX(13px);\n  }\n"
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	position: relative;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-play-state: ",
+    ";\n\n	&:before,\n	&:after {\n		content: '';\n		position: absolute;\n		inset: 0;\n		border-radius: 50%;\n		background: ",
+    ";\n		animation-iteration-count: infinite;\n		animation-timing-function: linear;\n		animation-direction: alternate;\n		animation-duration: ",
+    "s;\n		animation-play-state: ",
+    ";\n	}\n	&:before {\n		box-shadow: 26px 0 ",
+    ";\n		transform: translateX(-26px);\n		animation-name: ",
+    ";\n	}\n	&:after {\n		animation-name: ",
+    ";\n		transform: translateX(13px) rotate(0deg) translateX(13px);\n	}\n"
 ])), function(props) {
     return props.size;
-}, animation1$1, function(props) {
+}, animation1$4, function(props) {
     return props.animationPlayState;
 }, function(props) {
     return props.color;
@@ -31931,13 +32501,13 @@ var DotSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props)
 }, function(props) {
     return props.color;
 }, function(props) {
-    return animation2$1(props.color);
+    return animation2$4(props.color);
 }, animation3);
-_c56 = DotSpinner9Wrapper;
+_c57 = DotSpinner9Wrapper;
 function DotSpinner9(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1.5 : 1.5 / speed;
-    return React.createElement(DotSpinner9Wrapper, {
+    return React__default["default"].createElement(DotSpinner9Wrapper, {
         size: size,
         color: color,
         speed: updatedSpeed,
@@ -31948,30 +32518,30 @@ function DotSpinner9(_ref) {
         }, style)
     });
 }
-_c57 = DotSpinner9;
-var _templateObject$t, _templateObject2$t, _templateObject3$2;
-var animation1$2 = /*#__PURE__*/ styled.keyframes(_templateObject$t || (_templateObject$t = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c58 = DotSpinner9;
+var _templateObject$O, _templateObject2$O, _templateObject3$3;
+var animation1$3 = /*#__PURE__*/ styled.keyframes(_templateObject$O || (_templateObject$O = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  50% { transform: translateX(26px) }\n"
 ])));
-var animation2$2 = /*#__PURE__*/ styled.keyframes(_templateObject2$t || (_templateObject2$t = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+var animation2$3 = /*#__PURE__*/ styled.keyframes(_templateObject2$O || (_templateObject2$O = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { transform: rotate(-360deg) translateX(26px) }\n"
 ])));
-var DotSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var DotSpinner10Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "15px",
         speed: props["speed"],
         animationPlayState: props["animationPlayState"]
     };
-})(_templateObject3$2 || (_templateObject3$2 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ';\n  aspect-ratio: 1;\n  position: relative;\n\n  &:before,\n  &:after {\n    content: "";\n    position: absolute;\n    inset: 0;\n    border-radius: 50%;\n    background: ',
-    ";\n    \n    animation-duration: ",
-    "s;\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n    animation-play-state: ",
-    ";\n  }\n  &:before {\n    box-shadow: -26px 0 ",
-    ";\n    animation-name: ",
-    ";\n  }\n  &:after {\n    transform: rotate(0deg) translateX(26px);\n    animation-name: ",
-    ";\n  }\n"
+})(_templateObject3$3 || (_templateObject3$3 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	position: relative;\n\n	&:before,\n	&:after {\n		content: '';\n		position: absolute;\n		inset: 0;\n		border-radius: 50%;\n		background: ",
+    ";\n\n		animation-duration: ",
+    "s;\n		animation-iteration-count: infinite;\n		animation-timing-function: linear;\n		animation-play-state: ",
+    ";\n	}\n	&:before {\n		box-shadow: -26px 0 ",
+    ";\n		animation-name: ",
+    ";\n	}\n	&:after {\n		transform: rotate(0deg) translateX(26px);\n		animation-name: ",
+    ";\n	}\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
@@ -31982,12 +32552,12 @@ var DotSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props
     return props.animationPlayState;
 }, function(props) {
     return props.color;
-}, animation1$2, animation2$2);
-_c58 = DotSpinner10Wrapper;
+}, animation1$3, animation2$3);
+_c59 = DotSpinner10Wrapper;
 function DotSpinner10(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1.5 : 1.5 / speed;
-    return React.createElement(DotSpinner10Wrapper, {
+    return React__default["default"].createElement(DotSpinner10Wrapper, {
         size: size,
         color: color,
         speed: updatedSpeed,
@@ -31998,31 +32568,31 @@ function DotSpinner10(_ref) {
         }, style)
     });
 }
-_c59 = DotSpinner10;
-var _templateObject$u, _templateObject2$u;
-var animation$r = /*#__PURE__*/ styled.keyframes(_templateObject$u || (_templateObject$u = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c60 = DotSpinner10;
+var _templateObject$N, _templateObject2$N;
+var animation$K = /*#__PURE__*/ styled.keyframes(_templateObject$N || (_templateObject$N = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  0%  { background-size: 20% 100%, 20% 100%, 20% 100% }\n  33% { background-size: 20% 10% , 20% 100%, 20% 100% }\n  50% { background-size: 20% 100%, 20% 10% , 20% 100% }\n  66% { background-size: 20% 100%, 20% 100%, 20% 10%  }\n  100% { background-size: 20% 100%, 20% 100%, 20% 100% }\n"
 ])));
-var BarSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner1Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$u || (_templateObject2$u = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  --c: no-repeat linear-gradient(",
-    " 0 0);\n  background: \n    var(--c) 0%   50%,\n    var(--c) 50%  50%,\n    var(--c) 100% 50%;\n  background-size: 20% 100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$N || (_templateObject2$N = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	--c: no-repeat linear-gradient(",
+    " 0 0);\n	background: var(--c) 0% 50%, var(--c) 50% 50%, var(--c) 100% 50%;\n	background-size: 20% 100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$r);
-_c60 = BarSpinner1Wrapper;
+}, animation$K);
+_c61 = BarSpinner1Wrapper;
 function BarSpinner1(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner1Wrapper, {
+    return React__default["default"].createElement(BarSpinner1Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32031,31 +32601,31 @@ function BarSpinner1(_ref) {
         }, style)
     });
 }
-_c61 = BarSpinner1;
-var _templateObject$v, _templateObject2$v;
-var animation$s = /*#__PURE__*/ styled.keyframes(_templateObject$v || (_templateObject$v = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c62 = BarSpinner1;
+var _templateObject$M, _templateObject2$M;
+var animation$J = /*#__PURE__*/ styled.keyframes(_templateObject$M || (_templateObject$M = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  0%  { background-size: 20% 100%, 20% 100%, 20% 100% }\n  20% { background-size: 20% 60% , 20% 100%, 20% 100% }\n  40% { background-size: 20% 80% , 20% 60% , 20% 100% }\n  60% { background-size: 20% 100%, 20% 80% , 20% 60%  }\n  80% { background-size: 20% 100%, 20% 100%, 20% 80%  }\n  100% { background-size: 20% 100%, 20% 100%, 20% 100% }\n"
 ])));
-var BarSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner2Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$v || (_templateObject2$v = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  --c: no-repeat linear-gradient(",
-    " 0 0);\n  background: \n    var(--c) 0%   100%,\n    var(--c) 50%  100%,\n    var(--c) 100% 100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$M || (_templateObject2$M = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	--c: no-repeat linear-gradient(",
+    " 0 0);\n	background: var(--c) 0% 100%, var(--c) 50% 100%, var(--c) 100% 100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$s);
-_c62 = BarSpinner2Wrapper;
+}, animation$J);
+_c63 = BarSpinner2Wrapper;
 function BarSpinner2(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner2Wrapper, {
+    return React__default["default"].createElement(BarSpinner2Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32064,23 +32634,23 @@ function BarSpinner2(_ref) {
         }, style)
     });
 }
-_c63 = BarSpinner2;
-var _templateObject$w, _templateObject2$w;
-var animation$t = /*#__PURE__*/ styled.keyframes(_templateObject$w || (_templateObject$w = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c64 = BarSpinner2;
+var _templateObject$L, _templateObject2$L;
+var animation$I = /*#__PURE__*/ styled.keyframes(_templateObject$L || (_templateObject$L = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: left top, center top, right top }\n"
 ])));
-var BarSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner3Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$w || (_templateObject2$w = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  background: \n    linear-gradient(#0000 calc(1*100%/6), ",
-    " 0 calc(3*100%/6),#0000 0) left   bottom,\n    linear-gradient(#0000 calc(2*100%/6), ",
-    " 0 calc(4*100%/6),#0000 0) center bottom,\n    linear-gradient(#0000 calc(3*100%/6), ",
-    " 0 calc(5*100%/6),#0000 0) right  bottom;\n  background-size: 20% 600%;\n  background-repeat: no-repeat;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$L || (_templateObject2$L = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	background: linear-gradient(\n				#0000 calc(1 * 100% / 6),\n				",
+    " 0 calc(3 * 100% / 6),\n				#0000 0\n			)\n			left bottom,\n		linear-gradient(\n				#0000 calc(2 * 100% / 6),\n				",
+    " 0 calc(4 * 100% / 6),\n				#0000 0\n			)\n			center bottom,\n		linear-gradient(\n				#0000 calc(3 * 100% / 6),\n				",
+    " 0 calc(5 * 100% / 6),\n				#0000 0\n			)\n			right bottom;\n	background-size: 20% 600%;\n	background-repeat: no-repeat;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
@@ -32089,12 +32659,12 @@ var BarSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props)
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$t);
-_c64 = BarSpinner3Wrapper;
+}, animation$I);
+_c65 = BarSpinner3Wrapper;
 function BarSpinner3(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner3Wrapper, {
+    return React__default["default"].createElement(BarSpinner3Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32103,34 +32673,34 @@ function BarSpinner3(_ref) {
         }, style)
     });
 }
-_c65 = BarSpinner3;
-var _templateObject$x, _templateObject2$x;
-var animation$u = /*#__PURE__*/ styled.keyframes(_templateObject$x || (_templateObject$x = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c66 = BarSpinner3;
+var _templateObject$K, _templateObject2$K;
+var animation$H = /*#__PURE__*/ styled.keyframes(_templateObject$K || (_templateObject$K = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  33%  { background-position: 0% 50%, 50% 100%, 100% 100% }\n  50%  { background-position: 0%  0%, 50%  50%, 100% 100% }\n  66%  { background-position: 0%  0%, 50%   0%, 100%  50% }\n  100% { background-position: 0%  0%, 50%   0%, 100%   0% }\n"
 ])));
-var BarSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner4Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$x || (_templateObject2$x = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  --c: no-repeat linear-gradient(",
-    " calc(50% - 10px),#0000 0 calc(50% + 10px), ",
-    " 0);\n  background: \n    var(--c) 0%   100%,\n    var(--c) 50%  100%,\n    var(--c) 100% 100%;\n  background-size: 20% calc(200% + 20px);\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$K || (_templateObject2$K = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	--c: no-repeat\n		linear-gradient(\n			",
+    " calc(50% - 10px),\n			#0000 0 calc(50% + 10px),\n			",
+    " 0\n		);\n	background: var(--c) 0% 100%, var(--c) 50% 100%, var(--c) 100% 100%;\n	background-size: 20% calc(200% + 20px);\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$u);
-_c66 = BarSpinner4Wrapper;
+}, animation$H);
+_c67 = BarSpinner4Wrapper;
 function BarSpinner4(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner4Wrapper, {
+    return React__default["default"].createElement(BarSpinner4Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32139,31 +32709,31 @@ function BarSpinner4(_ref) {
         }, style)
     });
 }
-_c67 = BarSpinner4;
-var _templateObject$y, _templateObject2$y;
-var animation$v = /*#__PURE__*/ styled.keyframes(_templateObject$y || (_templateObject$y = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c68 = BarSpinner4;
+var _templateObject$J, _templateObject2$J;
+var animation$G = /*#__PURE__*/ styled.keyframes(_templateObject$J || (_templateObject$J = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  20% { background-position: 0% 50% , 50% 100%, 100% 100% }\n  40% { background-position: 0% 0%  , 50% 50% , 100% 100% }\n  60% { background-position: 0% 100%, 50% 0%  , 100% 50%  }\n  80% { background-position: 0% 100%, 50% 100%, 100% 0%   }\n"
 ])));
-var BarSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner5Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$y || (_templateObject2$y = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: .75;\n  --c: no-repeat linear-gradient(",
-    " 0 0);\n  background: \n    var(--c) 0%   100%,\n    var(--c) 50%  100%,\n    var(--c) 100% 100%;\n  background-size: 20% 65%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$J || (_templateObject2$J = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 0.75;\n	--c: no-repeat linear-gradient(",
+    " 0 0);\n	background: var(--c) 0% 100%, var(--c) 50% 100%, var(--c) 100% 100%;\n	background-size: 20% 65%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$v);
-_c68 = BarSpinner5Wrapper;
+}, animation$G);
+_c69 = BarSpinner5Wrapper;
 function BarSpinner5(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner5Wrapper, {
+    return React__default["default"].createElement(BarSpinner5Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32172,31 +32742,31 @@ function BarSpinner5(_ref) {
         }, style)
     });
 }
-_c69 = BarSpinner5;
-var _templateObject$z, _templateObject2$z;
-var animation$w = /*#__PURE__*/ styled.keyframes(_templateObject$z || (_templateObject$z = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c70 = BarSpinner5;
+var _templateObject$I, _templateObject2$I;
+var animation$F = /*#__PURE__*/ styled.keyframes(_templateObject$I || (_templateObject$I = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  20% { background-position: 0% 0%  , 50% 50% , 100% 50%  }\n  40% { background-position: 0% 100%, 50% 0%  , 100% 50%  }\n  60% { background-position: 0% 50% , 50% 100%, 100% 0%   }\n  80% { background-position: 0% 50% , 50% 50% , 100% 100% }\n"
 ])));
-var BarSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner6Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$z || (_templateObject2$z = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: .75;\n  --c: no-repeat linear-gradient(",
-    " 0 0);\n  background: \n    var(--c) 0%   50%,\n    var(--c) 50%  50%,\n    var(--c) 100% 50%;\n  background-size: 20% 50%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$I || (_templateObject2$I = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 0.75;\n	--c: no-repeat linear-gradient(",
+    " 0 0);\n	background: var(--c) 0% 50%, var(--c) 50% 50%, var(--c) 100% 50%;\n	background-size: 20% 50%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$w);
-_c70 = BarSpinner6Wrapper;
+}, animation$F);
+_c71 = BarSpinner6Wrapper;
 function BarSpinner6(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner6Wrapper, {
+    return React__default["default"].createElement(BarSpinner6Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32205,31 +32775,31 @@ function BarSpinner6(_ref) {
         }, style)
     });
 }
-_c71 = BarSpinner6;
-var _templateObject$A, _templateObject2$A;
-var animation$x = /*#__PURE__*/ styled.keyframes(_templateObject$A || (_templateObject$A = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c72 = BarSpinner6;
+var _templateObject$H, _templateObject2$H;
+var animation$E = /*#__PURE__*/ styled.keyframes(_templateObject$H || (_templateObject$H = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  0%  { background-size: 20% 50% , 20% 50% , 20% 50% }\n  20% { background-size: 20% 20% , 20% 50% , 20% 50% }\n  40% { background-size: 20% 100%, 20% 20% , 20% 50% }\n  60% { background-size: 20% 50% , 20% 100%, 20% 20% }\n  80% { background-size: 20% 50% , 20% 50% , 20% 100%}\n  100%{ background-size: 20% 50% , 20% 50% , 20% 50% }\n"
 ])));
-var BarSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner7Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$A || (_templateObject2$A = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: .75;\n  --c: no-repeat linear-gradient(",
-    " 0 0);\n  background: \n    var(--c) 0%   50%,\n    var(--c) 50%  50%,\n    var(--c) 100% 50%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n  animation-direction: alternate;\n"
+})(_templateObject2$H || (_templateObject2$H = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 0.75;\n	--c: no-repeat linear-gradient(",
+    " 0 0);\n	background: var(--c) 0% 50%, var(--c) 50% 50%, var(--c) 100% 50%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n	animation-direction: alternate;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$x);
-_c72 = BarSpinner7Wrapper;
+}, animation$E);
+_c73 = BarSpinner7Wrapper;
 function BarSpinner7(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner7Wrapper, {
+    return React__default["default"].createElement(BarSpinner7Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32238,31 +32808,31 @@ function BarSpinner7(_ref) {
         }, style)
     });
 }
-_c73 = BarSpinner7;
-var _templateObject$B, _templateObject2$B;
-var animation$y = /*#__PURE__*/ styled.keyframes(_templateObject$B || (_templateObject$B = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c74 = BarSpinner7;
+var _templateObject$G, _templateObject2$G;
+var animation$D = /*#__PURE__*/ styled.keyframes(_templateObject$G || (_templateObject$G = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  16.67% { background-position: 0% 0%  , 50% 100%, 100% 100% }\n  33.33% { background-position: 0% 0%  , 50% 0%  , 100% 100% }\n  50%    { background-position: 0% 0%  , 50% 0%  , 100% 0%   }\n  66.67% { background-position: 0% 100%, 50% 0%  , 100% 0%   }\n  83.33% { background-position: 0% 100%, 50% 100%, 100% 0%   }\n"
 ])));
-var BarSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner8Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$B || (_templateObject2$B = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: .75;\n  --c:no-repeat linear-gradient(",
-    " 0 0);\n  background: \n    var(--c) 0%   100%,\n    var(--c) 50%  100%,\n    var(--c) 100% 100%;\n  background-size: 20% 65%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$G || (_templateObject2$G = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 0.75;\n	--c: no-repeat linear-gradient(",
+    " 0 0);\n	background: var(--c) 0% 100%, var(--c) 50% 100%, var(--c) 100% 100%;\n	background-size: 20% 65%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$y);
-_c74 = BarSpinner8Wrapper;
+}, animation$D);
+_c75 = BarSpinner8Wrapper;
 function BarSpinner8(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner8Wrapper, {
+    return React__default["default"].createElement(BarSpinner8Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32271,31 +32841,31 @@ function BarSpinner8(_ref) {
         }, style)
     });
 }
-_c75 = BarSpinner8;
-var _templateObject$C, _templateObject2$C;
-var animation$z = /*#__PURE__*/ styled.keyframes(_templateObject$C || (_templateObject$C = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c76 = BarSpinner8;
+var _templateObject$F, _templateObject2$F;
+var animation$C = /*#__PURE__*/ styled.keyframes(_templateObject$F || (_templateObject$F = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  33% { background-position: 0% 0%  , 50% 100%,100% 0%   }\n  66% { background-position: 0% 100%, 50% 0%  ,100% 100% }\n"
 ])));
-var BarSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner9Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$C || (_templateObject2$C = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: .75;\n  --c: no-repeat linear-gradient(",
-    " 0 0);\n  background: \n    var(--c) 0%   50%,\n    var(--c) 50%  50%,\n    var(--c) 100% 50%;\n  background-size: 20% 60%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$F || (_templateObject2$F = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 0.75;\n	--c: no-repeat linear-gradient(",
+    " 0 0);\n	background: var(--c) 0% 50%, var(--c) 50% 50%, var(--c) 100% 50%;\n	background-size: 20% 60%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$z);
-_c76 = BarSpinner9Wrapper;
+}, animation$C);
+_c77 = BarSpinner9Wrapper;
 function BarSpinner9(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner9Wrapper, {
+    return React__default["default"].createElement(BarSpinner9Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32304,64 +32874,31 @@ function BarSpinner9(_ref) {
         }, style)
     });
 }
-_c77 = BarSpinner9;
-var _templateObject$D, _templateObject2$D;
-var animation$A = /*#__PURE__*/ styled.keyframes(_templateObject$D || (_templateObject$D = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c78 = BarSpinner9;
+var _templateObject$E, _templateObject2$E;
+var animation$B = /*#__PURE__*/ styled.keyframes(_templateObject$E || (_templateObject$E = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  33%  { background-position: 0   0   , 100% 100% }\n  66%  { background-position: 0   100%, 100% 0   }\n  100% { background-position: 50% 100%, 50%  0   }\n"
 ])));
-var BarSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var BarSpinner10Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "45px"
     };
-})(_templateObject2$D || (_templateObject2$D = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1.2;\n  --c:no-repeat repeating-linear-gradient(90deg, ",
-    " 0 20%, #0000 0 40%);\n  background: \n    var(--c) 50% 0,\n    var(--c) 50% 100%;\n  background-size: calc(500%/6) 50%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
-])), function(props) {
-    return props.size;
-}, function(props) {
-    return props.color;
-}, animation$A);
-_c78 = BarSpinner10Wrapper;
-function BarSpinner10(_ref) {
-    var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
-    var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(BarSpinner10Wrapper, {
-        size: size,
-        color: color,
-        style: _extends({
-            animationDuration: updatedSpeed + "s",
-            animationPlayState: stop ? "paused" : "running"
-        }, style)
-    });
-}
-_c79 = BarSpinner10;
-var _templateObject$E, _templateObject2$E;
-var animation$B = /*#__PURE__*/ styled.keyframes(_templateObject$E || (_templateObject$E = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  to{ transform: rotate(.5turn) }\n"
-])));
-var RoundedSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
-    return {
-        color: props["color"] || "currentColor",
-        size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px"
-    };
 })(_templateObject2$E || (_templateObject2$E = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  border-radius: 50%;\n  border: 8px solid;\n  border-color: ",
-    " #0000;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+    "\n	width: ",
+    ";\n	aspect-ratio: 1.2;\n	--c: no-repeat\n		repeating-linear-gradient(90deg, ",
+    " 0 20%, #0000 0 40%);\n	background: var(--c) 50% 0, var(--c) 50% 100%;\n	background-size: calc(500% / 6) 50%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
 }, animation$B);
-_c80 = RoundedSpinner1Wrapper;
-function RoundedSpinner1(_ref) {
+_c79 = BarSpinner10Wrapper;
+function BarSpinner10(_ref) {
     var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(RoundedSpinner1Wrapper, {
+    return React__default["default"].createElement(BarSpinner10Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32370,27 +32907,60 @@ function RoundedSpinner1(_ref) {
         }, style)
     });
 }
-_c81 = RoundedSpinner1;
-var _templateObject$F, _templateObject2$F;
-var animation$C = /*#__PURE__*/ styled.keyframes(_templateObject$F || (_templateObject$F = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c80 = BarSpinner10;
+var _templateObject$D, _templateObject2$D;
+var animation$A = /*#__PURE__*/ styled.keyframes(_templateObject$D || (_templateObject$D = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n  to{ transform: rotate(.5turn) }\n"
+])));
+var RoundedSpinner1Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
+    return {
+        color: props["color"] || "currentColor",
+        size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px"
+    };
+})(_templateObject2$D || (_templateObject2$D = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	border-radius: 50%;\n	border: 8px solid;\n	border-color: ",
+    " #0000;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
+])), function(props) {
+    return props.size;
+}, function(props) {
+    return props.color;
+}, animation$A);
+_c81 = RoundedSpinner1Wrapper;
+function RoundedSpinner1(_ref) {
+    var size = _ref.size, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
+    var updatedSpeed = speed === 0 ? 1 : 1 / speed;
+    return React__default["default"].createElement(RoundedSpinner1Wrapper, {
+        size: size,
+        color: color,
+        style: _extends({
+            animationDuration: updatedSpeed + "s",
+            animationPlayState: stop ? "paused" : "running"
+        }, style)
+    });
+}
+_c82 = RoundedSpinner1;
+var _templateObject$C, _templateObject2$C;
+var animation$z = /*#__PURE__*/ styled.keyframes(_templateObject$C || (_templateObject$C = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { transform: rotate(1turn) }\n"
 ])));
-var RoundedSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var RoundedSpinner2Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px"
     };
-})(_templateObject2$F || (_templateObject2$F = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  border-radius: 50%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$C || (_templateObject2$C = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	border-radius: 50%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
-}, animation$C);
-_c82 = RoundedSpinner2Wrapper;
+}, animation$z);
+_c83 = RoundedSpinner2Wrapper;
 function RoundedSpinner2(_ref) {
     var size = _ref.size, _ref$color = _ref.color, color = _ref$color === void 0 ? "currentColor" : _ref$color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$thickness = _ref.thickness, thickness = _ref$thickness === void 0 ? 8 : _ref$thickness, _ref$secondaryColor = _ref.secondaryColor, secondaryColor = _ref$secondaryColor === void 0 ? "#cbd5e1" : _ref$secondaryColor, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(RoundedSpinner2Wrapper, {
+    return React__default["default"].createElement(RoundedSpinner2Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32401,23 +32971,23 @@ function RoundedSpinner2(_ref) {
         }, style)
     });
 }
-_c83 = RoundedSpinner2;
-var _templateObject$G, _templateObject2$G;
-var animation$D = /*#__PURE__*/ styled.keyframes(_templateObject$G || (_templateObject$G = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c84 = RoundedSpinner2;
+var _templateObject$B, _templateObject2$B;
+var animation$y = /*#__PURE__*/ styled.keyframes(_templateObject$B || (_templateObject$B = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { transform: rotate(1turn) }\n"
 ])));
-var RoundedSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var RoundedSpinner3Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"],
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px"
     };
-})(_templateObject2$G || (_templateObject2$G = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  padding: 8px;\n  aspect-ratio: 1;\n  border-radius: 50%;\n  background: ",
-    ";\n  --_m: \n    conic-gradient(#0000 10%, ",
-    "),\n    linear-gradient(",
-    " 0 0) content-box;\n  -webkit-mask: var(--_m);\n          mask: var(--_m);\n  -webkit-mask-composite: source-out;\n          mask-composite: subtract;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$B || (_templateObject2$B = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	padding: 8px;\n	aspect-ratio: 1;\n	border-radius: 50%;\n	background: ",
+    ";\n	--_m: conic-gradient(#0000 10%, ",
+    "),\n		linear-gradient(",
+    " 0 0) content-box;\n	-webkit-mask: var(--_m);\n	mask: var(--_m);\n	-webkit-mask-composite: source-out;\n	mask-composite: subtract;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
@@ -32426,12 +32996,12 @@ var RoundedSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(pr
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$D);
-_c84 = RoundedSpinner3Wrapper;
+}, animation$y);
+_c85 = RoundedSpinner3Wrapper;
 function RoundedSpinner3(_ref) {
     var size = _ref.size, _ref$color = _ref.color, color = _ref$color === void 0 ? "currentColor" : _ref$color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(RoundedSpinner3Wrapper, {
+    return React__default["default"].createElement(RoundedSpinner3Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32440,31 +33010,31 @@ function RoundedSpinner3(_ref) {
         }, style)
     });
 }
-_c85 = RoundedSpinner3;
-var _templateObject$H, _templateObject2$H;
-var animation$E = /*#__PURE__*/ styled.keyframes(_templateObject$H || (_templateObject$H = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c86 = RoundedSpinner3;
+var _templateObject$A, _templateObject2$A;
+var animation$x = /*#__PURE__*/ styled.keyframes(_templateObject$A || (_templateObject$A = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { transform: rotate(1turn) }\n"
 ])));
-var RoundedSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var RoundedSpinner4Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"],
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px"
     };
-})(_templateObject2$H || (_templateObject2$H = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  --b: 8px; /* the border thickness */\n  aspect-ratio: 1;\n  border-radius: 50%;\n  padding: 1px;\n  background: conic-gradient(#0000 10%, ",
-    ") content-box;\n  -webkit-mask:\n    repeating-conic-gradient(#0000 0deg,#000 1deg 20deg,#0000 21deg 36deg),\n    radial-gradient(farthest-side,#0000 calc(100% - var(--b) - 1px),#000 calc(100% - var(--b)));\n  -webkit-mask-composite: destination-in;\n  mask-composite: intersect;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$A || (_templateObject2$A = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	--b: 8px; /* the border thickness */\n	aspect-ratio: 1;\n	border-radius: 50%;\n	padding: 1px;\n	background: conic-gradient(#0000 10%, ",
+    ") content-box;\n	-webkit-mask: repeating-conic-gradient(\n			#0000 0deg,\n			#000 1deg 20deg,\n			#0000 21deg 36deg\n		),\n		radial-gradient(\n			farthest-side,\n			#0000 calc(100% - var(--b) - 1px),\n			#000 calc(100% - var(--b))\n		);\n	-webkit-mask-composite: destination-in;\n	mask-composite: intersect;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$E);
-_c86 = RoundedSpinner4Wrapper;
+}, animation$x);
+_c87 = RoundedSpinner4Wrapper;
 function RoundedSpinner4(_ref) {
     var size = _ref.size, _ref$color = _ref.color, color = _ref$color === void 0 ? "currentColor" : _ref$color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(RoundedSpinner4Wrapper, {
+    return React__default["default"].createElement(RoundedSpinner4Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32474,25 +33044,25 @@ function RoundedSpinner4(_ref) {
         }, style)
     });
 }
-_c87 = RoundedSpinner4;
-var _templateObject$I, _templateObject2$I;
-var animation$F = /*#__PURE__*/ styled.keyframes(_templateObject$I || (_templateObject$I = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c88 = RoundedSpinner4;
+var _templateObject$z, _templateObject2$z;
+var animation$w = /*#__PURE__*/ styled.keyframes(_templateObject$z || (_templateObject$z = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { transform: rotate(.5turn) }\n"
 ])));
-var RoundedSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var RoundedSpinner5Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"],
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px",
         thickness: props["thickness"]
     };
-})(_templateObject2$I || (_templateObject2$I = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  --b: ",
-    "px; /* the border thickness */\n  aspect-ratio: 1;\n  border-radius: 50%;\n  background: ",
-    ";\n  -webkit-mask:\n    repeating-conic-gradient(#0000 0deg, ",
-    " 1deg 70deg, #0000 71deg 90deg),\n    radial-gradient(farthest-side, #0000 calc(100% - var(--b) - 1px), ",
-    " calc(100% - var(--b)));\n  -webkit-mask-composite: destination-in;\n  mask-composite: intersect;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$z || (_templateObject2$z = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	--b: ",
+    "px; /* the border thickness */\n	aspect-ratio: 1;\n	border-radius: 50%;\n	background: ",
+    ";\n	-webkit-mask: repeating-conic-gradient(\n			#0000 0deg,\n			",
+    " 1deg 70deg,\n			#0000 71deg 90deg\n		),\n		radial-gradient(\n			farthest-side,\n			#0000 calc(100% - var(--b) - 1px),\n			",
+    " calc(100% - var(--b))\n		);\n	-webkit-mask-composite: destination-in;\n	mask-composite: intersect;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
@@ -32503,12 +33073,12 @@ var RoundedSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(pr
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$F);
-_c88 = RoundedSpinner5Wrapper;
+}, animation$w);
+_c89 = RoundedSpinner5Wrapper;
 function RoundedSpinner5(_ref) {
     var size = _ref.size, _ref$color = _ref.color, color = _ref$color === void 0 ? "currentColor" : _ref$color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$thickness = _ref.thickness, thickness = _ref$thickness === void 0 ? 4 : _ref$thickness, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(RoundedSpinner5Wrapper, {
+    return React__default["default"].createElement(RoundedSpinner5Wrapper, {
         size: size,
         color: color,
         thickness: thickness,
@@ -32518,35 +33088,35 @@ function RoundedSpinner5(_ref) {
         }, style)
     });
 }
-_c89 = RoundedSpinner5;
-var _templateObject$J, _templateObject2$J;
-var animation$G = /*#__PURE__*/ styled.keyframes(_templateObject$J || (_templateObject$J = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c90 = RoundedSpinner5;
+var _templateObject$y, _templateObject2$y;
+var animation$v = /*#__PURE__*/ styled.keyframes(_templateObject$y || (_templateObject$y = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { transform: rotate(1turn) }\n"
 ])));
-var RoundedSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var RoundedSpinner6Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"],
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px",
         dotColor: props["dotColor"] || props["color"]
     };
-})(_templateObject2$J || (_templateObject2$J = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  border-radius: 50%;\n  padding: 3px;\n  background: \n    radial-gradient(farthest-side, ",
-    " 95%, #0000) 50% 0/12px 12px no-repeat,\n    radial-gradient(farthest-side, #0000 calc(100% - 5px), ",
-    " calc(100% - 4px)) content-box;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$y || (_templateObject2$y = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	border-radius: 50%;\n	padding: 3px;\n	background: radial-gradient(\n				farthest-side,\n				",
+    " 95%,\n				#0000\n			)\n			50% 0/12px 12px no-repeat,\n		radial-gradient(\n				farthest-side,\n				#0000 calc(100% - 5px),\n				",
+    " calc(100% - 4px)\n			)\n			content-box;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.dotColor;
 }, function(props) {
     return props.color;
-}, animation$G);
-_c90 = RoundedSpinner6Wrapper;
+}, animation$v);
+_c91 = RoundedSpinner6Wrapper;
 function RoundedSpinner6(_ref) {
     var size = _ref.size, _ref$color = _ref.color, color = _ref$color === void 0 ? "currentColor" : _ref$color, dotColor = _ref.dotColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(RoundedSpinner6Wrapper, {
+    return React__default["default"].createElement(RoundedSpinner6Wrapper, {
         size: size,
         color: color,
         dotColor: dotColor,
@@ -32556,31 +33126,31 @@ function RoundedSpinner6(_ref) {
         }, style)
     });
 }
-_c91 = RoundedSpinner6;
-var _templateObject$K, _templateObject2$K;
-var animation$H = /*#__PURE__*/ styled.keyframes(_templateObject$K || (_templateObject$K = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c92 = RoundedSpinner6;
+var _templateObject$x, _templateObject2$x;
+var animation$u = /*#__PURE__*/ styled.keyframes(_templateObject$x || (_templateObject$x = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { transform: rotate(.5turn) }\n"
 ])));
-var RoundedSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var RoundedSpinner7Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"],
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px"
     };
-})(_templateObject2$K || (_templateObject2$K = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  --_c: radial-gradient(farthest-side, ",
-    " 92%, #0000);\n  background: \n    var(--_c) top,\n    var(--_c) left,\n    var(--_c) right,\n    var(--_c) bottom;\n  background-size: 12px 12px;\n  background-repeat: no-repeat;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$x || (_templateObject2$x = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	--_c: radial-gradient(farthest-side, ",
+    " 92%, #0000);\n	background: var(--_c) top, var(--_c) left, var(--_c) right, var(--_c) bottom;\n	background-size: 12px 12px;\n	background-repeat: no-repeat;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.color;
-}, animation$H);
-_c92 = RoundedSpinner7Wrapper;
+}, animation$u);
+_c93 = RoundedSpinner7Wrapper;
 function RoundedSpinner7(_ref) {
     var size = _ref.size, _ref$color = _ref.color, color = _ref$color === void 0 ? "currentColor" : _ref$color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(RoundedSpinner7Wrapper, {
+    return React__default["default"].createElement(RoundedSpinner7Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32589,23 +33159,23 @@ function RoundedSpinner7(_ref) {
         }, style)
     });
 }
-_c93 = RoundedSpinner7;
-var _templateObject$L, _templateObject2$L;
-var animation$I = /*#__PURE__*/ styled.keyframes(_templateObject$L || (_templateObject$L = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c94 = RoundedSpinner7;
+var _templateObject$w, _templateObject2$w;
+var animation$t = /*#__PURE__*/ styled.keyframes(_templateObject$w || (_templateObject$w = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { transform: rotate(.5turn) }\n"
 ])));
-var RoundedSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var RoundedSpinner8Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"],
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px"
     };
-})(_templateObject2$L || (_templateObject2$L = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  color: ",
-    ";\n  --_c: no-repeat radial-gradient(farthest-side, ",
-    " 92%, #0000);\n  background: \n    var(--_c) 50% 0   /12px 12px,\n    var(--_c) 50% 100%/12px 12px,\n    var(--_c) 100% 50%/12px 12px,\n    var(--_c) 0    50%/12px 12px,\n    var(--_c) 50%  50%/12px 12px,\n    conic-gradient(from 90deg at 4px 4px, #0000 90deg, ",
-    " 0)\n    -4px -4px/calc(50% + 2px) calc(50% + 2px);\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$w || (_templateObject2$w = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	color: ",
+    ";\n	--_c: no-repeat\n		radial-gradient(farthest-side, ",
+    " 92%, #0000);\n	background: var(--_c) 50% 0 /12px 12px, var(--_c) 50% 100%/12px 12px,\n		var(--_c) 100% 50%/12px 12px, var(--_c) 0 50%/12px 12px,\n		var(--_c) 50% 50%/12px 12px,\n		conic-gradient(\n				from 90deg at 4px 4px,\n				#0000 90deg,\n				",
+    " 0\n			) -4px -4px / calc(50% + 2px) calc(50% + 2px);\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
@@ -32614,12 +33184,12 @@ var RoundedSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(pr
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$I);
-_c94 = RoundedSpinner8Wrapper;
+}, animation$t);
+_c95 = RoundedSpinner8Wrapper;
 function RoundedSpinner8(_ref) {
     var size = _ref.size, _ref$color = _ref.color, color = _ref$color === void 0 ? "currentColor" : _ref$color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(RoundedSpinner8Wrapper, {
+    return React__default["default"].createElement(RoundedSpinner8Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32628,35 +33198,35 @@ function RoundedSpinner8(_ref) {
         }, style)
     });
 }
-_c95 = RoundedSpinner8;
-var _templateObject$M, _templateObject2$M;
-var animation$J = /*#__PURE__*/ styled.keyframes(_templateObject$M || (_templateObject$M = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c96 = RoundedSpinner8;
+var _templateObject$v, _templateObject2$v;
+var animation$s = /*#__PURE__*/ styled.keyframes(_templateObject$v || (_templateObject$v = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { transform: rotate(1turn) }\n"
 ])));
-var RoundedSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var RoundedSpinner9Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"],
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px",
         dotColor: props["dotColor"]
     };
-})(_templateObject2$M || (_templateObject2$M = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  border-radius: 50%;\n  background: \n    radial-gradient(farthest-side, ",
-    " 95%, #0000) 50% 1px/12px 12px no-repeat,\n    radial-gradient(farthest-side, #0000 calc(100% - 14px), ",
-    " 0);\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$v || (_templateObject2$v = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	border-radius: 50%;\n	background: radial-gradient(\n				farthest-side,\n				",
+    " 95%,\n				#0000\n			)\n			50% 1px/12px 12px no-repeat,\n		radial-gradient(\n			farthest-side,\n			#0000 calc(100% - 14px),\n			",
+    " 0\n		);\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
     return props.dotColor;
 }, function(props) {
     return props.color;
-}, animation$J);
-_c96 = RoundedSpinner9Wrapper;
+}, animation$s);
+_c97 = RoundedSpinner9Wrapper;
 function RoundedSpinner9(_ref) {
     var size = _ref.size, _ref$color = _ref.color, color = _ref$color === void 0 ? "#ccc" : _ref$color, _ref$dotColor = _ref.dotColor, dotColor = _ref$dotColor === void 0 ? "currentColor" : _ref$dotColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(RoundedSpinner9Wrapper, {
+    return React__default["default"].createElement(RoundedSpinner9Wrapper, {
         size: size,
         color: color,
         dotColor: dotColor,
@@ -32666,23 +33236,23 @@ function RoundedSpinner9(_ref) {
         }, style)
     });
 }
-_c97 = RoundedSpinner9;
-var _templateObject$N, _templateObject2$N;
-var animation$K = /*#__PURE__*/ styled.keyframes(_templateObject$N || (_templateObject$N = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c98 = RoundedSpinner9;
+var _templateObject$u, _templateObject2$u;
+var animation$r = /*#__PURE__*/ styled.keyframes(_templateObject$u || (_templateObject$u = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  to { transform: rotate(.5turn) }\n"
 ])));
-var RoundedSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var RoundedSpinner10Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"],
         size: props["size"] ? typeof props["size"] === "number" ? props["size"] + "px" : props["size"] : "50px"
     };
-})(_templateObject2$N || (_templateObject2$N = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  width: ",
-    ";\n  aspect-ratio: 1;\n  color: #854f1d;\n  border-radius: 50%;\n  display: grid;\n  background: \n    conic-gradient(from 90deg at 4px 4px, #0000 90deg, ",
-    " 0)\n    -4px -4px/calc(50% + 2px) calc(50% + 2px),\n    radial-gradient(farthest-side, ",
-    " 6px, #0000 7px calc(100% - 6px), ",
-    " calc(100% - 5px)) no-repeat;\n  position: relative;\n  animation-name: ",
-    ';\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n\n  &:before {\n    content: "";\n    border-radius: inherit;\n    background: inherit;\n    transform: rotate(45deg);\n  }\n'
+})(_templateObject2$u || (_templateObject2$u = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	width: ",
+    ";\n	aspect-ratio: 1;\n	color: #854f1d;\n	border-radius: 50%;\n	display: grid;\n	background: conic-gradient(\n				from 90deg at 4px 4px,\n				#0000 90deg,\n				",
+    " 0\n			) -4px -4px / calc(50% + 2px) calc(50% + 2px),\n		radial-gradient(\n				farthest-side,\n				",
+    " 6px,\n				#0000 7px calc(100% - 6px),\n				",
+    " calc(100% - 5px)\n			)\n			no-repeat;\n	position: relative;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n\n	&:before {\n		content: '';\n		border-radius: inherit;\n		background: inherit;\n		transform: rotate(45deg);\n	}\n"
 ])), function(props) {
     return props.size;
 }, function(props) {
@@ -32691,12 +33261,12 @@ var RoundedSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$K);
-_c98 = RoundedSpinner10Wrapper;
+}, animation$r);
+_c99 = RoundedSpinner10Wrapper;
 function RoundedSpinner10(_ref) {
     var size = _ref.size, _ref$color = _ref.color, color = _ref$color === void 0 ? "currentColor" : _ref$color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(RoundedSpinner10Wrapper, {
+    return React__default["default"].createElement(RoundedSpinner10Wrapper, {
         size: size,
         color: color,
         style: _extends({
@@ -32705,35 +33275,35 @@ function RoundedSpinner10(_ref) {
         }, style)
     });
 }
-_c99 = RoundedSpinner10;
-var _templateObject$O, _templateObject2$O;
-var animation$L = /*#__PURE__*/ styled.keyframes(_templateObject$O || (_templateObject$O = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c100 = RoundedSpinner10;
+var _templateObject$t, _templateObject2$t;
+var animation$q = /*#__PURE__*/ styled.keyframes(_templateObject$t || (_templateObject$t = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  0% { background-position: right; }\n"
 ])));
-var ContinuousSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner1Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$O || (_templateObject2$O = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: \n    linear-gradient(90deg, #0001 33%, #0005 50%, #0001 66%)\n    ",
-    ";\n  background-size: 300% 100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$t || (_templateObject2$t = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(90deg, #0001 33%, #0005 50%, #0001 66%)\n		",
+    ";\n	background-size: 300% 100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, animation$L);
-_c100 = ContinuousSpinner1Wrapper;
+}, animation$q);
+_c101 = ContinuousSpinner1Wrapper;
 function ContinuousSpinner1(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner1Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner1Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -32743,25 +33313,25 @@ function ContinuousSpinner1(_ref) {
         }, style)
     });
 }
-_c101 = ContinuousSpinner1;
-var _templateObject$P, _templateObject2$P;
-var animation$M = /*#__PURE__*/ styled.keyframes(_templateObject$P || (_templateObject$P = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c102 = ContinuousSpinner1;
+var _templateObject$s, _templateObject2$s;
+var animation$p = /*#__PURE__*/ styled.keyframes(_templateObject$s || (_templateObject$s = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: right -50px top 0 }\n"
 ])));
-var ContinuousSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner2Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$P || (_templateObject2$P = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: \n    linear-gradient(90deg, #0000, ",
-    ") left -50px top 0/50px 20px no-repeat \n    ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$s || (_templateObject2$s = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(90deg, #0000, ",
+    ") left -50px top\n		0/50px 20px no-repeat ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -32770,12 +33340,12 @@ var ContinuousSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$M);
-_c102 = ContinuousSpinner2Wrapper;
+}, animation$p);
+_c103 = ContinuousSpinner2Wrapper;
 function ContinuousSpinner2(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner2Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner2Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -32786,25 +33356,25 @@ function ContinuousSpinner2(_ref) {
         }, style)
     });
 }
-_c103 = ContinuousSpinner2;
-var _templateObject$Q, _templateObject2$Q;
-var animation$N = /*#__PURE__*/ styled.keyframes(_templateObject$Q || (_templateObject$Q = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c104 = ContinuousSpinner2;
+var _templateObject$r, _templateObject2$r;
+var animation$o = /*#__PURE__*/ styled.keyframes(_templateObject$r || (_templateObject$r = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: right -30px top 0 }\n"
 ])));
-var ContinuousSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner3Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$Q || (_templateObject2$Q = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  transform: skewX(-45deg);\n  background: \n    linear-gradient(",
-    " 0 0) left -30px top 0/30px 20px no-repeat \n    ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$r || (_templateObject2$r = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	transform: skewX(-45deg);\n	background: linear-gradient(",
+    " 0 0) left -30px top 0/30px\n		20px no-repeat ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -32813,12 +33383,12 @@ var ContinuousSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$N);
-_c104 = ContinuousSpinner3Wrapper;
+}, animation$o);
+_c105 = ContinuousSpinner3Wrapper;
 function ContinuousSpinner3(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner3Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner3Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -32829,12 +33399,12 @@ function ContinuousSpinner3(_ref) {
         }, style)
     });
 }
-_c105 = ContinuousSpinner3;
-var _templateObject$R, _templateObject2$R;
-var animation$O = /*#__PURE__*/ styled.keyframes(_templateObject$R || (_templateObject$R = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c106 = ContinuousSpinner3;
+var _templateObject$q, _templateObject2$q;
+var animation$n = /*#__PURE__*/ styled.keyframes(_templateObject$q || (_templateObject$q = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { left: calc(100% + 20px) }\n"
 ])));
-var ContinuousSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner4Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         speed: props["speed"],
@@ -32842,30 +33412,30 @@ var ContinuousSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$R || (_templateObject2$R = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  color: ",
-    ';\n  border-radius: 40px;\n  border: 2px solid;\n  position: relative;\n  overflow: hidden;\n  \n  &:before {\n    content: "";\n    position: absolute;\n    margin: 2px;\n    width: 14px;\n    top: 0;\n    bottom: 0;\n    left: -20px;\n    border-radius: inherit;\n    background: currentColor;\n    box-shadow: -10px 0 12px 3px currentColor;\n    clip-path: polygon(0 5%, 100% 0, 100% 100%, 0 95%, -30px 50%);\n\n    animation-name: ',
-    ";\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n    animation-duration: ",
-    "s;\n    animation-play-state: ",
-    ";\n  }\n  \n"
+})(_templateObject2$q || (_templateObject2$q = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	color: ",
+    ";\n	border-radius: 40px;\n	border: 2px solid;\n	position: relative;\n	overflow: hidden;\n\n	&:before {\n		content: '';\n		position: absolute;\n		margin: 2px;\n		width: 14px;\n		top: 0;\n		bottom: 0;\n		left: -20px;\n		border-radius: inherit;\n		background: currentColor;\n		box-shadow: -10px 0 12px 3px currentColor;\n		clip-path: polygon(0 5%, 100% 0, 100% 100%, 0 95%, -30px 50%);\n\n		animation-name: ",
+    ";\n		animation-iteration-count: infinite;\n		animation-timing-function: linear;\n		animation-duration: ",
+    "s;\n		animation-play-state: ",
+    ";\n	}\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, animation$O, function(props) {
+}, animation$n, function(props) {
     return props.speed;
 }, function(props) {
     return props.animationPlayState;
 });
-_c106 = ContinuousSpinner4Wrapper;
+_c107 = ContinuousSpinner4Wrapper;
 function ContinuousSpinner4(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner4Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner4Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -32876,25 +33446,25 @@ function ContinuousSpinner4(_ref) {
         }, style)
     });
 }
-_c107 = ContinuousSpinner4;
-var _templateObject$S, _templateObject2$S;
-var animation$P = /*#__PURE__*/ styled.keyframes(_templateObject$S || (_templateObject$S = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c108 = ContinuousSpinner4;
+var _templateObject$p, _templateObject2$p;
+var animation$m = /*#__PURE__*/ styled.keyframes(_templateObject$p || (_templateObject$p = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: right -40px top 0, center }\n"
 ])));
-var ContinuousSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner5Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         secondaryColor: props["secondaryColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$S || (_templateObject2$S = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: \n      linear-gradient(",
-    " 0 0) left -40px top 0/40px 20px,\n      linear-gradient(",
-    " 0 0) center/100% 50%; \n  background-repeat: no-repeat;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$p || (_templateObject2$p = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(",
+    " 0 0) left -40px top 0/40px\n			20px,\n		linear-gradient(",
+    " 0 0) center/100% 50%;\n	background-repeat: no-repeat;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -32903,12 +33473,12 @@ var ContinuousSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function
     return props.color;
 }, function(props) {
     return props.secondaryColor;
-}, animation$P);
-_c108 = ContinuousSpinner5Wrapper;
+}, animation$m);
+_c109 = ContinuousSpinner5Wrapper;
 function ContinuousSpinner5(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, secondaryColor = _ref.secondaryColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner5Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner5Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -32919,25 +33489,25 @@ function ContinuousSpinner5(_ref) {
         }, style)
     });
 }
-_c109 = ContinuousSpinner5;
-var _templateObject$T, _templateObject2$T;
-var animation$Q = /*#__PURE__*/ styled.keyframes(_templateObject$T || (_templateObject$T = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c110 = ContinuousSpinner5;
+var _templateObject$o, _templateObject2$o;
+var animation$l = /*#__PURE__*/ styled.keyframes(_templateObject$o || (_templateObject$o = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { \n    background-position: left; \n    -webkit-mask-position:left \n  }\n"
 ])));
-var ContinuousSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner6Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$T || (_templateObject2$T = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: \n      radial-gradient(circle 10px, ",
-    " 95%, #0000) right/calc(200% + 20px) 100%,\n      linear-gradient(",
-    " 0 0) center/100% 6px; \n  background-repeat: no-repeat; \n  -webkit-mask: radial-gradient(circle 4px, #0000 93%, ",
-    ") right/calc(200% + 20px) 100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$o || (_templateObject2$o = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: radial-gradient(circle 10px, ",
+    " 95%, #0000)\n			right/calc(200% + 20px) 100%,\n		linear-gradient(",
+    " 0 0) center/100% 6px;\n	background-repeat: no-repeat;\n	-webkit-mask: radial-gradient(circle 4px, #0000 93%, ",
+    ")\n		right/calc(200% + 20px) 100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -32948,12 +33518,12 @@ var ContinuousSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$Q);
-_c110 = ContinuousSpinner6Wrapper;
+}, animation$l);
+_c111 = ContinuousSpinner6Wrapper;
 function ContinuousSpinner6(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner6Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner6Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -32963,26 +33533,26 @@ function ContinuousSpinner6(_ref) {
         }, style)
     });
 }
-_c111 = ContinuousSpinner6;
-var _templateObject$U, _templateObject2$U;
-var animation$R = /*#__PURE__*/ styled.keyframes(_templateObject$U || (_templateObject$U = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c112 = ContinuousSpinner6;
+var _templateObject$n, _templateObject2$n;
+var animation$k = /*#__PURE__*/ styled.keyframes(_templateObject$n || (_templateObject$n = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: right -25% top 0 }\n"
 ])));
-var ContinuousSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner7Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$U || (_templateObject2$U = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  -webkit-mask:linear-gradient(90deg, ",
-    " 70%, #0000 0) left/20% 100%;\n  background:\n    linear-gradient(",
-    " 0 0) left -25% top 0 /20% 100% no-repeat\n    ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$n || (_templateObject2$n = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	-webkit-mask: linear-gradient(90deg, ",
+    " 70%, #0000 0)\n		left/20% 100%;\n	background: linear-gradient(",
+    " 0 0) left -25% top 0 /20%\n		100% no-repeat ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -32993,12 +33563,12 @@ var ContinuousSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$R);
-_c112 = ContinuousSpinner7Wrapper;
+}, animation$k);
+_c113 = ContinuousSpinner7Wrapper;
 function ContinuousSpinner7(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner7Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner7Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33010,35 +33580,35 @@ function ContinuousSpinner7(_ref) {
         }, style)
     });
 }
-_c113 = ContinuousSpinner7;
-var _templateObject$V, _templateObject2$V;
-var animation$S = /*#__PURE__*/ styled.keyframes(_templateObject$V || (_templateObject$V = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c114 = ContinuousSpinner7;
+var _templateObject$m, _templateObject2$m;
+var animation$j = /*#__PURE__*/ styled.keyframes(_templateObject$m || (_templateObject$m = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: top left }\n"
 ])));
-var ContinuousSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner8Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "40px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "40px"
     };
-})(_templateObject2$V || (_templateObject2$V = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background:\n      linear-gradient(to bottom right, #0000 calc(50% - 40px), #fff 50%, #0000 calc(50% + 40px)) \n      bottom right/calc(200% + 80px) calc(200% + 80px) \n      ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$m || (_templateObject2$m = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(\n			to bottom right,\n			#0000 calc(50% - 40px),\n			#fff 50%,\n			#0000 calc(50% + 40px)\n		)\n		bottom right/calc(200% + 80px) calc(200% + 80px) ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, animation$S);
-_c114 = ContinuousSpinner8Wrapper;
+}, animation$j);
+_c115 = ContinuousSpinner8Wrapper;
 function ContinuousSpinner8(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner8Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner8Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33048,25 +33618,25 @@ function ContinuousSpinner8(_ref) {
         }, style)
     });
 }
-_c115 = ContinuousSpinner8;
-var _templateObject$W, _templateObject2$W;
-var animation$T = /*#__PURE__*/ styled.keyframes(_templateObject$W || (_templateObject$W = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c116 = ContinuousSpinner8;
+var _templateObject$l, _templateObject2$l;
+var animation$i = /*#__PURE__*/ styled.keyframes(_templateObject$l || (_templateObject$l = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: calc(200% - 5px) }\n"
 ])));
-var ContinuousSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner9Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         dotColor: props["dotColor"] || props["color"],
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$W || (_templateObject2$W = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: \n      radial-gradient(circle closest-side, ",
-    " 94%, #0000) 50% 50%/calc(50% + 10px) 70% repeat-x \n      ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: cubic-bezier(0.3, 1, 0, 1);\n"
+})(_templateObject2$l || (_templateObject2$l = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: radial-gradient(\n			circle closest-side,\n			",
+    " 94%,\n			#0000\n		)\n		50% 50% / calc(50% + 10px) 70% repeat-x ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: cubic-bezier(0.3, 1, 0, 1);\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33075,12 +33645,12 @@ var ContinuousSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function
     return props.dotColor;
 }, function(props) {
     return props.color;
-}, animation$T);
-_c116 = ContinuousSpinner9Wrapper;
+}, animation$i);
+_c117 = ContinuousSpinner9Wrapper;
 function ContinuousSpinner9(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, dotColor = _ref.dotColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner9Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner9Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33091,25 +33661,25 @@ function ContinuousSpinner9(_ref) {
         }, style)
     });
 }
-_c117 = ContinuousSpinner9;
-var _templateObject$X, _templateObject2$X;
-var animation$U = /*#__PURE__*/ styled.keyframes(_templateObject$X || (_templateObject$X = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c118 = ContinuousSpinner9;
+var _templateObject$k, _templateObject2$k;
+var animation$h = /*#__PURE__*/ styled.keyframes(_templateObject$k || (_templateObject$k = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-position: right -40px top 0 }\n"
 ])));
-var ContinuousSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ContinuousSpinner10Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$X || (_templateObject2$X = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: linear-gradient(",
-    " 0 0) left -40px top 0/40px 100% no-repeat ",
-    ";\n  -webkit-mask:\n    linear-gradient(#000 0 0) top   /100% 5px no-repeat,\n    linear-gradient(#000 0 0) bottom/100% 5px no-repeat,\n    repeating-linear-gradient(90deg, #000 0 5px, #0000 0 20%) left/calc(100% - 5px) 100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$k || (_templateObject2$k = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(",
+    " 0 0) left -40px top 0/40px\n		100% no-repeat ",
+    ";\n	-webkit-mask: linear-gradient(#000 0 0) top / 100% 5px no-repeat,\n		linear-gradient(#000 0 0) bottom/100% 5px no-repeat,\n		repeating-linear-gradient(90deg, #000 0 5px, #0000 0 20%)\n			left/calc(100% - 5px) 100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33118,12 +33688,12 @@ var ContinuousSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(functio
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$U);
-_c118 = ContinuousSpinner10Wrapper;
+}, animation$h);
+_c119 = ContinuousSpinner10Wrapper;
 function ContinuousSpinner10(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(ContinuousSpinner10Wrapper, {
+    return React__default["default"].createElement(ContinuousSpinner10Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33134,25 +33704,25 @@ function ContinuousSpinner10(_ref) {
         }, style)
     });
 }
-_c119 = ContinuousSpinner10;
-var _templateObject$Y, _templateObject2$Y;
-var animation$V = /*#__PURE__*/ styled.keyframes(_templateObject$Y || (_templateObject$Y = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c120 = ContinuousSpinner10;
+var _templateObject$j, _templateObject2$j;
+var animation$g = /*#__PURE__*/ styled.keyframes(_templateObject$j || (_templateObject$j = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-size: 100% }\n"
 ])));
-var ProgressSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner1Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$Y || (_templateObject2$Y = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background:\n   linear-gradient(",
-    " 0 0) 0/0% no-repeat\n   ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$j || (_templateObject2$j = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(",
+    " 0 0) 0/0% no-repeat\n		",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33161,12 +33731,12 @@ var ProgressSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$V);
-_c120 = ProgressSpinner1Wrapper;
+}, animation$g);
+_c121 = ProgressSpinner1Wrapper;
 function ProgressSpinner1(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner1Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner1Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33177,25 +33747,25 @@ function ProgressSpinner1(_ref) {
         }, style)
     });
 }
-_c121 = ProgressSpinner1;
-var _templateObject$Z, _templateObject2$Z;
-var animation$W = /*#__PURE__*/ styled.keyframes(_templateObject$Z || (_templateObject$Z = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c122 = ProgressSpinner1;
+var _templateObject$i, _templateObject2$i;
+var animation$f = /*#__PURE__*/ styled.keyframes(_templateObject$i || (_templateObject$i = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-size: 110% }\n"
 ])));
-var ProgressSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner2Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$Z || (_templateObject2$Z = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  border-radius: 20px;\n  background:\n   linear-gradient(",
-    " 0 0) 0/0% no-repeat\n   ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$i || (_templateObject2$i = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	border-radius: 20px;\n	background: linear-gradient(",
+    " 0 0) 0/0% no-repeat\n		",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33204,12 +33774,12 @@ var ProgressSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$W);
-_c122 = ProgressSpinner2Wrapper;
+}, animation$f);
+_c123 = ProgressSpinner2Wrapper;
 function ProgressSpinner2(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner2Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner2Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33221,25 +33791,25 @@ function ProgressSpinner2(_ref) {
         }, style)
     });
 }
-_c123 = ProgressSpinner2;
-var _templateObject$_, _templateObject2$_;
-var animation$X = /*#__PURE__*/ styled.keyframes(_templateObject$_ || (_templateObject$_ = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c124 = ProgressSpinner2;
+var _templateObject$h, _templateObject2$h;
+var animation$e = /*#__PURE__*/ styled.keyframes(_templateObject$h || (_templateObject$h = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-size: 100% }\n"
 ])));
-var ProgressSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner3Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color1: props["color1"] || "currentColor",
         color2: props["color2"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$_ || (_templateObject2$_ = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background:\n   repeating-linear-gradient(135deg, ",
-    " 0 10px, ",
-    " 0 20px) 0/0%   no-repeat,\n   repeating-linear-gradient(135deg, #ddd    0 10px, #eee    0 20px) 0/100%;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$h || (_templateObject2$h = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: repeating-linear-gradient(\n				135deg,\n				",
+    " 0 10px,\n				",
+    " 0 20px\n			)\n			0/0% no-repeat,\n		repeating-linear-gradient(135deg, #ddd 0 10px, #eee 0 20px) 0/100%;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33248,12 +33818,12 @@ var ProgressSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color1;
 }, function(props) {
     return props.color2;
-}, animation$X);
-_c124 = ProgressSpinner3Wrapper;
+}, animation$e);
+_c125 = ProgressSpinner3Wrapper;
 function ProgressSpinner3(_ref) {
     var height = _ref.height, width = _ref.width, color1 = _ref.color1, color2 = _ref.color2, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner3Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner3Wrapper, {
         height: height,
         width: width,
         color1: color1,
@@ -33264,26 +33834,26 @@ function ProgressSpinner3(_ref) {
         }, style)
     });
 }
-_c125 = ProgressSpinner3;
-var _templateObject$$, _templateObject2$$;
-var animation$Y = /*#__PURE__*/ styled.keyframes(_templateObject$$ || (_templateObject$$ = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c126 = ProgressSpinner3;
+var _templateObject$g, _templateObject2$g;
+var animation$d = /*#__PURE__*/ styled.keyframes(_templateObject$g || (_templateObject$g = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-size: 120% }\n"
 ])));
-var ProgressSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner4Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$$ || (_templateObject2$$ = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  -webkit-mask:linear-gradient(90deg, ",
-    " 70%,#0000 0) 0/20%;\n  background:\n   linear-gradient(",
-    " 0 0) 0/0% no-repeat\n   ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$g || (_templateObject2$g = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	-webkit-mask: linear-gradient(90deg, ",
+    " 70%, #0000 0) 0/20%;\n	background: linear-gradient(",
+    " 0 0) 0/0% no-repeat\n		",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33294,12 +33864,12 @@ var ProgressSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$Y);
-_c126 = ProgressSpinner4Wrapper;
+}, animation$d);
+_c127 = ProgressSpinner4Wrapper;
 function ProgressSpinner4(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner4Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner4Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33311,18 +33881,18 @@ function ProgressSpinner4(_ref) {
         }, style)
     });
 }
-_c127 = ProgressSpinner4;
-var _templateObject$10, _templateObject2$10;
-var animation$Z = /*#__PURE__*/ styled.keyframes(_templateObject$10 || (_templateObject$10 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c128 = ProgressSpinner4;
+var _templateObject$f, _templateObject2$f;
+var animation$c = /*#__PURE__*/ styled.keyframes(_templateObject$f || (_templateObject$f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-size: 120% }\n"
 ])));
-var ProgressSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner5Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "40px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "80px"
     };
-})(_templateObject2$10 || (_templateObject2$10 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+})(_templateObject2$f || (_templateObject2$f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  height: ",
     ";\n  width: ",
     ";\n  border: 2px solid ",
@@ -33342,7 +33912,7 @@ var ProgressSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$Z, function(props) {
+}, animation$c, function(props) {
     return props.color;
 }, function(props) {
     return props.color;
@@ -33353,11 +33923,11 @@ var ProgressSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
 }, function(props) {
     return props.color;
 });
-_c128 = ProgressSpinner5Wrapper;
+_c129 = ProgressSpinner5Wrapper;
 function ProgressSpinner5(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner5Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner5Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33368,12 +33938,12 @@ function ProgressSpinner5(_ref) {
         }, style)
     });
 }
-_c129 = ProgressSpinner5;
-var _templateObject$11, _templateObject2$11;
-var animation$_ = /*#__PURE__*/ styled.keyframes(_templateObject$11 || (_templateObject$11 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c130 = ProgressSpinner5;
+var _templateObject$e, _templateObject2$e;
+var animation$b = /*#__PURE__*/ styled.keyframes(_templateObject$e || (_templateObject$e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { inset: 0 }\n"
 ])));
-var ProgressSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner6Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         speed: props["speed"],
@@ -33381,7 +33951,7 @@ var ProgressSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "22px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$11 || (_templateObject2$11 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+})(_templateObject2$e || (_templateObject2$e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  height: ",
     ";\n  width: ",
     ";\n  color: ",
@@ -33395,16 +33965,16 @@ var ProgressSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.width;
 }, function(props) {
     return props.color;
-}, animation$_, function(props) {
+}, animation$b, function(props) {
     return props.speed;
 }, function(props) {
     return props.animationPlayState;
 });
-_c130 = ProgressSpinner6Wrapper;
+_c131 = ProgressSpinner6Wrapper;
 function ProgressSpinner6(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner6Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner6Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33413,25 +33983,25 @@ function ProgressSpinner6(_ref) {
         style: _extends({}, style)
     });
 }
-_c131 = ProgressSpinner6;
-var _templateObject$12, _templateObject2$12;
-var animation$$ = /*#__PURE__*/ styled.keyframes(_templateObject$12 || (_templateObject$12 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c132 = ProgressSpinner6;
+var _templateObject$d, _templateObject2$d;
+var animation$a = /*#__PURE__*/ styled.keyframes(_templateObject$d || (_templateObject$d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-size: 100% }\n"
 ])));
-var ProgressSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner7Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$12 || (_templateObject2$12 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  -webkit-mask:\n    radial-gradient(circle closest-side, #000 94%,#0000) 0 0/25% 100%,\n    linear-gradient(#000 0 0) center/calc(100% - 12px) calc(100% - 12px) no-repeat;\n  background:\n   linear-gradient(",
-    " 0 0) 0/0% no-repeat\n   ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$d || (_templateObject2$d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	-webkit-mask: radial-gradient(circle closest-side, #000 94%, #0000) 0 0/25%\n			100%,\n		linear-gradient(#000 0 0) center/calc(100% - 12px) calc(100% - 12px)\n			no-repeat;\n	background: linear-gradient(",
+    " 0 0) 0/0% no-repeat\n		",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33440,12 +34010,12 @@ var ProgressSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$$);
-_c132 = ProgressSpinner7Wrapper;
+}, animation$a);
+_c133 = ProgressSpinner7Wrapper;
 function ProgressSpinner7(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner7Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner7Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33456,25 +34026,25 @@ function ProgressSpinner7(_ref) {
         }, style)
     });
 }
-_c133 = ProgressSpinner7;
-var _templateObject$13, _templateObject2$13;
-var animation$10 = /*#__PURE__*/ styled.keyframes(_templateObject$13 || (_templateObject$13 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c134 = ProgressSpinner7;
+var _templateObject$c, _templateObject2$c;
+var animation$9 = /*#__PURE__*/ styled.keyframes(_templateObject$c || (_templateObject$c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-size: 100% 115% }\n"
 ])));
-var ProgressSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner8Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "60px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "60px"
     };
-})(_templateObject2$13 || (_templateObject2$13 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  border-radius: 50%;\n  -webkit-mask:linear-gradient(0deg,#000 55%,#0000 0) bottom/100% 18.18%;\n  background:\n   linear-gradient(",
-    " 0 0) bottom/100% 0% no-repeat\n   ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$c || (_templateObject2$c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	border-radius: 50%;\n	-webkit-mask: linear-gradient(0deg, #000 55%, #0000 0) bottom/100% 18.18%;\n	background: linear-gradient(",
+    " 0 0) bottom/100% 0%\n		no-repeat ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33483,12 +34053,12 @@ var ProgressSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$10);
-_c134 = ProgressSpinner8Wrapper;
+}, animation$9);
+_c135 = ProgressSpinner8Wrapper;
 function ProgressSpinner8(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner8Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner8Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33500,27 +34070,27 @@ function ProgressSpinner8(_ref) {
         }, style)
     });
 }
-_c135 = ProgressSpinner8;
-var _templateObject$14, _templateObject2$14;
-var animation$11 = /*#__PURE__*/ styled.keyframes(_templateObject$14 || (_templateObject$14 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c136 = ProgressSpinner8;
+var _templateObject$b, _templateObject2$b;
+var animation$8 = /*#__PURE__*/ styled.keyframes(_templateObject$b || (_templateObject$b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  33%  {background-position:    0% 33% , 100% 33% , 200% 33% }\n  66%  {background-position: -100%  66%, 0%   66% , 100% 66% }\n  100% {background-position:    0% 100%, 100% 100%, 200% 100%}\n"
 ])));
-var ProgressSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner9Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$14 || (_templateObject2$14 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  --r1: 154%;\n  --r2: 68.5%;\n  width:60px;\n  height:60px;\n  border-radius: 50%; \n  background:\n    radial-gradient(var(--r1) var(--r2) at top   , #0000 79.5%, ",
-    " 80%),\n    radial-gradient(var(--r1) var(--r2) at bottom, ",
-    " 79.5%, #0000 80%),\n    radial-gradient(var(--r1) var(--r2) at top   , #0000 79.5%, ",
-    " 80%),\n    ",
-    ";\n  background-size: 50.5% 220%;\n  background-position: -100% 0%,0% 0%,100% 0%;\n  background-repeat: no-repeat;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$b || (_templateObject2$b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	--r1: 154%;\n	--r2: 68.5%;\n	width: 60px;\n	height: 60px;\n	border-radius: 50%;\n	background: radial-gradient(\n			var(--r1) var(--r2) at top,\n			#0000 79.5%,\n			",
+    " 80%\n		),\n		radial-gradient(\n			var(--r1) var(--r2) at bottom,\n			",
+    " 79.5%,\n			#0000 80%\n		),\n		radial-gradient(\n			var(--r1) var(--r2) at top,\n			#0000 79.5%,\n			",
+    " 80%\n		),\n		",
+    ";\n	background-size: 50.5% 220%;\n	background-position: -100% 0%, 0% 0%, 100% 0%;\n	background-repeat: no-repeat;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33533,12 +34103,12 @@ var ProgressSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$11);
-_c136 = ProgressSpinner9Wrapper;
+}, animation$8);
+_c137 = ProgressSpinner9Wrapper;
 function ProgressSpinner9(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner9Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner9Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33549,25 +34119,25 @@ function ProgressSpinner9(_ref) {
         }, style)
     });
 }
-_c137 = ProgressSpinner9;
-var _templateObject$15, _templateObject2$15;
-var animation$12 = /*#__PURE__*/ styled.keyframes(_templateObject$15 || (_templateObject$15 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c138 = ProgressSpinner9;
+var _templateObject$a, _templateObject2$a;
+var animation$7 = /*#__PURE__*/ styled.keyframes(_templateObject$a || (_templateObject$a = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { background-size: 120% 120% }\n"
 ])));
-var ProgressSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var ProgressSpinner10Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "60px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$15 || (_templateObject2$15 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  border-radius: 200px 200px 0 0;\n  -webkit-mask:repeating-radial-gradient(farthest-side at bottom, #0000 0, #000 1px 12%, #0000 calc(12% + 1px) 20%);\n  background:\n   radial-gradient(farthest-side at bottom, ",
-    " 0 95%, #0000 0) bottom/0% 0% no-repeat\n   ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n"
+})(_templateObject2$a || (_templateObject2$a = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	border-radius: 200px 200px 0 0;\n	-webkit-mask: repeating-radial-gradient(\n		farthest-side at bottom,\n		#0000 0,\n		#000 1px 12%,\n		#0000 calc(12% + 1px) 20%\n	);\n	background: radial-gradient(\n			farthest-side at bottom,\n			",
+    " 0 95%,\n			#0000 0\n		)\n		bottom/0% 0% no-repeat ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33576,12 +34146,12 @@ var ProgressSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$12);
-_c138 = ProgressSpinner10Wrapper;
+}, animation$7);
+_c139 = ProgressSpinner10Wrapper;
 function ProgressSpinner10(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 2 : 2 / speed;
-    return React.createElement(ProgressSpinner10Wrapper, {
+    return React__default["default"].createElement(ProgressSpinner10Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33593,25 +34163,25 @@ function ProgressSpinner10(_ref) {
         }, style)
     });
 }
-_c139 = ProgressSpinner10;
-var _templateObject$16, _templateObject2$16;
-var animation$13 = /*#__PURE__*/ styled.keyframes(_templateObject$16 || (_templateObject$16 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c140 = ProgressSpinner10;
+var _templateObject$9, _templateObject2$9;
+var animation$6 = /*#__PURE__*/ styled.keyframes(_templateObject$9 || (_templateObject$9 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  50% { background-position: right }\n"
 ])));
-var WobblingSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner1Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$16 || (_templateObject2$16 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background:\n   linear-gradient(",
-    " 0 0) left/20px 20px no-repeat\n   ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$9 || (_templateObject2$9 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(",
+    " 0 0) left/20px 20px\n		no-repeat ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33620,12 +34190,12 @@ var WobblingSpinner1Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$13);
-_c140 = WobblingSpinner1Wrapper;
+}, animation$6);
+_c141 = WobblingSpinner1Wrapper;
 function WobblingSpinner1(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(WobblingSpinner1Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner1Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33636,41 +34206,41 @@ function WobblingSpinner1(_ref) {
         }, style)
     });
 }
-_c141 = WobblingSpinner1;
-var _templateObject$17, _templateObject2$17;
-var animation$14 = /*#__PURE__*/ styled.keyframes(_templateObject$17 || (_templateObject$17 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c142 = WobblingSpinner1;
+var _templateObject$8, _templateObject2$8;
+var animation$5 = /*#__PURE__*/ styled.keyframes(_templateObject$8 || (_templateObject$8 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  50% { background-position: right }\n"
 ])));
-var WobblingSpinner2Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner2Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$17 || (_templateObject2$17 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  border-radius: 20px;\n  background:\n   radial-gradient(farthest-side, ",
-    " 94%, #0000) left/20px 20px no-repeat\n   ",
-    ";\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$8 || (_templateObject2$8 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	border-radius: 20px;\n	background: radial-gradient(farthest-side, ",
+    " 94%, #0000)\n		left/20px 20px no-repeat ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, function(props1) {
+}, function(props) {
     return function(props) {
         return props.bgColor;
     };
-}, animation$14);
-_c142 = WobblingSpinner2Wrapper;
+}, animation$5);
+_c143 = WobblingSpinner2Wrapper;
 function WobblingSpinner2(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(WobblingSpinner2Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner2Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33681,12 +34251,12 @@ function WobblingSpinner2(_ref) {
         }, style)
     });
 }
-_c143 = WobblingSpinner2;
-var _templateObject$18, _templateObject2$18;
-var animation$15 = /*#__PURE__*/ styled.keyframes(_templateObject$18 || (_templateObject$18 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c144 = WobblingSpinner2;
+var _templateObject$7, _templateObject2$7;
+var animation$4 = /*#__PURE__*/ styled.keyframes(_templateObject$7 || (_templateObject$7 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  50% { \n    left: 100%;\n    transform: translateX(calc(-100% - 4px))\n  }\n"
 ])));
-var WobblingSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner3Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         speed: props["speed"],
@@ -33694,30 +34264,30 @@ var WobblingSpinner3Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "22px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$18 || (_templateObject2$18 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  border-radius: 40px;\n  color: ",
-    ';\n  border: 2px solid;\n  position: relative;\n\n  &:before {\n    content: "";\n    position: absolute;\n    margin: 2px;\n    width: 25%;\n    top: 0;\n    bottom: 0;\n    left: 0;\n    border-radius: inherit;\n    background: currentColor;\n    animation-name: ',
-    ";\n    animation-duration: ",
-    "s;\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n    animation-play-state: ",
-    ";\n  }\n"
+})(_templateObject2$7 || (_templateObject2$7 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	border-radius: 40px;\n	color: ",
+    ";\n	border: 2px solid;\n	position: relative;\n\n	&:before {\n		content: '';\n		position: absolute;\n		margin: 2px;\n		width: 25%;\n		top: 0;\n		bottom: 0;\n		left: 0;\n		border-radius: inherit;\n		background: currentColor;\n		animation-name: ",
+    ";\n		animation-duration: ",
+    "s;\n		animation-iteration-count: infinite;\n		animation-timing-function: linear;\n		animation-play-state: ",
+    ";\n	}\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, animation$15, function(props) {
+}, animation$4, function(props) {
     return props.speed;
 }, function(props) {
     return props.animationPlayState;
 });
-_c144 = WobblingSpinner3Wrapper;
+_c145 = WobblingSpinner3Wrapper;
 function WobblingSpinner3(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(WobblingSpinner3Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner3Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33726,28 +34296,28 @@ function WobblingSpinner3(_ref) {
         style: _extends({}, style)
     });
 }
-_c145 = WobblingSpinner3;
-var _templateObject$19, _templateObject2$19, _templateObject3$3;
-var animation1$3 = /*#__PURE__*/ styled.keyframes(_templateObject$19 || (_templateObject$19 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c146 = WobblingSpinner3;
+var _templateObject$6, _templateObject2$6, _templateObject3$2;
+var animation1$2 = /*#__PURE__*/ styled.keyframes(_templateObject$6 || (_templateObject$6 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { transform:translateX(80px) }\n"
 ])));
-var animation2$3 = /*#__PURE__*/ styled.keyframes(_templateObject2$19 || (_templateObject2$19 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+var animation2$2 = /*#__PURE__*/ styled.keyframes(_templateObject2$6 || (_templateObject2$6 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  33% { clip-path: inset(0 0 0 -100px) }\n  50% { clip-path: inset(0 0 0 0)      }\n  83% { clip-path: inset(0 -100px 0 0) }\n"
 ])));
-var WobblingSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner4Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "20px"
     };
-})(_templateObject3$3 || (_templateObject3$3 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background: ",
-    ";\n  box-shadow: 0 0 60px 15px ",
-    ";\n  transform: translate(-80px);\n  clip-path: inset(0);\n  animation-name: ",
+})(_templateObject3$2 || (_templateObject3$2 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: ",
+    ";\n	box-shadow: 0 0 60px 15px ",
+    ";\n	transform: translate(-80px);\n	clip-path: inset(0);\n	animation-name: ",
     ", ",
-    ";\n  animation-iteration-count: infinite, infinite;\n  animation-direction: alternate, normal;\n  animation-timing-function: ease-in-out, ease-in-out;\n"
+    ";\n	animation-iteration-count: infinite, infinite;\n	animation-direction: alternate, normal;\n	animation-timing-function: ease-in-out, ease-in-out;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33756,12 +34326,12 @@ var WobblingSpinner4Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation1$3, animation2$3);
-_c146 = WobblingSpinner4Wrapper;
+}, animation1$2, animation2$2);
+_c147 = WobblingSpinner4Wrapper;
 function WobblingSpinner4(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 0.5 : speed / 2;
-    return React.createElement(WobblingSpinner4Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner4Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33771,26 +34341,26 @@ function WobblingSpinner4(_ref) {
         }, style)
     });
 }
-_c147 = WobblingSpinner4;
-var _templateObject$1a, _templateObject2$1a;
-var animation$16 = /*#__PURE__*/ styled.keyframes(_templateObject$1a || (_templateObject$1a = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c148 = WobblingSpinner4;
+var _templateObject$5, _templateObject2$5;
+var animation$3 = /*#__PURE__*/ styled.keyframes(_templateObject$5 || (_templateObject$5 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  50% { background-position: top right, bottom right }\n"
 ])));
-var WobblingSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner5Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$1a || (_templateObject2$1a = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  clip-path: polygon(10px 0, calc(100% - 10px) 0,100% 50%, calc(100% - 10px) 100%, 10px 100%,0 50%);\n  background:\n   conic-gradient(from 135deg at top   , ",
-    " 90deg,#0000 0) top    left,\n   conic-gradient(from -45deg at bottom, ",
-    " 90deg,#0000 0) bottom left,\n   ",
-    ";\n  background-size: 20px 50%;\n  background-repeat: no-repeat;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: linear;\n"
+})(_templateObject2$5 || (_templateObject2$5 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	clip-path: polygon(\n		10px 0,\n		calc(100% - 10px) 0,\n		100% 50%,\n		calc(100% - 10px) 100%,\n		10px 100%,\n		0 50%\n	);\n	background: conic-gradient(\n				from 135deg at top,\n				",
+    " 90deg,\n				#0000 0\n			)\n			top left,\n		conic-gradient(\n				from -45deg at bottom,\n				",
+    " 90deg,\n				#0000 0\n			)\n			bottom left,\n		",
+    ";\n	background-size: 20px 50%;\n	background-repeat: no-repeat;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33801,12 +34371,12 @@ var WobblingSpinner5Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$16);
-_c148 = WobblingSpinner5Wrapper;
+}, animation$3);
+_c149 = WobblingSpinner5Wrapper;
 function WobblingSpinner5(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(WobblingSpinner5Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner5Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33817,27 +34387,27 @@ function WobblingSpinner5(_ref) {
         }, style)
     });
 }
-_c149 = WobblingSpinner5;
-var _templateObject$1b, _templateObject2$1b;
-var animation$17 = /*#__PURE__*/ styled.keyframes(_templateObject$1b || (_templateObject$1b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c150 = WobblingSpinner5;
+var _templateObject$4, _templateObject2$4;
+var animation$2 = /*#__PURE__*/ styled.keyframes(_templateObject$4 || (_templateObject$4 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  50% {background-position: right }\n"
 ])));
-var WobblingSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner6Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "21px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject2$1b || (_templateObject2$1b = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  background:\n   linear-gradient(",
-    " 0 0) left/10px 100% no-repeat\n    ",
-    ";\n   position: relative;\n   animation-name: ",
-    ';\n   animation-iteration-count: infinite;\n   animation-timing-function: cubic-bezier(0, 0.2, 1, 1);\n\n   &:before,\n   &:after {\n     content: "";\n     position: absolute;\n     left: 0;\n     right: 0;\n     height: 7px;\n     background:\n        linear-gradient(',
-    " 0 0) left/10px 100% no-repeat\n        ",
-    ";\n     animation: inherit;\n   }\n    &:before {\n      top:0;\n      animation-timing-function: cubic-bezier(0, 0, 1, 1);\n    }\n    &:after {\n    bottom:0;\n    animation-timing-function: cubic-bezier(0, 0.4, 1, 1);\n    }\n"
+})(_templateObject2$4 || (_templateObject2$4 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	background: linear-gradient(",
+    " 0 0) left/10px 100%\n		no-repeat ",
+    ";\n	position: relative;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: cubic-bezier(0, 0.2, 1, 1);\n\n	&:before,\n	&:after {\n		content: '';\n		position: absolute;\n		left: 0;\n		right: 0;\n		height: 7px;\n		background: linear-gradient(",
+    " 0 0) left/10px 100%\n			no-repeat ",
+    ";\n		animation: inherit;\n	}\n	&:before {\n		top: 0;\n		animation-timing-function: cubic-bezier(0, 0, 1, 1);\n	}\n	&:after {\n		bottom: 0;\n		animation-timing-function: cubic-bezier(0, 0.4, 1, 1);\n	}\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33846,16 +34416,16 @@ var WobblingSpinner6Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.bgColor;
-}, animation$17, function(props) {
+}, animation$2, function(props) {
     return props.color;
 }, function(props) {
     return props.bgColor;
 });
-_c150 = WobblingSpinner6Wrapper;
+_c151 = WobblingSpinner6Wrapper;
 function WobblingSpinner6(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(WobblingSpinner6Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner6Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33866,39 +34436,39 @@ function WobblingSpinner6(_ref) {
         }, style)
     });
 }
-_c151 = WobblingSpinner6;
-var _templateObject$1c, _templateObject2$1c, _templateObject3$4;
-var animation1$4 = /*#__PURE__*/ styled.keyframes(_templateObject$1c || (_templateObject$1c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c152 = WobblingSpinner6;
+var _templateObject$3, _templateObject2$3, _templateObject3$1;
+var animation1$1 = /*#__PURE__*/ styled.keyframes(_templateObject$3 || (_templateObject$3 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { left: 1px; } \n"
 ])));
-var animation2$4 = /*#__PURE__*/ styled.keyframes(_templateObject2$1c || (_templateObject2$1c = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+var animation2$1 = /*#__PURE__*/ styled.keyframes(_templateObject2$3 || (_templateObject2$3 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { top: 0.3px; } \n"
 ])));
-var WobblingSpinner7Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner7Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "20px"
     };
-})(_templateObject3$4 || (_templateObject3$4 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  border-radius: 50%;\n  background: radial-gradient(at 30% 30%, #0000, #000a) ",
-    ";\n  position: relative;\n  left: 0px;\n  top: 0px;\n  animation-name: ",
+})(_templateObject3$1 || (_templateObject3$1 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	border-radius: 50%;\n	background: radial-gradient(at 30% 30%, #0000, #000a) ",
+    ";\n	position: relative;\n	left: 0px;\n	top: 0px;\n	animation-name: ",
     ", ",
-    ";\n  animation-timing-function: cubic-bezier(.5,-200,.5,200);\n  animation-iteration-count: infinite;\n"
+    ";\n	animation-timing-function: cubic-bezier(0.5, -200, 0.5, 200);\n	animation-iteration-count: infinite;\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, animation1$4, animation2$4);
-_c152 = WobblingSpinner7Wrapper;
+}, animation1$1, animation2$1);
+_c153 = WobblingSpinner7Wrapper;
 function WobblingSpinner7(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 0.5 : speed / 2;
-    return React.createElement(WobblingSpinner7Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner7Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33908,39 +34478,39 @@ function WobblingSpinner7(_ref) {
         }, style)
     });
 }
-_c153 = WobblingSpinner7;
-var _templateObject$1d, _templateObject2$1d;
-var animation$18 = /*#__PURE__*/ styled.keyframes(_templateObject$1d || (_templateObject$1d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c154 = WobblingSpinner7;
+var _templateObject$2, _templateObject2$2;
+var animation$1 = /*#__PURE__*/ styled.keyframes(_templateObject$2 || (_templateObject$2 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { transform: rotate(1deg) }\n"
 ])));
-var WobblingSpinner8Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner8Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         stickColor: props["stickColor"] || "#eee",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "20px"
     };
-})(_templateObject2$1d || (_templateObject2$1d = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  border-radius: 50%;\n  position: relative;\n  transform-origin: 50% -200%;\n  background: radial-gradient(at 30% 30%, #0000, #000a) ",
-    ";\n  animation-name: ",
-    ';\n  animation-iteration-count: infinite;\n  animation-timing-function: cubic-bezier(0.5, -200, 0.5, 200);\n\n  &:before {\n    content: "";\n    position: absolute;\n    inset: -200% 8px 100%;\n    background: ',
-    "; \n  }\n"
+})(_templateObject2$2 || (_templateObject2$2 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	border-radius: 50%;\n	position: relative;\n	transform-origin: 50% -200%;\n	background: radial-gradient(at 30% 30%, #0000, #000a) ",
+    ";\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: cubic-bezier(0.5, -200, 0.5, 200);\n\n	&:before {\n		content: '';\n		position: absolute;\n		inset: -200% 8px 100%;\n		background: ",
+    ";\n	}\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
     return props.width;
 }, function(props) {
     return props.color;
-}, animation$18, function(props) {
+}, animation$1, function(props) {
     return props.stickColor;
 });
-_c154 = WobblingSpinner8Wrapper;
+_c155 = WobblingSpinner8Wrapper;
 function WobblingSpinner8(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, stickColor = _ref.stickColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(WobblingSpinner8Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner8Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33951,25 +34521,25 @@ function WobblingSpinner8(_ref) {
         }, style)
     });
 }
-_c155 = WobblingSpinner8;
-var _templateObject$1e, _templateObject2$1e;
-var animation$19 = /*#__PURE__*/ styled.keyframes(_templateObject$1e || (_templateObject$1e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c156 = WobblingSpinner8;
+var _templateObject$1, _templateObject2$1;
+var animation = /*#__PURE__*/ styled.keyframes(_templateObject$1 || (_templateObject$1 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { transform: rotate(1deg) } \n"
 ])));
-var WobblingSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner9Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "80px"
     };
-})(_templateObject2$1e || (_templateObject2$1e = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  color:#514b82;\n  background:\n    radial-gradient(farthest-side, ",
-    " 98%, #0000) left  /20px 20px,\n    radial-gradient(farthest-side, ",
-    " 98%, #0000) right /20px 20px,\n    radial-gradient(farthest-side, #000 98%, #0000) center/5px 5px,\n    linear-gradient(",
-    " 0 0) center/100% 2px;\n  background-repeat: no-repeat;\n  animation-name: ",
-    ";\n  animation-iteration-count: infinite;\n  animation-timing-function: cubic-bezier(0.5, -150, 0.5, 150);\n"
+})(_templateObject2$1 || (_templateObject2$1 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	color: #514b82;\n	background: radial-gradient(farthest-side, ",
+    " 98%, #0000)\n			left / 20px 20px,\n		radial-gradient(farthest-side, ",
+    " 98%, #0000) right /\n			20px 20px,\n		radial-gradient(farthest-side, #000 98%, #0000) center/5px 5px,\n		linear-gradient(",
+    " 0 0) center/100% 2px;\n	background-repeat: no-repeat;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: cubic-bezier(0.5, -150, 0.5, 150);\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -33980,12 +34550,12 @@ var WobblingSpinner9Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(p
     return props.color;
 }, function(props) {
     return props.color;
-}, animation$19);
-_c156 = WobblingSpinner9Wrapper;
+}, animation);
+_c157 = WobblingSpinner9Wrapper;
 function WobblingSpinner9(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 1 : 1 / speed;
-    return React.createElement(WobblingSpinner9Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner9Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -33995,15 +34565,15 @@ function WobblingSpinner9(_ref) {
         }, style)
     });
 }
-_c157 = WobblingSpinner9;
-var _templateObject$1f, _templateObject2$1f, _templateObject3$5;
-var animation1$5 = /*#__PURE__*/ styled.keyframes(_templateObject$1f || (_templateObject$1f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+_c158 = WobblingSpinner9;
+var _templateObject, _templateObject2, _templateObject3;
+var animation1 = /*#__PURE__*/ styled.keyframes(_templateObject || (_templateObject = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  0%,49.99% { transform: scaleX(1) }\n  50%,100% { transform: scaleX(-1) } \n"
 ])));
-var animation2$5 = /*#__PURE__*/ styled.keyframes(_templateObject2$1f || (_templateObject2$1f = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+var animation2 = /*#__PURE__*/ styled.keyframes(_templateObject2 || (_templateObject2 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
     "\n  100% { transform: rotate(1turn) }\n"
 ])));
-var WobblingSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(props) {
+var WobblingSpinner10Wrapper = /*#__PURE__*/ styled__default["default"].div.attrs(function(props) {
     return {
         color: props["color"] || "currentColor",
         bgColor: props["bgColor"] || "#eee",
@@ -34012,17 +34582,17 @@ var WobblingSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(
         height: props["height"] ? typeof props["height"] === "number" ? props["height"] + "px" : props["height"] : "20px",
         width: props["width"] ? typeof props["width"] === "number" ? props["width"] + "px" : props["width"] : "120px"
     };
-})(_templateObject3$5 || (_templateObject3$5 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
-    "\n  height: ",
-    ";\n  width: ",
-    ";\n  width: calc(100px - 14px);\n    height: 50px;\n    border-radius: 50px;\n    background: \n      radial-gradient(farthest-side, #0000 calc(100% - 15px), ",
-    " calc(100% - 14px) 99%,#0000) left,\n      radial-gradient(farthest-side, #0000 calc(100% - 15px), ",
-    " calc(100% - 14px) 99%,#0000) right;\n    background-size: calc(50% + 7px) 100%;\n    background-repeat: no-repeat;\n    position: relative;\n    animation-name: ",
-    ';\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n\n  &:before {\n    content: "";\n    position: absolute;\n    inset: 0;\n    margin: auto; \n    width: 10px;\n    height: 10px;\n    border-radius: 50%;\n    background: ',
-    ";\n    transform-origin: -14px 50%;\n\n    animation-name: ",
-    ";\n    animation-iteration-count: infinite;\n    animation-timing-function: linear;\n    animation-duration: ",
-    ";\n    animation-play-state: ",
-    ";\n  }\n"
+})(_templateObject3 || (_templateObject3 = /*#__PURE__*/ _taggedTemplateLiteralLoose([
+    "\n	height: ",
+    ";\n	width: ",
+    ";\n	width: calc(100px - 14px);\n	height: 50px;\n	border-radius: 50px;\n	background: radial-gradient(\n				farthest-side,\n				#0000 calc(100% - 15px),\n				",
+    " calc(100% - 14px) 99%,\n				#0000\n			)\n			left,\n		radial-gradient(\n				farthest-side,\n				#0000 calc(100% - 15px),\n				",
+    " calc(100% - 14px) 99%,\n				#0000\n			)\n			right;\n	background-size: calc(50% + 7px) 100%;\n	background-repeat: no-repeat;\n	position: relative;\n	animation-name: ",
+    ";\n	animation-iteration-count: infinite;\n	animation-timing-function: linear;\n\n	&:before {\n		content: '';\n		position: absolute;\n		inset: 0;\n		margin: auto;\n		width: 10px;\n		height: 10px;\n		border-radius: 50%;\n		background: ",
+    ";\n		transform-origin: -14px 50%;\n\n		animation-name: ",
+    ";\n		animation-iteration-count: infinite;\n		animation-timing-function: linear;\n		animation-duration: ",
+    ";\n		animation-play-state: ",
+    ";\n	}\n"
 ])), function(props) {
     return props.height;
 }, function(props) {
@@ -34031,18 +34601,18 @@ var WobblingSpinner10Wrapper = /*#__PURE__*/ styled__default.div.attrs(function(
     return props.bgColor;
 }, function(props) {
     return props.bgColor;
-}, animation1$5, function(props) {
+}, animation1, function(props) {
     return props.color;
-}, animation2$5, function(props) {
+}, animation2, function(props) {
     return props.animationDuration;
 }, function(props) {
     return props.animationPlayState;
 });
-_c158 = WobblingSpinner10Wrapper;
+_c159 = WobblingSpinner10Wrapper;
 function WobblingSpinner10(_ref) {
     var height = _ref.height, width = _ref.width, color = _ref.color, bgColor = _ref.bgColor, _ref$style = _ref.style, style = _ref$style === void 0 ? {} : _ref$style, _ref$speed = _ref.speed, speed = _ref$speed === void 0 ? 1 : _ref$speed, _ref$stop = _ref.stop, stop = _ref$stop === void 0 ? false : _ref$stop;
     var updatedSpeed = speed === 0 ? 0.5 : speed / 2;
-    return React.createElement(WobblingSpinner10Wrapper, {
+    return React__default["default"].createElement(WobblingSpinner10Wrapper, {
         height: height,
         width: width,
         color: color,
@@ -34055,7 +34625,7 @@ function WobblingSpinner10(_ref) {
         }, style)
     });
 }
-_c159 = WobblingSpinner10;
+_c160 = WobblingSpinner10;
 exports.BarSpinner1 = BarSpinner1;
 exports.BarSpinner10 = BarSpinner10;
 exports.BarSpinner2 = BarSpinner2;
@@ -34097,7 +34667,7 @@ exports.DotSpinner7 = DotSpinner7;
 exports.DotSpinner8 = DotSpinner8;
 exports.DotSpinner9 = DotSpinner9;
 exports.InfinitySpinner1 = InfinitySpinner1;
-exports.InfinitySpinner10 = InfinitySpinner9$1;
+exports.InfinitySpinner10 = InfinitySpinner9;
 exports.InfinitySpinner2 = InfinitySpinner2;
 exports.InfinitySpinner3 = InfinitySpinner3;
 exports.InfinitySpinner4 = InfinitySpinner4;
@@ -34105,7 +34675,7 @@ exports.InfinitySpinner5 = InfinitySpinner5;
 exports.InfinitySpinner6 = InfinitySpinner6;
 exports.InfinitySpinner7 = InfinitySpinner7;
 exports.InfinitySpinner8 = InfinitySpinner8;
-exports.InfinitySpinner9 = InfinitySpinner9;
+exports.InfinitySpinner9 = InfinitySpinner9$1;
 exports.ProgressSpinner1 = ProgressSpinner1;
 exports.ProgressSpinner10 = ProgressSpinner10;
 exports.ProgressSpinner2 = ProgressSpinner2;
@@ -34136,174 +34706,175 @@ exports.WobblingSpinner6 = WobblingSpinner6;
 exports.WobblingSpinner7 = WobblingSpinner7;
 exports.WobblingSpinner8 = WobblingSpinner8;
 exports.WobblingSpinner9 = WobblingSpinner9;
-var _c, _c1, _c2, _c3, _c4, _c5, _c6, _c7, _c8, _c9, _c10, _c11, _c12, _c13, _c14, _c15, _c16, _c17, _c18, _c19, _c20, _c21, _c22, _c23, _c24, _c25, _c26, _c27, _c28, _c29, _c30, _c31, _c32, _c33, _c34, _c35, _c36, _c37, _c38, _c39, _c40, _c41, _c42, _c43, _c44, _c45, _c46, _c47, _c48, _c49, _c50, _c51, _c52, _c53, _c54, _c55, _c56, _c57, _c58, _c59, _c60, _c61, _c62, _c63, _c64, _c65, _c66, _c67, _c68, _c69, _c70, _c71, _c72, _c73, _c74, _c75, _c76, _c77, _c78, _c79, _c80, _c81, _c82, _c83, _c84, _c85, _c86, _c87, _c88, _c89, _c90, _c91, _c92, _c93, _c94, _c95, _c96, _c97, _c98, _c99, _c100, _c101, _c102, _c103, _c104, _c105, _c106, _c107, _c108, _c109, _c110, _c111, _c112, _c113, _c114, _c115, _c116, _c117, _c118, _c119, _c120, _c121, _c122, _c123, _c124, _c125, _c126, _c127, _c128, _c129, _c130, _c131, _c132, _c133, _c134, _c135, _c136, _c137, _c138, _c139, _c140, _c141, _c142, _c143, _c144, _c145, _c146, _c147, _c148, _c149, _c150, _c151, _c152, _c153, _c154, _c155, _c156, _c157, _c158, _c159;
-$RefreshReg$(_c, "ClassicSpinner1Wrapper");
-$RefreshReg$(_c1, "ClassicSpinner1");
-$RefreshReg$(_c2, "ClassicSpinner2Wrapper");
-$RefreshReg$(_c3, "ClassicSpinner2");
-$RefreshReg$(_c4, "ClassicSpinner3Wrapper");
-$RefreshReg$(_c5, "ClassicSpinner3");
-$RefreshReg$(_c6, "ClassicSpinner4Wrapper");
-$RefreshReg$(_c7, "ClassicSpinner4");
-$RefreshReg$(_c8, "ClassicSpinner5Wrapper");
-$RefreshReg$(_c9, "ClassicSpinner5");
-$RefreshReg$(_c10, "ClassicSpinner6Wrapper");
-$RefreshReg$(_c11, "ClassicSpinner6");
-$RefreshReg$(_c12, "ClassicSpinner7Wrapper");
-$RefreshReg$(_c13, "ClassicSpinner7");
-$RefreshReg$(_c14, "ClassicSpinner8Wrapper");
-$RefreshReg$(_c15, "ClassicSpinner8");
-$RefreshReg$(_c16, "ClassicSpinner9Wrapper");
-$RefreshReg$(_c17, "ClassicSpinner9");
-$RefreshReg$(_c18, "ClassicSpinner10Wrapper");
-$RefreshReg$(_c19, "ClassicSpinner10");
-$RefreshReg$(_c20, "InfinitySpinner1Wrapper");
-$RefreshReg$(_c21, "InfinitySpinner1");
-$RefreshReg$(_c22, "InfinitySpinner2Wrapper");
-$RefreshReg$(_c23, "InfinitySpinner2");
-$RefreshReg$(_c24, "InfinitySpinner3Wrapper");
-$RefreshReg$(_c25, "InfinitySpinner3");
-$RefreshReg$(_c26, "InfinitySpinner4Wrapper");
-$RefreshReg$(_c27, "InfinitySpinner4");
-$RefreshReg$(_c28, "InfinitySpinner5Wrapper");
-$RefreshReg$(_c29, "InfinitySpinner5");
-$RefreshReg$(_c30, "InfinitySpinner6Wrapper");
-$RefreshReg$(_c31, "InfinitySpinner6");
-$RefreshReg$(_c32, "InfinitySpinner7Wrapper");
-$RefreshReg$(_c33, "InfinitySpinner7");
-$RefreshReg$(_c34, "InfinitySpinner8Wrapper");
-$RefreshReg$(_c35, "InfinitySpinner8");
-$RefreshReg$(_c36, "InfinitySpinner9Wrapper");
-$RefreshReg$(_c37, "InfinitySpinner9");
-$RefreshReg$(_c38, "InfinitySpinner9Wrapper$1");
-$RefreshReg$(_c39, "InfinitySpinner9$1");
-$RefreshReg$(_c40, "DotSpinner1Wrapper");
-$RefreshReg$(_c41, "DotSpinner1");
-$RefreshReg$(_c42, "DotSpinner2Wrapper");
-$RefreshReg$(_c43, "DotSpinner2");
-$RefreshReg$(_c44, "DotSpinner3Wrapper");
-$RefreshReg$(_c45, "DotSpinner3");
-$RefreshReg$(_c46, "DotSpinner4Wrapper");
-$RefreshReg$(_c47, "DotSpinner4");
-$RefreshReg$(_c48, "DotSpinner5Wrapper");
-$RefreshReg$(_c49, "DotSpinner5");
-$RefreshReg$(_c50, "DotSpinner6Wrapper");
-$RefreshReg$(_c51, "DotSpinner6");
-$RefreshReg$(_c52, "DotSpinner7Wrapper");
-$RefreshReg$(_c53, "DotSpinner7");
-$RefreshReg$(_c54, "DotSpinner8Wrapper");
-$RefreshReg$(_c55, "DotSpinner8");
-$RefreshReg$(_c56, "DotSpinner9Wrapper");
-$RefreshReg$(_c57, "DotSpinner9");
-$RefreshReg$(_c58, "DotSpinner10Wrapper");
-$RefreshReg$(_c59, "DotSpinner10");
-$RefreshReg$(_c60, "BarSpinner1Wrapper");
-$RefreshReg$(_c61, "BarSpinner1");
-$RefreshReg$(_c62, "BarSpinner2Wrapper");
-$RefreshReg$(_c63, "BarSpinner2");
-$RefreshReg$(_c64, "BarSpinner3Wrapper");
-$RefreshReg$(_c65, "BarSpinner3");
-$RefreshReg$(_c66, "BarSpinner4Wrapper");
-$RefreshReg$(_c67, "BarSpinner4");
-$RefreshReg$(_c68, "BarSpinner5Wrapper");
-$RefreshReg$(_c69, "BarSpinner5");
-$RefreshReg$(_c70, "BarSpinner6Wrapper");
-$RefreshReg$(_c71, "BarSpinner6");
-$RefreshReg$(_c72, "BarSpinner7Wrapper");
-$RefreshReg$(_c73, "BarSpinner7");
-$RefreshReg$(_c74, "BarSpinner8Wrapper");
-$RefreshReg$(_c75, "BarSpinner8");
-$RefreshReg$(_c76, "BarSpinner9Wrapper");
-$RefreshReg$(_c77, "BarSpinner9");
-$RefreshReg$(_c78, "BarSpinner10Wrapper");
-$RefreshReg$(_c79, "BarSpinner10");
-$RefreshReg$(_c80, "RoundedSpinner1Wrapper");
-$RefreshReg$(_c81, "RoundedSpinner1");
-$RefreshReg$(_c82, "RoundedSpinner2Wrapper");
-$RefreshReg$(_c83, "RoundedSpinner2");
-$RefreshReg$(_c84, "RoundedSpinner3Wrapper");
-$RefreshReg$(_c85, "RoundedSpinner3");
-$RefreshReg$(_c86, "RoundedSpinner4Wrapper");
-$RefreshReg$(_c87, "RoundedSpinner4");
-$RefreshReg$(_c88, "RoundedSpinner5Wrapper");
-$RefreshReg$(_c89, "RoundedSpinner5");
-$RefreshReg$(_c90, "RoundedSpinner6Wrapper");
-$RefreshReg$(_c91, "RoundedSpinner6");
-$RefreshReg$(_c92, "RoundedSpinner7Wrapper");
-$RefreshReg$(_c93, "RoundedSpinner7");
-$RefreshReg$(_c94, "RoundedSpinner8Wrapper");
-$RefreshReg$(_c95, "RoundedSpinner8");
-$RefreshReg$(_c96, "RoundedSpinner9Wrapper");
-$RefreshReg$(_c97, "RoundedSpinner9");
-$RefreshReg$(_c98, "RoundedSpinner10Wrapper");
-$RefreshReg$(_c99, "RoundedSpinner10");
-$RefreshReg$(_c100, "ContinuousSpinner1Wrapper");
-$RefreshReg$(_c101, "ContinuousSpinner1");
-$RefreshReg$(_c102, "ContinuousSpinner2Wrapper");
-$RefreshReg$(_c103, "ContinuousSpinner2");
-$RefreshReg$(_c104, "ContinuousSpinner3Wrapper");
-$RefreshReg$(_c105, "ContinuousSpinner3");
-$RefreshReg$(_c106, "ContinuousSpinner4Wrapper");
-$RefreshReg$(_c107, "ContinuousSpinner4");
-$RefreshReg$(_c108, "ContinuousSpinner5Wrapper");
-$RefreshReg$(_c109, "ContinuousSpinner5");
-$RefreshReg$(_c110, "ContinuousSpinner6Wrapper");
-$RefreshReg$(_c111, "ContinuousSpinner6");
-$RefreshReg$(_c112, "ContinuousSpinner7Wrapper");
-$RefreshReg$(_c113, "ContinuousSpinner7");
-$RefreshReg$(_c114, "ContinuousSpinner8Wrapper");
-$RefreshReg$(_c115, "ContinuousSpinner8");
-$RefreshReg$(_c116, "ContinuousSpinner9Wrapper");
-$RefreshReg$(_c117, "ContinuousSpinner9");
-$RefreshReg$(_c118, "ContinuousSpinner10Wrapper");
-$RefreshReg$(_c119, "ContinuousSpinner10");
-$RefreshReg$(_c120, "ProgressSpinner1Wrapper");
-$RefreshReg$(_c121, "ProgressSpinner1");
-$RefreshReg$(_c122, "ProgressSpinner2Wrapper");
-$RefreshReg$(_c123, "ProgressSpinner2");
-$RefreshReg$(_c124, "ProgressSpinner3Wrapper");
-$RefreshReg$(_c125, "ProgressSpinner3");
-$RefreshReg$(_c126, "ProgressSpinner4Wrapper");
-$RefreshReg$(_c127, "ProgressSpinner4");
-$RefreshReg$(_c128, "ProgressSpinner5Wrapper");
-$RefreshReg$(_c129, "ProgressSpinner5");
-$RefreshReg$(_c130, "ProgressSpinner6Wrapper");
-$RefreshReg$(_c131, "ProgressSpinner6");
-$RefreshReg$(_c132, "ProgressSpinner7Wrapper");
-$RefreshReg$(_c133, "ProgressSpinner7");
-$RefreshReg$(_c134, "ProgressSpinner8Wrapper");
-$RefreshReg$(_c135, "ProgressSpinner8");
-$RefreshReg$(_c136, "ProgressSpinner9Wrapper");
-$RefreshReg$(_c137, "ProgressSpinner9");
-$RefreshReg$(_c138, "ProgressSpinner10Wrapper");
-$RefreshReg$(_c139, "ProgressSpinner10");
-$RefreshReg$(_c140, "WobblingSpinner1Wrapper");
-$RefreshReg$(_c141, "WobblingSpinner1");
-$RefreshReg$(_c142, "WobblingSpinner2Wrapper");
-$RefreshReg$(_c143, "WobblingSpinner2");
-$RefreshReg$(_c144, "WobblingSpinner3Wrapper");
-$RefreshReg$(_c145, "WobblingSpinner3");
-$RefreshReg$(_c146, "WobblingSpinner4Wrapper");
-$RefreshReg$(_c147, "WobblingSpinner4");
-$RefreshReg$(_c148, "WobblingSpinner5Wrapper");
-$RefreshReg$(_c149, "WobblingSpinner5");
-$RefreshReg$(_c150, "WobblingSpinner6Wrapper");
-$RefreshReg$(_c151, "WobblingSpinner6");
-$RefreshReg$(_c152, "WobblingSpinner7Wrapper");
-$RefreshReg$(_c153, "WobblingSpinner7");
-$RefreshReg$(_c154, "WobblingSpinner8Wrapper");
-$RefreshReg$(_c155, "WobblingSpinner8");
-$RefreshReg$(_c156, "WobblingSpinner9Wrapper");
-$RefreshReg$(_c157, "WobblingSpinner9");
-$RefreshReg$(_c158, "WobblingSpinner10Wrapper");
-$RefreshReg$(_c159, "WobblingSpinner10");
+var _c, _c1, _c2, _c3, _c4, _c5, _c6, _c7, _c8, _c9, _c10, _c11, _c12, _c13, _c14, _c15, _c16, _c17, _c18, _c19, _c20, _c21, _c22, _c23, _c24, _c25, _c26, _c27, _c28, _c29, _c30, _c31, _c32, _c33, _c34, _c35, _c36, _c37, _c38, _c39, _c40, _c41, _c42, _c43, _c44, _c45, _c46, _c47, _c48, _c49, _c50, _c51, _c52, _c53, _c54, _c55, _c56, _c57, _c58, _c59, _c60, _c61, _c62, _c63, _c64, _c65, _c66, _c67, _c68, _c69, _c70, _c71, _c72, _c73, _c74, _c75, _c76, _c77, _c78, _c79, _c80, _c81, _c82, _c83, _c84, _c85, _c86, _c87, _c88, _c89, _c90, _c91, _c92, _c93, _c94, _c95, _c96, _c97, _c98, _c99, _c100, _c101, _c102, _c103, _c104, _c105, _c106, _c107, _c108, _c109, _c110, _c111, _c112, _c113, _c114, _c115, _c116, _c117, _c118, _c119, _c120, _c121, _c122, _c123, _c124, _c125, _c126, _c127, _c128, _c129, _c130, _c131, _c132, _c133, _c134, _c135, _c136, _c137, _c138, _c139, _c140, _c141, _c142, _c143, _c144, _c145, _c146, _c147, _c148, _c149, _c150, _c151, _c152, _c153, _c154, _c155, _c156, _c157, _c158, _c159, _c160;
+$RefreshReg$(_c, "React__default");
+$RefreshReg$(_c1, "ClassicSpinner1Wrapper");
+$RefreshReg$(_c2, "ClassicSpinner1");
+$RefreshReg$(_c3, "ClassicSpinner2Wrapper");
+$RefreshReg$(_c4, "ClassicSpinner2");
+$RefreshReg$(_c5, "ClassicSpinner3Wrapper");
+$RefreshReg$(_c6, "ClassicSpinner3");
+$RefreshReg$(_c7, "ClassicSpinner4Wrapper");
+$RefreshReg$(_c8, "ClassicSpinner4");
+$RefreshReg$(_c9, "ClassicSpinner5Wrapper");
+$RefreshReg$(_c10, "ClassicSpinner5");
+$RefreshReg$(_c11, "ClassicSpinner6Wrapper");
+$RefreshReg$(_c12, "ClassicSpinner6");
+$RefreshReg$(_c13, "ClassicSpinner7Wrapper");
+$RefreshReg$(_c14, "ClassicSpinner7");
+$RefreshReg$(_c15, "ClassicSpinner8Wrapper");
+$RefreshReg$(_c16, "ClassicSpinner8");
+$RefreshReg$(_c17, "ClassicSpinner9Wrapper");
+$RefreshReg$(_c18, "ClassicSpinner9");
+$RefreshReg$(_c19, "ClassicSpinner10Wrapper");
+$RefreshReg$(_c20, "ClassicSpinner10");
+$RefreshReg$(_c21, "InfinitySpinner1Wrapper");
+$RefreshReg$(_c22, "InfinitySpinner1");
+$RefreshReg$(_c23, "InfinitySpinner2Wrapper");
+$RefreshReg$(_c24, "InfinitySpinner2");
+$RefreshReg$(_c25, "InfinitySpinner3Wrapper");
+$RefreshReg$(_c26, "InfinitySpinner3");
+$RefreshReg$(_c27, "InfinitySpinner4Wrapper");
+$RefreshReg$(_c28, "InfinitySpinner4");
+$RefreshReg$(_c29, "InfinitySpinner5Wrapper");
+$RefreshReg$(_c30, "InfinitySpinner5");
+$RefreshReg$(_c31, "InfinitySpinner6Wrapper");
+$RefreshReg$(_c32, "InfinitySpinner6");
+$RefreshReg$(_c33, "InfinitySpinner7Wrapper");
+$RefreshReg$(_c34, "InfinitySpinner7");
+$RefreshReg$(_c35, "InfinitySpinner8Wrapper");
+$RefreshReg$(_c36, "InfinitySpinner8");
+$RefreshReg$(_c37, "InfinitySpinner9Wrapper$1");
+$RefreshReg$(_c38, "InfinitySpinner9$1");
+$RefreshReg$(_c39, "InfinitySpinner9Wrapper");
+$RefreshReg$(_c40, "InfinitySpinner9");
+$RefreshReg$(_c41, "DotSpinner1Wrapper");
+$RefreshReg$(_c42, "DotSpinner1");
+$RefreshReg$(_c43, "DotSpinner2Wrapper");
+$RefreshReg$(_c44, "DotSpinner2");
+$RefreshReg$(_c45, "DotSpinner3Wrapper");
+$RefreshReg$(_c46, "DotSpinner3");
+$RefreshReg$(_c47, "DotSpinner4Wrapper");
+$RefreshReg$(_c48, "DotSpinner4");
+$RefreshReg$(_c49, "DotSpinner5Wrapper");
+$RefreshReg$(_c50, "DotSpinner5");
+$RefreshReg$(_c51, "DotSpinner6Wrapper");
+$RefreshReg$(_c52, "DotSpinner6");
+$RefreshReg$(_c53, "DotSpinner7Wrapper");
+$RefreshReg$(_c54, "DotSpinner7");
+$RefreshReg$(_c55, "DotSpinner8Wrapper");
+$RefreshReg$(_c56, "DotSpinner8");
+$RefreshReg$(_c57, "DotSpinner9Wrapper");
+$RefreshReg$(_c58, "DotSpinner9");
+$RefreshReg$(_c59, "DotSpinner10Wrapper");
+$RefreshReg$(_c60, "DotSpinner10");
+$RefreshReg$(_c61, "BarSpinner1Wrapper");
+$RefreshReg$(_c62, "BarSpinner1");
+$RefreshReg$(_c63, "BarSpinner2Wrapper");
+$RefreshReg$(_c64, "BarSpinner2");
+$RefreshReg$(_c65, "BarSpinner3Wrapper");
+$RefreshReg$(_c66, "BarSpinner3");
+$RefreshReg$(_c67, "BarSpinner4Wrapper");
+$RefreshReg$(_c68, "BarSpinner4");
+$RefreshReg$(_c69, "BarSpinner5Wrapper");
+$RefreshReg$(_c70, "BarSpinner5");
+$RefreshReg$(_c71, "BarSpinner6Wrapper");
+$RefreshReg$(_c72, "BarSpinner6");
+$RefreshReg$(_c73, "BarSpinner7Wrapper");
+$RefreshReg$(_c74, "BarSpinner7");
+$RefreshReg$(_c75, "BarSpinner8Wrapper");
+$RefreshReg$(_c76, "BarSpinner8");
+$RefreshReg$(_c77, "BarSpinner9Wrapper");
+$RefreshReg$(_c78, "BarSpinner9");
+$RefreshReg$(_c79, "BarSpinner10Wrapper");
+$RefreshReg$(_c80, "BarSpinner10");
+$RefreshReg$(_c81, "RoundedSpinner1Wrapper");
+$RefreshReg$(_c82, "RoundedSpinner1");
+$RefreshReg$(_c83, "RoundedSpinner2Wrapper");
+$RefreshReg$(_c84, "RoundedSpinner2");
+$RefreshReg$(_c85, "RoundedSpinner3Wrapper");
+$RefreshReg$(_c86, "RoundedSpinner3");
+$RefreshReg$(_c87, "RoundedSpinner4Wrapper");
+$RefreshReg$(_c88, "RoundedSpinner4");
+$RefreshReg$(_c89, "RoundedSpinner5Wrapper");
+$RefreshReg$(_c90, "RoundedSpinner5");
+$RefreshReg$(_c91, "RoundedSpinner6Wrapper");
+$RefreshReg$(_c92, "RoundedSpinner6");
+$RefreshReg$(_c93, "RoundedSpinner7Wrapper");
+$RefreshReg$(_c94, "RoundedSpinner7");
+$RefreshReg$(_c95, "RoundedSpinner8Wrapper");
+$RefreshReg$(_c96, "RoundedSpinner8");
+$RefreshReg$(_c97, "RoundedSpinner9Wrapper");
+$RefreshReg$(_c98, "RoundedSpinner9");
+$RefreshReg$(_c99, "RoundedSpinner10Wrapper");
+$RefreshReg$(_c100, "RoundedSpinner10");
+$RefreshReg$(_c101, "ContinuousSpinner1Wrapper");
+$RefreshReg$(_c102, "ContinuousSpinner1");
+$RefreshReg$(_c103, "ContinuousSpinner2Wrapper");
+$RefreshReg$(_c104, "ContinuousSpinner2");
+$RefreshReg$(_c105, "ContinuousSpinner3Wrapper");
+$RefreshReg$(_c106, "ContinuousSpinner3");
+$RefreshReg$(_c107, "ContinuousSpinner4Wrapper");
+$RefreshReg$(_c108, "ContinuousSpinner4");
+$RefreshReg$(_c109, "ContinuousSpinner5Wrapper");
+$RefreshReg$(_c110, "ContinuousSpinner5");
+$RefreshReg$(_c111, "ContinuousSpinner6Wrapper");
+$RefreshReg$(_c112, "ContinuousSpinner6");
+$RefreshReg$(_c113, "ContinuousSpinner7Wrapper");
+$RefreshReg$(_c114, "ContinuousSpinner7");
+$RefreshReg$(_c115, "ContinuousSpinner8Wrapper");
+$RefreshReg$(_c116, "ContinuousSpinner8");
+$RefreshReg$(_c117, "ContinuousSpinner9Wrapper");
+$RefreshReg$(_c118, "ContinuousSpinner9");
+$RefreshReg$(_c119, "ContinuousSpinner10Wrapper");
+$RefreshReg$(_c120, "ContinuousSpinner10");
+$RefreshReg$(_c121, "ProgressSpinner1Wrapper");
+$RefreshReg$(_c122, "ProgressSpinner1");
+$RefreshReg$(_c123, "ProgressSpinner2Wrapper");
+$RefreshReg$(_c124, "ProgressSpinner2");
+$RefreshReg$(_c125, "ProgressSpinner3Wrapper");
+$RefreshReg$(_c126, "ProgressSpinner3");
+$RefreshReg$(_c127, "ProgressSpinner4Wrapper");
+$RefreshReg$(_c128, "ProgressSpinner4");
+$RefreshReg$(_c129, "ProgressSpinner5Wrapper");
+$RefreshReg$(_c130, "ProgressSpinner5");
+$RefreshReg$(_c131, "ProgressSpinner6Wrapper");
+$RefreshReg$(_c132, "ProgressSpinner6");
+$RefreshReg$(_c133, "ProgressSpinner7Wrapper");
+$RefreshReg$(_c134, "ProgressSpinner7");
+$RefreshReg$(_c135, "ProgressSpinner8Wrapper");
+$RefreshReg$(_c136, "ProgressSpinner8");
+$RefreshReg$(_c137, "ProgressSpinner9Wrapper");
+$RefreshReg$(_c138, "ProgressSpinner9");
+$RefreshReg$(_c139, "ProgressSpinner10Wrapper");
+$RefreshReg$(_c140, "ProgressSpinner10");
+$RefreshReg$(_c141, "WobblingSpinner1Wrapper");
+$RefreshReg$(_c142, "WobblingSpinner1");
+$RefreshReg$(_c143, "WobblingSpinner2Wrapper");
+$RefreshReg$(_c144, "WobblingSpinner2");
+$RefreshReg$(_c145, "WobblingSpinner3Wrapper");
+$RefreshReg$(_c146, "WobblingSpinner3");
+$RefreshReg$(_c147, "WobblingSpinner4Wrapper");
+$RefreshReg$(_c148, "WobblingSpinner4");
+$RefreshReg$(_c149, "WobblingSpinner5Wrapper");
+$RefreshReg$(_c150, "WobblingSpinner5");
+$RefreshReg$(_c151, "WobblingSpinner6Wrapper");
+$RefreshReg$(_c152, "WobblingSpinner6");
+$RefreshReg$(_c153, "WobblingSpinner7Wrapper");
+$RefreshReg$(_c154, "WobblingSpinner7");
+$RefreshReg$(_c155, "WobblingSpinner8Wrapper");
+$RefreshReg$(_c156, "WobblingSpinner8");
+$RefreshReg$(_c157, "WobblingSpinner9Wrapper");
+$RefreshReg$(_c158, "WobblingSpinner9");
+$RefreshReg$(_c159, "WobblingSpinner10Wrapper");
+$RefreshReg$(_c160, "WobblingSpinner10");
 
   $parcel$ReactRefreshHelpers$c9f1.postlude(module);
 } finally {
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","styled-components":"nHnZQ","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"nHnZQ":[function(require,module,exports) {
+},{"695b40a359d5540b":"3IZzP","cc3b45ccebc3165d":"nHnZQ","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"nHnZQ":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "ServerStyleSheet", ()=>Je);
@@ -34334,7 +34905,7 @@ var _isPropValid = require("@emotion/is-prop-valid");
 var _isPropValidDefault = parcelHelpers.interopDefault(_isPropValid);
 var _hoistNonReactStatics = require("hoist-non-react-statics");
 var _hoistNonReactStaticsDefault = parcelHelpers.interopDefault(_hoistNonReactStatics);
-var process = require("process");
+var process = require("c024175ebfc21ad3");
 function v() {
     return (v = Object.assign || function(e) {
         for(var t = 1; t < arguments.length; t++){
@@ -34361,7 +34932,7 @@ function _(e) {
 function N(e) {
     return e && "string" == typeof e.styledComponentId;
 }
-var A = ("undefined" != typeof process && undefined, "data-styled"), C = "5.3.5", I = "undefined" != typeof window && "HTMLElement" in window, P = Boolean("boolean" == typeof SC_DISABLE_SPEEDY ? SC_DISABLE_SPEEDY : (typeof process, typeof process, true)), O = {}, R = {
+var A = ("undefined" != typeof process && void 0 !== process.env && undefined, "data-styled"), C = "5.3.10", I = "undefined" != typeof window && "HTMLElement" in window, P = Boolean("boolean" == typeof SC_DISABLE_SPEEDY ? SC_DISABLE_SPEEDY : "undefined" != typeof process && void 0 !== process.env && true), O = {}, R = {
     1: "Cannot create styled-component for component: %s.\n\n",
     2: "Can't collect styles once you've consumed a `ServerStyleSheet`'s styles! `ServerStyleSheet` is a one off instance for each server-side render cycle.\n\n- Are you trying to reuse it across renders?\n- Are you accidentally calling collectStyles twice?\n\n",
     3: "Streaming SSR is only supported in a Node.js environment; Please do not try to call this method in the browser.\n\n",
@@ -34381,8 +34952,8 @@ var A = ("undefined" != typeof process && undefined, "data-styled"), C = "5.3.5"
     17: "CSSStyleSheet could not be found on HTMLStyleElement.\nHas styled-components' style tag been unmounted or altered by another script?\n"
 };
 function D() {
-    for(var e = arguments.length <= 0 ? void 0 : arguments[0], t1 = [], n = 1, r = arguments.length; n < r; n += 1)t1.push(n < 0 || arguments.length <= n ? void 0 : arguments[n]);
-    return t1.forEach(function(t) {
+    for(var e = arguments.length <= 0 ? void 0 : arguments[0], t = [], n = 1, r = arguments.length; n < r; n += 1)t.push(n < 0 || arguments.length <= n ? void 0 : arguments[n]);
+    return t.forEach(function(t) {
         e = e.replace(/%[a-z]/, t);
     }), e;
 }
@@ -34393,32 +34964,32 @@ function j(e) {
     ].concat(n)).trim());
 }
 var T = function() {
-    function e1(e) {
+    function e(e) {
         this.groupSizes = new Uint32Array(512), this.length = 512, this.tag = e;
     }
-    var t2 = e1.prototype;
-    return t2.indexOfGroup = function(e) {
+    var t = e.prototype;
+    return t.indexOfGroup = function(e) {
         for(var t = 0, n = 0; n < e; n++)t += this.groupSizes[n];
         return t;
-    }, t2.insertRules = function(e, t) {
+    }, t.insertRules = function(e, t) {
         if (e >= this.groupSizes.length) {
             for(var n = this.groupSizes, r = n.length, o = r; e >= o;)(o <<= 1) < 0 && j(16, "" + e);
             this.groupSizes = new Uint32Array(o), this.groupSizes.set(n), this.length = o;
             for(var s = r; s < o; s++)this.groupSizes[s] = 0;
         }
         for(var i = this.indexOfGroup(e + 1), a = 0, c = t.length; a < c; a++)this.tag.insertRule(i, t[a]) && (this.groupSizes[e]++, i++);
-    }, t2.clearGroup = function(e) {
+    }, t.clearGroup = function(e) {
         if (e < this.length) {
             var t = this.groupSizes[e], n = this.indexOfGroup(e), r = n + t;
             this.groupSizes[e] = 0;
             for(var o = n; o < r; o++)this.tag.deleteRule(n);
         }
-    }, t2.getGroup = function(e) {
+    }, t.getGroup = function(e) {
         var t = "";
         if (e >= this.length || 0 === this.groupSizes[e]) return t;
         for(var n = this.groupSizes[e], r = this.indexOfGroup(e), o = r + n, s = r; s < o; s++)t += this.tag.getRule(s) + "/*!sc*/\n";
         return t;
-    }, e1;
+    }, e;
 }(), x = new Map, k = new Map, V = 1, B = function(e) {
     if (x.has(e)) return x.get(e);
     for(; k.has(V);)V++;
@@ -34428,7 +34999,7 @@ var T = function() {
     return k.get(e);
 }, M = function(e, t) {
     t >= V && (V = t + 1), x.set(e, t), k.set(t, e);
-}, G = "style[" + A + '][data-styled-version="5.3.5"]', L = new RegExp("^" + A + '\\.g(\\d+)\\[id="([\\w\\d-]+)"\\].*?"([^"]*)'), F = function(e, t, n) {
+}, G = "style[" + A + '][data-styled-version="5.3.10"]', L = new RegExp("^" + A + '\\.g(\\d+)\\[id="([\\w\\d-]+)"\\].*?"([^"]*)'), F = function(e, t, n) {
     for(var r, o = n.split(","), s = 0, i = o.length; s < i; s++)(r = o[s]) && e.registerName(t, r);
 }, Y = function(e, t) {
     for(var n = (t.textContent || "").split("/*!sc*/\n"), r = [], o = 0, s = n.length; o < s; o++){
@@ -34442,116 +35013,116 @@ var T = function() {
         }
     }
 }, q = function() {
-    return "undefined" != typeof window && void 0 !== window.__webpack_nonce__ ? window.__webpack_nonce__ : null;
-}, H = function(e2) {
-    var t3 = document.head, n1 = e2 || t3, r1 = document.createElement("style"), o = function(e) {
+    return "undefined" != typeof __webpack_nonce__ ? __webpack_nonce__ : null;
+}, H = function(e) {
+    var t = document.head, n = e || t, r = document.createElement("style"), o = function(e) {
         for(var t = e.childNodes, n = t.length; n >= 0; n--){
             var r = t[n];
             if (r && 1 === r.nodeType && r.hasAttribute(A)) return r;
         }
-    }(n1), s = void 0 !== o ? o.nextSibling : null;
-    r1.setAttribute(A, "active"), r1.setAttribute("data-styled-version", "5.3.5");
+    }(n), s = void 0 !== o ? o.nextSibling : null;
+    r.setAttribute(A, "active"), r.setAttribute("data-styled-version", "5.3.10");
     var i = q();
-    return i && r1.setAttribute("nonce", i), n1.insertBefore(r1, s), r1;
+    return i && r.setAttribute("nonce", i), n.insertBefore(r, s), r;
 }, $ = function() {
-    function e3(e4) {
-        var t5 = this.element = H(e4);
-        t5.appendChild(document.createTextNode("")), this.sheet = function(e) {
+    function e(e) {
+        var t = this.element = H(e);
+        t.appendChild(document.createTextNode("")), this.sheet = function(e) {
             if (e.sheet) return e.sheet;
             for(var t = document.styleSheets, n = 0, r = t.length; n < r; n++){
                 var o = t[n];
                 if (o.ownerNode === e) return o;
             }
             j(17);
-        }(t5), this.length = 0;
+        }(t), this.length = 0;
     }
-    var t4 = e3.prototype;
-    return t4.insertRule = function(e, t) {
+    var t = e.prototype;
+    return t.insertRule = function(e, t) {
         try {
             return this.sheet.insertRule(t, e), this.length++, !0;
-        } catch (e5) {
+        } catch (e) {
             return !1;
         }
-    }, t4.deleteRule = function(e) {
+    }, t.deleteRule = function(e) {
         this.sheet.deleteRule(e), this.length--;
-    }, t4.getRule = function(e) {
+    }, t.getRule = function(e) {
         var t = this.sheet.cssRules[e];
         return void 0 !== t && "string" == typeof t.cssText ? t.cssText : "";
-    }, e3;
+    }, e;
 }(), W = function() {
-    function e6(e) {
+    function e(e) {
         var t = this.element = H(e);
         this.nodes = t.childNodes, this.length = 0;
     }
-    var t6 = e6.prototype;
-    return t6.insertRule = function(e, t) {
+    var t = e.prototype;
+    return t.insertRule = function(e, t) {
         if (e <= this.length && e >= 0) {
             var n = document.createTextNode(t), r = this.nodes[e];
             return this.element.insertBefore(n, r || null), this.length++, !0;
         }
         return !1;
-    }, t6.deleteRule = function(e) {
+    }, t.deleteRule = function(e) {
         this.element.removeChild(this.nodes[e]), this.length--;
-    }, t6.getRule = function(e) {
+    }, t.getRule = function(e) {
         return e < this.length ? this.nodes[e].textContent : "";
-    }, e6;
+    }, e;
 }(), U = function() {
-    function e7(e) {
+    function e(e) {
         this.rules = [], this.length = 0;
     }
-    var t7 = e7.prototype;
-    return t7.insertRule = function(e, t) {
+    var t = e.prototype;
+    return t.insertRule = function(e, t) {
         return e <= this.length && (this.rules.splice(e, 0, t), this.length++, !0);
-    }, t7.deleteRule = function(e) {
+    }, t.deleteRule = function(e) {
         this.rules.splice(e, 1), this.length--;
-    }, t7.getRule = function(e) {
+    }, t.getRule = function(e) {
         return e < this.length ? this.rules[e] : "";
-    }, e7;
+    }, e;
 }(), J = I, X = {
     isServer: !I,
     useCSSOMInjection: !P
 }, Z = function() {
-    function e8(e9, t9, n2) {
-        void 0 === e9 && (e9 = E), void 0 === t9 && (t9 = {}), this.options = v({}, X, {}, e9), this.gs = t9, this.names = new Map(n2), this.server = !!e9.isServer, !this.server && I && J && (J = !1, function(e) {
+    function e(e, t, n) {
+        void 0 === e && (e = E), void 0 === t && (t = {}), this.options = v({}, X, {}, e), this.gs = t, this.names = new Map(n), this.server = !!e.isServer, !this.server && I && J && (J = !1, function(e) {
             for(var t = document.querySelectorAll(G), n = 0, r = t.length; n < r; n++){
                 var o = t[n];
                 o && "active" !== o.getAttribute(A) && (Y(e, o), o.parentNode && o.parentNode.removeChild(o));
             }
         }(this));
     }
-    e8.registerId = function(e) {
+    e.registerId = function(e) {
         return B(e);
     };
-    var t8 = e8.prototype;
-    return t8.reconstructWithOptions = function(t, n) {
-        return void 0 === n && (n = !0), new e8(v({}, this.options, {}, t), this.gs, n && this.names || void 0);
-    }, t8.allocateGSInstance = function(e) {
+    var t = e.prototype;
+    return t.reconstructWithOptions = function(t, n) {
+        return void 0 === n && (n = !0), new e(v({}, this.options, {}, t), this.gs, n && this.names || void 0);
+    }, t.allocateGSInstance = function(e) {
         return this.gs[e] = (this.gs[e] || 0) + 1;
-    }, t8.getTag = function() {
+    }, t.getTag = function() {
         var e, t, n, r, o;
         return this.tag || (this.tag = (n = (t = this.options).isServer, r = t.useCSSOMInjection, o = t.target, e = n ? new U(o) : r ? new $(o) : new W(o), new T(e)));
-    }, t8.hasNameForId = function(e, t) {
+    }, t.hasNameForId = function(e, t) {
         return this.names.has(e) && this.names.get(e).has(t);
-    }, t8.registerName = function(e, t) {
+    }, t.registerName = function(e, t) {
         if (B(e), this.names.has(e)) this.names.get(e).add(t);
         else {
             var n = new Set;
             n.add(t), this.names.set(e, n);
         }
-    }, t8.insertRules = function(e, t, n) {
+    }, t.insertRules = function(e, t, n) {
         this.registerName(e, t), this.getTag().insertRules(B(e), n);
-    }, t8.clearNames = function(e) {
+    }, t.clearNames = function(e) {
         this.names.has(e) && this.names.get(e).clear();
-    }, t8.clearRules = function(e) {
+    }, t.clearRules = function(e) {
         this.getTag().clearGroup(B(e)), this.clearNames(e);
-    }, t8.clearTag = function() {
+    }, t.clearTag = function() {
         this.tag = void 0;
-    }, t8.toString = function() {
-        return function(e10) {
-            for(var t = e10.getTag(), n = t.length, r = "", o = 0; o < n; o++){
+    }, t.toString = function() {
+        return function(e) {
+            for(var t = e.getTag(), n = t.length, r = "", o = 0; o < n; o++){
                 var s = z(o);
                 if (void 0 !== s) {
-                    var i = e10.names.get(s), a = t.getGroup(o);
+                    var i = e.names.get(s), a = t.getGroup(o);
                     if (i && a && i.size) {
                         var c = A + ".g" + o + '[id="' + s + '"]', u = "";
                         void 0 !== i && i.forEach(function(e) {
@@ -34562,7 +35133,7 @@ var T = function() {
             }
             return r;
         }(this);
-    }, e8;
+    }, e;
 }(), K = /(a)(d)/gi, Q = function(e) {
     return String.fromCharCode(e + (e > 25 ? 39 : 97));
 };
@@ -34584,11 +35155,11 @@ function re(e) {
     }
     return !0;
 }
-var oe = ne("5.3.5"), se = function() {
-    function e11(e, t, n) {
+var oe = ne("5.3.10"), se = function() {
+    function e(e, t, n) {
         this.rules = e, this.staticRulesId = "", this.isStatic = false, this.componentId = t, this.baseHash = te(oe, t), this.baseStyle = n, Z.registerId(t);
     }
-    return e11.prototype.generateAndInjectStyles = function(e, t, n) {
+    return e.prototype.generateAndInjectStyles = function(e, t, n) {
         var r = this.componentId, o = [];
         if (this.baseStyle && o.push(this.baseStyle.generateAndInjectStyles(e, t, n)), this.isStatic && !n.hash) {
             if (this.staticRulesId && t.hasNameForId(r, this.staticRulesId)) o.push(this.staticRulesId);
@@ -34619,16 +35190,16 @@ var oe = ne("5.3.5"), se = function() {
             }
         }
         return o.join(" ");
-    }, e11;
+    }, e;
 }(), ie = /^\s*\/\/.*$/gm, ae = [
     ":",
     "[",
     ".",
     "#"
 ];
-function ce(e12) {
-    var t10, n3, r2, o1, s1 = void 0 === e12 ? E : e12, i1 = s1.options, a1 = void 0 === i1 ? E : i1, c1 = s1.plugins, u1 = void 0 === c1 ? w : c1, l1 = new (0, _stylisDefault.default)(a1), d1 = [], h = function(e) {
-        function t11(t) {
+function ce(e) {
+    var t, n, r, o, s = void 0 === e ? E : e, i = s.options, a = void 0 === i ? E : i, c = s.plugins, u = void 0 === c ? w : c, l = new (0, _stylisDefault.default)(a), d = [], h = function(e) {
+        function t(t) {
             if (t) try {
                 e(t + "}");
             } catch (e) {}
@@ -34650,31 +35221,31 @@ function ce(e12) {
                             return r + (0 === d ? "/*|*/" : "");
                     }
                 case -2:
-                    r.split("/*|*/}").forEach(t11);
+                    r.split("/*|*/}").forEach(t);
             }
         };
     }(function(e) {
-        d1.push(e);
+        d.push(e);
     }), f = function(e, r, s) {
-        return 0 === r && -1 !== ae.indexOf(s[n3.length]) || s.match(o1) ? e : "." + t10;
+        return 0 === r && -1 !== ae.indexOf(s[n.length]) || s.match(o) ? e : "." + t;
     };
     function m(e, s, i, a) {
         void 0 === a && (a = "&");
         var c = e.replace(ie, ""), u = s && i ? i + " " + s + " { " + c + " }" : c;
-        return t10 = a, n3 = s, r2 = new RegExp("\\" + n3 + "\\b", "g"), o1 = new RegExp("(\\" + n3 + "\\b){2,}"), l1(i || !s ? "" : s, u);
+        return t = a, n = s, r = new RegExp("\\" + n + "\\b", "g"), o = new RegExp("(\\" + n + "\\b){2,}"), l(i || !s ? "" : s, u);
     }
-    return l1.use([].concat(u1, [
+    return l.use([].concat(u, [
         function(e, t, o) {
-            2 === e && o.length && o[0].lastIndexOf(n3) > 0 && (o[0] = o[0].replace(r2, f));
+            2 === e && o.length && o[0].lastIndexOf(n) > 0 && (o[0] = o[0].replace(r, f));
         },
         h,
         function(e) {
             if (-2 === e) {
-                var t = d1;
-                return d1 = [], t;
+                var t = d;
+                return d = [], t;
             }
         }
-    ])), m.hash = u1.length ? u1.reduce(function(e, t) {
+    ])), m.hash = u.length ? u.reduce(function(e, t) {
         return t.name || j(15), te(e, t.name);
     }, 5381).toString() : "", m;
 }
@@ -34686,7 +35257,7 @@ function me() {
     return (0, _react.useContext)(de) || pe;
 }
 function ye(e) {
-    var t12 = (0, _react.useState)(e.stylisPlugins), n = t12[0], s = t12[1], c = fe(), u = (0, _react.useMemo)(function() {
+    var t = (0, _react.useState)(e.stylisPlugins), n = t[0], s = t[1], c = fe(), u = (0, _react.useMemo)(function() {
         var t = c;
         return e.sheet ? t = e.sheet : e.target && (t = t.reconstructWithOptions({
             target: e.target
@@ -34719,7 +35290,7 @@ function ye(e) {
     }, (0, _reactDefault.default).Children.only(e.children)));
 }
 var ve = function() {
-    function e13(e14, t13) {
+    function e(e, t) {
         var n = this;
         this.inject = function(e, t) {
             void 0 === t && (t = pe);
@@ -34727,11 +35298,11 @@ var ve = function() {
             e.hasNameForId(n.id, r) || e.insertRules(n.id, r, t(n.rules, r, "@keyframes"));
         }, this.toString = function() {
             return j(12, String(n.name));
-        }, this.name = e14, this.id = "sc-keyframes-" + e14, this.rules = t13;
+        }, this.name = e, this.id = "sc-keyframes-" + e, this.rules = t;
     }
-    return e13.prototype.getName = function(e) {
+    return e.prototype.getName = function(e) {
         return void 0 === e && (e = pe), this.name + e.hash;
-    }, e13;
+    }, e;
 }(), ge = /([A-Z])/, Se = /([A-Z])/g, we = /^ms-/, Ee = function(e) {
     return "-" + e.toLowerCase();
 };
@@ -34741,28 +35312,28 @@ function be(e) {
 var _e = function(e) {
     return null == e || !1 === e || "" === e;
 };
-function Ne(e15, n4, r3, o2) {
-    if (Array.isArray(e15)) {
-        for(var s, i = [], a = 0, c = e15.length; a < c; a += 1)"" !== (s = Ne(e15[a], n4, r3, o2)) && (Array.isArray(s) ? i.push.apply(i, s) : i.push(s));
+function Ne(e, n, r, o) {
+    if (Array.isArray(e)) {
+        for(var s, i = [], a = 0, c = e.length; a < c; a += 1)"" !== (s = Ne(e[a], n, r, o)) && (Array.isArray(s) ? i.push.apply(i, s) : i.push(s));
         return i;
     }
-    if (_e(e15)) return "";
-    if (N(e15)) return "." + e15.styledComponentId;
-    if (b(e15)) {
-        if ("function" != typeof (l = e15) || l.prototype && l.prototype.isReactComponent || !n4) return e15;
-        var u = e15(n4);
-        return (0, _reactIs.isElement)(u) && console.warn(_(e15) + " is not a styled component and cannot be referred to via component selector. See https://www.styled-components.com/docs/advanced#referring-to-other-components for more details."), Ne(u, n4, r3, o2);
+    if (_e(e)) return "";
+    if (N(e)) return "." + e.styledComponentId;
+    if (b(e)) {
+        if ("function" != typeof (l = e) || l.prototype && l.prototype.isReactComponent || !n) return e;
+        var u = e(n);
+        return (0, _reactIs.isElement)(u) && console.warn(_(e) + " is not a styled component and cannot be referred to via component selector. See https://www.styled-components.com/docs/advanced#referring-to-other-components for more details."), Ne(u, n, r, o);
     }
     var l;
-    return e15 instanceof ve ? r3 ? (e15.inject(r3, o2), e15.getName(o2)) : e15 : S(e15) ? function e(t, n) {
+    return e instanceof ve ? r ? (e.inject(r, o), e.getName(o)) : e : S(e) ? function e(t, n) {
         var r, o, s = [];
-        for(var i in t)t.hasOwnProperty(i) && !_e(t[i]) && (Array.isArray(t[i]) && t[i].isCss || b(t[i]) ? s.push(be(i) + ":", t[i], ";") : S(t[i]) ? s.push.apply(s, e(t[i], i)) : s.push(be(i) + ": " + (r = i, null == (o = t[i]) || "boolean" == typeof o || "" === o ? "" : "number" != typeof o || 0 === o || r in (0, _unitlessDefault.default) ? String(o).trim() : o + "px") + ";"));
+        for(var i in t)t.hasOwnProperty(i) && !_e(t[i]) && (Array.isArray(t[i]) && t[i].isCss || b(t[i]) ? s.push(be(i) + ":", t[i], ";") : S(t[i]) ? s.push.apply(s, e(t[i], i)) : s.push(be(i) + ": " + (r = i, null == (o = t[i]) || "boolean" == typeof o || "" === o ? "" : "number" != typeof o || 0 === o || r in (0, _unitlessDefault.default) || r.startsWith("--") ? String(o).trim() : o + "px") + ";"));
         return n ? [
             n + " {"
         ].concat(s, [
             "}"
         ]) : s;
-    }(e15) : e15.toString();
+    }(e) : e.toString();
 }
 var Ae = function(e) {
     return Array.isArray(e) && (e.isCss = !0), e;
@@ -34773,8 +35344,8 @@ function Ce(e) {
         e
     ].concat(n)))) : 0 === n.length && 1 === e.length && "string" == typeof e[0] ? e : Ae(Ne(g(e, n)));
 }
-var Ie = /invalid hook call/i, Pe = new Set, Oe = function(e16, t14) {
-    var n = "The component " + e16 + (t14 ? ' with the id of "' + t14 + '"' : "") + " has been created dynamically.\nYou may see this warning because you've called styled inside another component.\nTo resolve this only create new StyledComponents outside of any render method and function component.", r = console.error;
+var Ie = /invalid hook call/i, Pe = new Set, Oe = function(e, t) {
+    var n = "The component " + e + (t ? ' with the id of "' + t + '"' : "") + " has been created dynamically.\nYou may see this warning because you've called styled inside another component.\nTo resolve this only create new StyledComponents outside of any render method and function component.", r = console.error;
     try {
         var o = !0;
         console.error = function(e) {
@@ -34821,8 +35392,8 @@ function Me(e) {
     return e;
 }
 var Ge = (0, _reactDefault.default).createContext(), Le = Ge.Consumer;
-function Fe(e17) {
-    var t15 = (0, _react.useContext)(Ge), n5 = (0, _react.useMemo)(function() {
+function Fe(e) {
+    var t = (0, _react.useContext)(Ge), n = (0, _react.useMemo)(function() {
         return function(e, t) {
             if (!e) return j(14);
             if (b(e)) {
@@ -34830,73 +35401,73 @@ function Fe(e17) {
                 return null !== n && !Array.isArray(n) && "object" == typeof n ? n : j(7);
             }
             return Array.isArray(e) || "object" != typeof e ? j(8) : t ? v({}, t, {}, e) : e;
-        }(e17.theme, t15);
+        }(e.theme, t);
     }, [
-        e17.theme,
-        t15
+        e.theme,
+        t
     ]);
-    return e17.children ? (0, _reactDefault.default).createElement(Ge.Provider, {
-        value: n5
-    }, e17.children) : null;
+    return e.children ? (0, _reactDefault.default).createElement(Ge.Provider, {
+        value: n
+    }, e.children) : null;
 }
 var Ye = {};
-function qe(e18, t16, n6) {
-    var o3 = N(e18), i2 = !ke(e18), a2 = t16.attrs, c2 = void 0 === a2 ? w : a2, d2 = t16.componentId, h1 = void 0 === d2 ? function(e, t) {
+function qe(e, t, n) {
+    var o = N(e), i = !ke(e), a = t.attrs, c = void 0 === a ? w : a, d = t.componentId, h = void 0 === d ? function(e, t) {
         var n = "string" != typeof e ? "sc" : Te(e);
         Ye[n] = (Ye[n] || 0) + 1;
-        var r = n + "-" + xe("5.3.5" + n + Ye[n]);
+        var r = n + "-" + xe("5.3.10" + n + Ye[n]);
         return t ? t + "-" + r : r;
-    }(t16.displayName, t16.parentComponentId) : d2, p1 = t16.displayName, f1 = void 0 === p1 ? function(e) {
+    }(t.displayName, t.parentComponentId) : d, p = t.displayName, f = void 0 === p ? function(e) {
         return ke(e) ? "styled." + e : "Styled(" + _(e) + ")";
-    }(e18) : p1, g1 = t16.displayName && t16.componentId ? Te(t16.displayName) + "-" + t16.componentId : t16.componentId || h1, S1 = o3 && e18.attrs ? Array.prototype.concat(e18.attrs, c2).filter(Boolean) : c2, A1 = t16.shouldForwardProp;
-    o3 && e18.shouldForwardProp && (A1 = t16.shouldForwardProp ? function(n, r, o) {
-        return e18.shouldForwardProp(n, r, o) && t16.shouldForwardProp(n, r, o);
-    } : e18.shouldForwardProp);
-    var C1, I1 = new se(n6, g1, o3 ? e18.componentStyle : void 0), P1 = I1.isStatic && 0 === c2.length, O1 = function(e19, t17) {
-        return function(e20, t18, n7, r4) {
-            var o4 = e20.attrs, i3 = e20.componentStyle, a = e20.defaultProps, c = e20.foldedComponentIds, d = e20.shouldForwardProp, h = e20.styledComponentId, p = e20.target;
+    }(e) : p, g = t.displayName && t.componentId ? Te(t.displayName) + "-" + t.componentId : t.componentId || h, S = o && e.attrs ? Array.prototype.concat(e.attrs, c).filter(Boolean) : c, A = t.shouldForwardProp;
+    o && e.shouldForwardProp && (A = t.shouldForwardProp ? function(n, r, o) {
+        return e.shouldForwardProp(n, r, o) && t.shouldForwardProp(n, r, o);
+    } : e.shouldForwardProp);
+    var C, I = new se(n, g, o ? e.componentStyle : void 0), P = I.isStatic && 0 === c.length, O = function(e, t) {
+        return function(e, t, n, r) {
+            var o = e.attrs, i = e.componentStyle, a = e.defaultProps, c = e.foldedComponentIds, d = e.shouldForwardProp, h = e.styledComponentId, p = e.target;
             (0, _react.useDebugValue)(h);
-            var f = function(e21, t19, n8) {
-                void 0 === e21 && (e21 = E);
-                var r = v({}, t19, {
-                    theme: e21
+            var f = function(e, t, n) {
+                void 0 === e && (e = E);
+                var r = v({}, t, {
+                    theme: e
                 }), o = {};
-                return n8.forEach(function(e) {
+                return n.forEach(function(e) {
                     var t, n, s, i = e;
                     for(t in b(i) && (i = i(r)), i)r[t] = o[t] = "className" === t ? (n = o[t], s = i[t], n && s ? n + " " + s : n || s) : i[t];
                 }), [
                     r,
                     o
                 ];
-            }(Re(t18, (0, _react.useContext)(Ge), a) || E, t18, o4), y = f[0], g2 = f[1], S2 = function(e, t, n, r) {
+            }(Re(t, (0, _react.useContext)(Ge), a) || E, t, o), y = f[0], g = f[1], S = function(e, t, n, r) {
                 var o = fe(), s = me(), i = t ? e.generateAndInjectStyles(E, o, s) : e.generateAndInjectStyles(n, o, s);
                 return (0, _react.useDebugValue)(i), !t && r && r(i), i;
-            }(i3, r4, y, e20.warnTooManyClasses), w1 = n7, _1 = g2.$as || t18.$as || g2.as || t18.as || p, N1 = ke(_1), A2 = g2 !== t18 ? v({}, t18, {}, g2) : t18, C2 = {};
-            for(var I2 in A2)"$" !== I2[0] && "as" !== I2 && ("forwardedAs" === I2 ? C2.as = A2[I2] : (d ? d(I2, (0, _isPropValidDefault.default), _1) : !N1 || (0, _isPropValidDefault.default)(I2)) && (C2[I2] = A2[I2]));
-            return t18.style && g2.style !== t18.style && (C2.style = v({}, t18.style, {}, g2.style)), C2.className = Array.prototype.concat(c, h, S2 !== h ? S2 : null, t18.className, g2.className).filter(Boolean).join(" "), C2.ref = w1, (0, _react.createElement)(_1, C2);
-        }(C1, e19, t17, P1);
+            }(i, r, y, (0, e.warnTooManyClasses)), w = n, _ = g.$as || t.$as || g.as || t.as || p, N = ke(_), A = g !== t ? v({}, t, {}, g) : t, C = {};
+            for(var I in A)"$" !== I[0] && "as" !== I && ("forwardedAs" === I ? C.as = A[I] : (d ? d(I, (0, _isPropValidDefault.default), _) : !N || (0, _isPropValidDefault.default)(I)) && (C[I] = A[I]));
+            return t.style && g.style !== t.style && (C.style = v({}, t.style, {}, g.style)), C.className = Array.prototype.concat(c, h, S !== h ? S : null, t.className, g.className).filter(Boolean).join(" "), C.ref = w, (0, _react.createElement)(_, C);
+        }(C, e, t, P);
     };
-    return O1.displayName = f1, (C1 = (0, _reactDefault.default).forwardRef(O1)).attrs = S1, C1.componentStyle = I1, C1.displayName = f1, C1.shouldForwardProp = A1, C1.foldedComponentIds = o3 ? Array.prototype.concat(e18.foldedComponentIds, e18.styledComponentId) : w, C1.styledComponentId = g1, C1.target = o3 ? e18.target : e18, C1.withComponent = function(e22) {
-        var r5 = t16.componentId, o5 = function(e, t) {
+    return O.displayName = f, (C = (0, _reactDefault.default).forwardRef(O)).attrs = S, C.componentStyle = I, C.displayName = f, C.shouldForwardProp = A, C.foldedComponentIds = o ? Array.prototype.concat(e.foldedComponentIds, e.styledComponentId) : w, C.styledComponentId = g, C.target = o ? e.target : e, C.withComponent = function(e) {
+        var r = t.componentId, o = function(e, t) {
             if (null == e) return {};
             var n, r, o = {}, s = Object.keys(e);
             for(r = 0; r < s.length; r++)n = s[r], t.indexOf(n) >= 0 || (o[n] = e[n]);
             return o;
-        }(t16, [
+        }(t, [
             "componentId"
-        ]), s2 = r5 && r5 + "-" + (ke(e22) ? e22 : Te(_(e22)));
-        return qe(e22, v({}, o5, {
-            attrs: S1,
-            componentId: s2
-        }), n6);
-    }, Object.defineProperty(C1, "defaultProps", {
+        ]), s = r && r + "-" + (ke(e) ? e : Te(_(e)));
+        return qe(e, v({}, o, {
+            attrs: S,
+            componentId: s
+        }), n);
+    }, Object.defineProperty(C, "defaultProps", {
         get: function() {
             return this._foldedDefaultProps;
         },
         set: function(t) {
-            this._foldedDefaultProps = o3 ? Me({}, e18.defaultProps, t) : t;
+            this._foldedDefaultProps = o ? Me({}, e.defaultProps, t) : t;
         }
-    }), Oe(f1, g1), C1.warnTooManyClasses = function(e, t) {
+    }), Oe(f, g), C.warnTooManyClasses = function(e, t) {
         var n = {}, r = !1;
         return function(o) {
             if (!r && (n[o] = !0, Object.keys(n).length >= 200)) {
@@ -34904,9 +35475,11 @@ function qe(e18, t16, n6) {
                 console.warn("Over 200 classes were generated for component " + e + s + ".\nConsider using the attrs method, together with a style object for frequently changed styles.\nExample:\n  const Component = styled.div.attrs(props => ({\n    style: {\n      background: props.background,\n    },\n  }))`width: 100%;`\n\n  <Component />"), r = !0, n = {};
             }
         };
-    }(f1, g1), C1.toString = function() {
-        return "." + C1.styledComponentId;
-    }, i2 && (0, _hoistNonReactStaticsDefault.default)(C1, e18, {
+    }(f, g), Object.defineProperty(C, "toString", {
+        value: function() {
+            return "." + C.styledComponentId;
+        }
+    }), i && (0, _hoistNonReactStaticsDefault.default)(C, e, {
         attrs: !0,
         componentStyle: !0,
         displayName: !0,
@@ -34915,9 +35488,9 @@ function qe(e18, t16, n6) {
         styledComponentId: !0,
         target: !0,
         withComponent: !0
-    }), C1;
+    }), C;
 }
-var He = function(e23) {
+var He = function(e) {
     return function e(t, r, o) {
         if (void 0 === o && (o = E), !(0, _reactIs.isValidElementType)(r)) return j(1, String(r));
         var s = function() {
@@ -34930,7 +35503,7 @@ var He = function(e23) {
                 attrs: Array.prototype.concat(o.attrs, n).filter(Boolean)
             }));
         }, s;
-    }(qe, e23);
+    }(qe, e);
 };
 [
     "a",
@@ -35073,35 +35646,35 @@ var He = function(e23) {
     He[e] = He(e);
 });
 var $e = function() {
-    function e24(e, t) {
+    function e(e, t) {
         this.rules = e, this.componentId = t, this.isStatic = re(e), Z.registerId(this.componentId + 1);
     }
-    var t20 = e24.prototype;
-    return t20.createStyles = function(e, t, n, r) {
+    var t = e.prototype;
+    return t.createStyles = function(e, t, n, r) {
         var o = r(Ne(this.rules, t, n, r).join(""), ""), s = this.componentId + e;
         n.insertRules(s, s, o);
-    }, t20.removeStyles = function(e, t) {
+    }, t.removeStyles = function(e, t) {
         t.clearRules(this.componentId + e);
-    }, t20.renderStyles = function(e, t, n, r) {
+    }, t.renderStyles = function(e, t, n, r) {
         e > 2 && Z.registerId(this.componentId + e), this.removeStyles(e, n), this.createStyles(e, t, n, r);
-    }, e24;
+    }, e;
 }();
-function We(e25) {
-    for(var t21 = arguments.length, n9 = new Array(t21 > 1 ? t21 - 1 : 0), o6 = 1; o6 < t21; o6++)n9[o6 - 1] = arguments[o6];
+function We(e) {
+    for(var t = arguments.length, n = new Array(t > 1 ? t - 1 : 0), o = 1; o < t; o++)n[o - 1] = arguments[o];
     var i = Ce.apply(void 0, [
-        e25
-    ].concat(n9)), a = "sc-global-" + xe(JSON.stringify(i)), u = new $e(i, a);
-    function l2(e26) {
+        e
+    ].concat(n)), a = "sc-global-" + xe(JSON.stringify(i)), u = new $e(i, a);
+    function l(e) {
         var t = fe(), n = me(), o = (0, _react.useContext)(Ge), l = (0, _react.useRef)(t.allocateGSInstance(a)).current;
-        return (0, _reactDefault.default).Children.count(e26.children) && console.warn("The global style component " + a + " was given child JSX. createGlobalStyle does not render children."), i.some(function(e) {
+        return (0, _reactDefault.default).Children.count(e.children) && console.warn("The global style component " + a + " was given child JSX. createGlobalStyle does not render children."), i.some(function(e) {
             return "string" == typeof e && -1 !== e.indexOf("@import");
-        }) && console.warn("Please do not use @import CSS syntax in createGlobalStyle at this time, as the CSSOM APIs we use in production do not handle it well. Instead, we recommend using a library such as react-helmet to inject a typical <link> meta tag to the stylesheet, or simply embedding it manually in your index.html <head> section for a simpler app."), t.server && h(l, e26, t, o, n), (0, _react.useLayoutEffect)(function() {
-            if (!t.server) return h(l, e26, t, o, n), function() {
+        }) && console.warn("Please do not use @import CSS syntax in createGlobalStyle at this time, as the CSSOM APIs we use in production do not handle it well. Instead, we recommend using a library such as react-helmet to inject a typical <link> meta tag to the stylesheet, or simply embedding it manually in your index.html <head> section for a simpler app."), t.server && h(l, e, t, o, n), (0, _react.useLayoutEffect)(function() {
+            if (!t.server) return h(l, e, t, o, n), function() {
                 return u.removeStyles(l, t);
             };
         }, [
             l,
-            e26,
+            e,
             t,
             o,
             n
@@ -35111,12 +35684,12 @@ function We(e25) {
         if (u.isStatic) u.renderStyles(e, O, n, o);
         else {
             var s = v({}, t, {
-                theme: Re(t, r, l2.defaultProps)
+                theme: Re(t, r, l.defaultProps)
             });
             u.renderStyles(e, s, n, o);
         }
     }
-    return Oe(a), (0, _reactDefault.default).memo(l2);
+    return Oe(a), (0, _reactDefault.default).memo(l);
 }
 function Ue(e) {
     "undefined" != typeof navigator && "ReactNative" === navigator.product && console.warn("`keyframes` cannot be used on ReactNative, only on the web. To do animation in ReactNative please use Animated.");
@@ -35127,7 +35700,7 @@ function Ue(e) {
     return new ve(s, o);
 }
 var Je = function() {
-    function e27() {
+    function e() {
         var e = this;
         this._emitSheetCSS = function() {
             var t = e.instance.toString();
@@ -35136,14 +35709,14 @@ var Je = function() {
             return "<style " + [
                 n && 'nonce="' + n + '"',
                 A + '="true"',
-                'data-styled-version="5.3.5"'
+                'data-styled-version="5.3.10"'
             ].filter(Boolean).join(" ") + ">" + t + "</style>";
         }, this.getStyleTags = function() {
             return e.sealed ? j(2) : e._emitSheetCSS();
         }, this.getStyleElement = function() {
             var t;
             if (e.sealed) return j(2);
-            var n = ((t = {})[A] = "", t["data-styled-version"] = "5.3.5", t.dangerouslySetInnerHTML = {
+            var n = ((t = {})[A] = "", t["data-styled-version"] = "5.3.10", t.dangerouslySetInnerHTML = {
                 __html: e.instance.toString()
             }, t), o = q();
             return o && (n.nonce = o), [
@@ -35157,23 +35730,23 @@ var Je = function() {
             isServer: !0
         }), this.sealed = !1;
     }
-    var t22 = e27.prototype;
-    return t22.collectStyles = function(e) {
+    var t = e.prototype;
+    return t.collectStyles = function(e) {
         return this.sealed ? j(2) : (0, _reactDefault.default).createElement(ye, {
             sheet: this.instance
         }, e);
-    }, t22.interleaveWithNodeStream = function(e) {
+    }, t.interleaveWithNodeStream = function(e) {
         return j(3);
-    }, e27;
+    }, e;
 }(), Xe = function(e) {
-    var t23 = (0, _reactDefault.default).forwardRef(function(t, n) {
+    var t = (0, _reactDefault.default).forwardRef(function(t, n) {
         var o = (0, _react.useContext)(Ge), i = e.defaultProps, a = Re(t, o, i);
         return void 0 === a && console.warn('[withTheme] You are not using a ThemeProvider nor passing a theme prop or a theme in defaultProps in component class "' + _(e) + '"'), (0, _reactDefault.default).createElement(e, v({}, t, {
             theme: a,
             ref: n
         }));
     });
-    return (0, _hoistNonReactStaticsDefault.default)(t23, e), t23.displayName = "WithTheme(" + _(e) + ")", t23;
+    return (0, _hoistNonReactStaticsDefault.default)(t, e), t.displayName = "WithTheme(" + _(e) + ")", t;
 }, Ze = function() {
     return (0, _react.useContext)(Ge);
 }, Ke = {
@@ -35183,11 +35756,11 @@ var Je = function() {
 "undefined" != typeof navigator && "ReactNative" === navigator.product && console.warn("It looks like you've imported 'styled-components' on React Native.\nPerhaps you're looking to import 'styled-components/native'?\nRead more about this at https://www.styled-components.com/docs/basics#react-native"), "undefined" != typeof window && (window["__styled-components-init__"] = window["__styled-components-init__"] || 0, 1 === window["__styled-components-init__"] && console.warn("It looks like there are several instances of 'styled-components' initialized in this application. This may cause dynamic styles to not render properly, errors during the rehydration process, a missing theme prop, and makes your application bigger without good reason.\n\nSee https://s-c.sh/2BAXzed for more info."), window["__styled-components-init__"] += 1);
 exports.default = He;
 
-},{"react-is":"1UDhh","react":"3IZzP","shallowequal":"lazRE","@emotion/stylis":"cvoxF","@emotion/unitless":"flnXL","@emotion/is-prop-valid":"cnjiM","hoist-non-react-statics":"4lOXR","process":"jhUEF","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"1UDhh":[function(require,module,exports) {
+},{"c024175ebfc21ad3":"jhUEF","react-is":"1UDhh","react":"3IZzP","shallowequal":"lazRE","@emotion/stylis":"cvoxF","@emotion/unitless":"flnXL","@emotion/is-prop-valid":"6kH5e","hoist-non-react-statics":"4lOXR","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"1UDhh":[function(require,module,exports) {
 "use strict";
-module.exports = require("./cjs/react-is.development.js");
+module.exports = require("a7239b2ce4548a02");
 
-},{"./cjs/react-is.development.js":"4Auko"}],"4Auko":[function(require,module,exports) {
+},{"a7239b2ce4548a02":"4Auko"}],"4Auko":[function(require,module,exports) {
 /** @license React v16.13.1
  * react-is.development.js
  *
@@ -35221,7 +35794,8 @@ module.exports = require("./cjs/react-is.development.js");
     var REACT_RESPONDER_TYPE = hasSymbol ? Symbol.for("react.responder") : 0xead6;
     var REACT_SCOPE_TYPE = hasSymbol ? Symbol.for("react.scope") : 0xead7;
     function isValidElementType(type) {
-        return typeof type === "string" || typeof type === "function" || type === REACT_FRAGMENT_TYPE || type === REACT_CONCURRENT_MODE_TYPE || type === REACT_PROFILER_TYPE || type === REACT_STRICT_MODE_TYPE || type === REACT_SUSPENSE_TYPE || type === REACT_SUSPENSE_LIST_TYPE || typeof type === "object" && type !== null && (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE || type.$$typeof === REACT_FUNDAMENTAL_TYPE || type.$$typeof === REACT_RESPONDER_TYPE || type.$$typeof === REACT_SCOPE_TYPE || type.$$typeof === REACT_BLOCK_TYPE);
+        return typeof type === "string" || typeof type === "function" || // Note: its typeof might be other than 'symbol' or 'number' if it's a polyfill.
+        type === REACT_FRAGMENT_TYPE || type === REACT_CONCURRENT_MODE_TYPE || type === REACT_PROFILER_TYPE || type === REACT_STRICT_MODE_TYPE || type === REACT_SUSPENSE_TYPE || type === REACT_SUSPENSE_LIST_TYPE || typeof type === "object" && type !== null && (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE || type.$$typeof === REACT_FUNDAMENTAL_TYPE || type.$$typeof === REACT_RESPONDER_TYPE || type.$$typeof === REACT_SCOPE_TYPE || type.$$typeof === REACT_BLOCK_TYPE);
     }
     function typeOf(object) {
         if (typeof object === "object" && object !== null) {
@@ -35429,7 +36003,7 @@ function stylis_min(W) {
                                     g++;
                                 case 34:
                                 case 39:
-                                    for(; (l++) < J && e.charCodeAt(l) !== g;);
+                                    for(; l++ < J && e.charCodeAt(l) !== g;);
                             }
                             if (0 === k) break;
                             l++;
@@ -35464,7 +36038,7 @@ function stylis_min(W) {
                                     case 107:
                                         f = f.replace(fa, "$1 $2");
                                         k = f + "{" + k + "}";
-                                        k = 1 === w1 || 2 === w1 && L("@" + k, 3) ? "@-webkit-" + k + "@" + k : "@" + k;
+                                        k = 1 === w || 2 === w && L("@" + k, 3) ? "@-webkit-" + k + "@" + k : "@" + k;
                                         break;
                                     default:
                                         k = f + k, 112 === h && (k = (p += k, ""));
@@ -35609,8 +36183,8 @@ function stylis_min(W) {
             r = c;
             if (0 < A && (C = H(2, p, r, d, D, z, t, h, a, h), void 0 !== C && 0 === (p = C).length)) return G + p + F;
             p = r.join(",") + "{" + p + "}";
-            if (0 !== w1 * E) {
-                2 !== w1 || L(p, 2) || (E = 0);
+            if (0 !== w * E) {
+                2 !== w || L(p, 2) || (E = 0);
                 switch(E){
                     case 111:
                         p = p.replace(ha, ":-moz-$1") + p;
@@ -35644,11 +36218,11 @@ function stylis_min(W) {
         33 > h && (h = (c = c.trim()).charCodeAt(0));
         switch(h){
             case 38:
-                return c.replace(F1, "$1" + d.trim());
+                return c.replace(F, "$1" + d.trim());
             case 58:
-                return d.trim() + c.replace(F1, "$1" + d.trim());
+                return d.trim() + c.replace(F, "$1" + d.trim());
             default:
-                if (0 < 1 * e && 0 < c.indexOf("\f")) return c.replace(F1, (58 === d.charCodeAt(0) ? "" : "$1") + d.trim());
+                if (0 < 1 * e && 0 < c.indexOf("\f")) return c.replace(F, (58 === d.charCodeAt(0) ? "" : "$1") + d.trim());
         }
         return d + c;
     }
@@ -35658,9 +36232,9 @@ function stylis_min(W) {
             d = a.indexOf(":", 9) + 1;
             var b = a.substring(d, a.length - 1).trim();
             b = a.substring(0, d).trim() + b + ";";
-            return 1 === w1 || 2 === w1 && L(b, 1) ? "-webkit-" + b + b : b;
+            return 1 === w || 2 === w && L(b, 1) ? "-webkit-" + b + b : b;
         }
-        if (0 === w1 || 2 === w1 && !L(a, 1)) return a;
+        if (0 === w || 2 === w && !L(a, 1)) return a;
         switch(m){
             case 1015:
                 return 97 === a.charCodeAt(10) ? "-webkit-" + a + a : a;
@@ -35705,13 +36279,13 @@ function stylis_min(W) {
                 c = b.indexOf("-") + 1;
                 switch(b.charCodeAt(0) + b.charCodeAt(c)){
                     case 226:
-                        b = a.replace(G1, "tb");
+                        b = a.replace(G, "tb");
                         break;
                     case 232:
-                        b = a.replace(G1, "tb-rl");
+                        b = a.replace(G, "tb-rl");
                         break;
                     case 220:
-                        b = a.replace(G1, "lr");
+                        b = a.replace(G, "lr");
                         break;
                     default:
                         return a;
@@ -35765,7 +36339,7 @@ function stylis_min(W) {
         return e !== c + ";" ? e.replace(oa, " or ($1)").substring(4) : "(" + c + ")";
     }
     function H(d, c, e, h, a, m, b, v, n, q) {
-        for(var g = 0, x = c, w; g < A; ++g)switch(w = S[g].call(B1, d, x, e, h, a, m, b, v, n, q)){
+        for(var g = 0, x = c, w; g < A; ++g)switch(w = S[g].call(B, d, x, e, h, a, m, b, v, n, q)){
             case void 0:
             case !1:
             case !0:
@@ -35791,10 +36365,10 @@ function stylis_min(W) {
     }
     function U(d) {
         d = d.prefix;
-        void 0 !== d && (R = null, d ? "function" !== typeof d ? w1 = 1 : (w1 = 2, R = d) : w1 = 0);
+        void 0 !== d && (R = null, d ? "function" !== typeof d ? w = 1 : (w = 2, R = d) : w = 0);
         return U;
     }
-    function B1(d, c) {
+    function B(d, c) {
         var e = d;
         33 > e.charCodeAt(0) && (e = e.trim());
         V = e;
@@ -35812,11 +36386,11 @@ function stylis_min(W) {
         z = D = 1;
         return a;
     }
-    var ca = /^\0+/g, N = /[\0\r\f]/g, aa = /: */g, ka = /zoo|gra/, ma = /([,: ])(transform)/g, ia = /,\r+?/g, F1 = /([\t\r\n ])*\f?&/g, fa = /@(k\w+)\s*(\S*)\s*/, Q = /::(place)/g, ha = /:(read-only)/g, G1 = /[svh]\w+-[tblr]{2}/, da = /\(\s*(.*)\s*\)/g, oa = /([\s\S]*?);/g, ba = /-self|flex-/g, na = /[^]*?(:[rp][el]a[\w-]+)[^]*/, la = /stretch|:\s*\w+\-(?:conte|avail)/, ja = /([^-])(image-set\()/, z = 1, D = 1, E = 0, w1 = 1, O = [], S = [], A = 0, R = null, Y = 0, V = "";
-    B1.use = T;
-    B1.set = U;
+    var ca = /^\0+/g, N = /[\0\r\f]/g, aa = /: */g, ka = /zoo|gra/, ma = /([,: ])(transform)/g, ia = /,\r+?/g, F = /([\t\r\n ])*\f?&/g, fa = /@(k\w+)\s*(\S*)\s*/, Q = /::(place)/g, ha = /:(read-only)/g, G = /[svh]\w+-[tblr]{2}/, da = /\(\s*(.*)\s*\)/g, oa = /([\s\S]*?);/g, ba = /-self|flex-/g, na = /[^]*?(:[rp][el]a[\w-]+)[^]*/, la = /stretch|:\s*\w+\-(?:conte|avail)/, ja = /([^-])(image-set\()/, z = 1, D = 1, E = 0, w = 1, O = [], S = [], A = 0, R = null, Y = 0, V = "";
+    B.use = T;
+    B.set = U;
     void 0 !== W && U(W);
-    return B1;
+    return B;
 }
 exports.default = stylis_min;
 
@@ -35873,20 +36447,21 @@ var unitlessKeys = {
 };
 exports.default = unitlessKeys;
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"cnjiM":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"6kH5e":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "default", ()=>isPropValid);
 var _memoize = require("@emotion/memoize");
 var _memoizeDefault = parcelHelpers.interopDefault(_memoize);
 var reactPropsRegex = /^((children|dangerouslySetInnerHTML|key|ref|autoFocus|defaultValue|defaultChecked|innerHTML|suppressContentEditableWarning|suppressHydrationWarning|valueLink|abbr|accept|acceptCharset|accessKey|action|allow|allowUserMedia|allowPaymentRequest|allowFullScreen|allowTransparency|alt|async|autoComplete|autoPlay|capture|cellPadding|cellSpacing|challenge|charSet|checked|cite|classID|className|cols|colSpan|content|contentEditable|contextMenu|controls|controlsList|coords|crossOrigin|data|dateTime|decoding|default|defer|dir|disabled|disablePictureInPicture|download|draggable|encType|enterKeyHint|form|formAction|formEncType|formMethod|formNoValidate|formTarget|frameBorder|headers|height|hidden|high|href|hrefLang|htmlFor|httpEquiv|id|inputMode|integrity|is|keyParams|keyType|kind|label|lang|list|loading|loop|low|marginHeight|marginWidth|max|maxLength|media|mediaGroup|method|min|minLength|multiple|muted|name|nonce|noValidate|open|optimum|pattern|placeholder|playsInline|poster|preload|profile|radioGroup|readOnly|referrerPolicy|rel|required|reversed|role|rows|rowSpan|sandbox|scope|scoped|scrolling|seamless|selected|shape|size|sizes|slot|span|spellCheck|src|srcDoc|srcLang|srcSet|start|step|style|summary|tabIndex|target|title|translate|type|useMap|value|width|wmode|wrap|about|datatype|inlist|prefix|property|resource|typeof|vocab|autoCapitalize|autoCorrect|autoSave|color|incremental|fallback|inert|itemProp|itemScope|itemType|itemID|itemRef|on|option|results|security|unselectable|accentHeight|accumulate|additive|alignmentBaseline|allowReorder|alphabetic|amplitude|arabicForm|ascent|attributeName|attributeType|autoReverse|azimuth|baseFrequency|baselineShift|baseProfile|bbox|begin|bias|by|calcMode|capHeight|clip|clipPathUnits|clipPath|clipRule|colorInterpolation|colorInterpolationFilters|colorProfile|colorRendering|contentScriptType|contentStyleType|cursor|cx|cy|d|decelerate|descent|diffuseConstant|direction|display|divisor|dominantBaseline|dur|dx|dy|edgeMode|elevation|enableBackground|end|exponent|externalResourcesRequired|fill|fillOpacity|fillRule|filter|filterRes|filterUnits|floodColor|floodOpacity|focusable|fontFamily|fontSize|fontSizeAdjust|fontStretch|fontStyle|fontVariant|fontWeight|format|from|fr|fx|fy|g1|g2|glyphName|glyphOrientationHorizontal|glyphOrientationVertical|glyphRef|gradientTransform|gradientUnits|hanging|horizAdvX|horizOriginX|ideographic|imageRendering|in|in2|intercept|k|k1|k2|k3|k4|kernelMatrix|kernelUnitLength|kerning|keyPoints|keySplines|keyTimes|lengthAdjust|letterSpacing|lightingColor|limitingConeAngle|local|markerEnd|markerMid|markerStart|markerHeight|markerUnits|markerWidth|mask|maskContentUnits|maskUnits|mathematical|mode|numOctaves|offset|opacity|operator|order|orient|orientation|origin|overflow|overlinePosition|overlineThickness|panose1|paintOrder|pathLength|patternContentUnits|patternTransform|patternUnits|pointerEvents|points|pointsAtX|pointsAtY|pointsAtZ|preserveAlpha|preserveAspectRatio|primitiveUnits|r|radius|refX|refY|renderingIntent|repeatCount|repeatDur|requiredExtensions|requiredFeatures|restart|result|rotate|rx|ry|scale|seed|shapeRendering|slope|spacing|specularConstant|specularExponent|speed|spreadMethod|startOffset|stdDeviation|stemh|stemv|stitchTiles|stopColor|stopOpacity|strikethroughPosition|strikethroughThickness|string|stroke|strokeDasharray|strokeDashoffset|strokeLinecap|strokeLinejoin|strokeMiterlimit|strokeOpacity|strokeWidth|surfaceScale|systemLanguage|tableValues|targetX|targetY|textAnchor|textDecoration|textRendering|textLength|to|transform|u1|u2|underlinePosition|underlineThickness|unicode|unicodeBidi|unicodeRange|unitsPerEm|vAlphabetic|vHanging|vIdeographic|vMathematical|values|vectorEffect|version|vertAdvY|vertOriginX|vertOriginY|viewBox|viewTarget|visibility|widths|wordSpacing|writingMode|x|xHeight|x1|x2|xChannelSelector|xlinkActuate|xlinkArcrole|xlinkHref|xlinkRole|xlinkShow|xlinkTitle|xlinkType|xmlBase|xmlns|xmlnsXlink|xmlLang|xmlSpace|y|y1|y2|yChannelSelector|z|zoomAndPan|for|class|autofocus)|(([Dd][Aa][Tt][Aa]|[Aa][Rr][Ii][Aa]|x)-.*))$/; // https://esbench.com/bench/5bfee68a4cd7e6009ef61d23
 var isPropValid = /* #__PURE__ */ (0, _memoizeDefault.default)(function(prop) {
     return reactPropsRegex.test(prop) || prop.charCodeAt(0) === 111 && prop.charCodeAt(1) === 110 && prop.charCodeAt(2) < 91;
 });
-exports.default = isPropValid;
 
-},{"@emotion/memoize":"jRZ6n","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"jRZ6n":[function(require,module,exports) {
+},{"@emotion/memoize":"c5jkH","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"c5jkH":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
+parcelHelpers.export(exports, "default", ()=>memoize);
 function memoize(fn) {
     var cache = Object.create(null);
     return function(arg) {
@@ -35894,11 +36469,10 @@ function memoize(fn) {
         return cache[arg];
     };
 }
-exports.default = memoize;
 
 },{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"4lOXR":[function(require,module,exports) {
 "use strict";
-var reactIs = require("react-is");
+var reactIs = require("a3cfe038a0d10641");
 /**
  * Copyright 2015, Yahoo! Inc.
  * Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
@@ -35980,28 +36554,66 @@ function hoistNonReactStatics(targetComponent, sourceComponent, blacklist) {
 }
 module.exports = hoistNonReactStatics;
 
-},{"react-is":"1UDhh"}],"9C5Db":[function(require,module,exports) {
+},{"a3cfe038a0d10641":"1UDhh"}],"dHgQL":[function(require,module,exports) {
+var $parcel$ReactRefreshHelpers$4389 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
+var prevRefreshReg = window.$RefreshReg$;
+var prevRefreshSig = window.$RefreshSig$;
+$parcel$ReactRefreshHelpers$4389.prelude(module);
+
+try {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
-parcelHelpers.export(exports, "prepareString", ()=>prepareString);
-const prepareString = (obj)=>{
-    let array = [];
-    Object.keys(obj).forEach((key)=>{
-        console.log(key, typeof obj[key]);
-        switch(typeof obj[key]){
-            case "number":
-            case "boolean":
-                array.push(`${key}=&lcub;${obj[key]}&rcub;`);
-                break;
-            case "string":
-                array.push(`${key}=\"${obj[key]}\"`);
-                break;
-        }
+parcelHelpers.export(exports, "DemoContext", ()=>DemoContext);
+var _react = require("react");
+const DemoContext = /*#__PURE__*/ _react.createContext({
+    show: false,
+    showDemo: ()=>{}
+});
+const DemoProvider = ({ children  })=>{
+    const [demo, setDemo] = _react.useState({
+        show: false,
+        component: null
     });
-    return array.join(" ");
+    function showDemo(demo) {
+        setDemo({
+            show: true,
+            component: demo
+        });
+        setTimeout(()=>{
+            setDemo({
+                show: false,
+                component: null
+            });
+        }, 3000);
+    }
+    return /*#__PURE__*/ _react.createElement(DemoContext.Provider, {
+        value: {
+            showDemo: showDemo
+        },
+        __source: {
+            fileName: "components/context/DemoContext.tsx",
+            lineNumber: 29,
+            columnNumber: 9
+        },
+        __self: undefined
+    }, children, demo.show ? /*#__PURE__*/ _react.createElement("div", {
+        className: "full-screen-demo",
+        __source: {
+            fileName: "components/context/DemoContext.tsx",
+            lineNumber: 35,
+            columnNumber: 29
+        },
+        __self: undefined
+    }, demo.component) : "");
 };
+exports.default = DemoProvider;
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"4qsJa":[function(require,module,exports) {
+  $parcel$ReactRefreshHelpers$4389.postlude(module);
+} finally {
+  window.$RefreshReg$ = prevRefreshReg;
+  window.$RefreshSig$ = prevRefreshSig;
+}
+},{"react":"3IZzP","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"4qsJa":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$d7a3 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -36012,9 +36624,11 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
+var _demoContext = require("../context/DemoContext");
 const size = "1.5rem";
 const classicSpinnerColor = "#1e293b";
 function ClassicSpinners({ stop , speed  }) {
+    const { showDemo  } = _react.useContext((0, _demoContext.DemoContext));
     const classicSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.ClassicSpinner1), {
             text: "Loading 1...",
@@ -36024,7 +36638,7 @@ function ClassicSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 13,
+                lineNumber: 16,
                 columnNumber: 9
             },
             __self: this
@@ -36037,7 +36651,7 @@ function ClassicSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 14,
+                lineNumber: 17,
                 columnNumber: 9
             },
             __self: this
@@ -36050,7 +36664,7 @@ function ClassicSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 15,
+                lineNumber: 18,
                 columnNumber: 9
             },
             __self: this
@@ -36064,7 +36678,7 @@ function ClassicSpinners({ stop , speed  }) {
             noOfCharactersToBlinkAtLast: 3,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 16,
+                lineNumber: 19,
                 columnNumber: 9
             },
             __self: this
@@ -36077,7 +36691,7 @@ function ClassicSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 17,
+                lineNumber: 20,
                 columnNumber: 9
             },
             __self: this
@@ -36090,7 +36704,7 @@ function ClassicSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 18,
+                lineNumber: 21,
                 columnNumber: 9
             },
             __self: this
@@ -36104,7 +36718,7 @@ function ClassicSpinners({ stop , speed  }) {
             animationColor: "#be123c",
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 19,
+                lineNumber: 22,
                 columnNumber: 9
             },
             __self: this
@@ -36118,7 +36732,7 @@ function ClassicSpinners({ stop , speed  }) {
             animationColor: "#be123c",
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 20,
+                lineNumber: 23,
                 columnNumber: 9
             },
             __self: this
@@ -36136,7 +36750,7 @@ function ClassicSpinners({ stop , speed  }) {
             ],
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 21,
+                lineNumber: 24,
                 columnNumber: 9
             },
             __self: this
@@ -36154,7 +36768,7 @@ function ClassicSpinners({ stop , speed  }) {
             ],
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 22,
+                lineNumber: 25,
                 columnNumber: 9
             },
             __self: this
@@ -36168,14 +36782,14 @@ function ClassicSpinners({ stop , speed  }) {
         },
         __source: {
             fileName: "components/Spinners/ClassicSpinners.tsx",
-            lineNumber: 27,
+            lineNumber: 30,
             columnNumber: 13
         },
         __self: this
     }, /*#__PURE__*/ _react.createElement("span", {
         __source: {
             fileName: "components/Spinners/ClassicSpinners.tsx",
-            lineNumber: 28,
+            lineNumber: 31,
             columnNumber: 17
         },
         __self: this
@@ -36185,7 +36799,7 @@ function ClassicSpinners({ stop , speed  }) {
         className: "spinner_header_link",
         __source: {
             fileName: "components/Spinners/ClassicSpinners.tsx",
-            lineNumber: 29,
+            lineNumber: 32,
             columnNumber: 17
         },
         __self: this
@@ -36193,7 +36807,7 @@ function ClassicSpinners({ stop , speed  }) {
         className: "example",
         __source: {
             fileName: "components/Spinners/ClassicSpinners.tsx",
-            lineNumber: 34,
+            lineNumber: 37,
             columnNumber: 13
         },
         __self: this
@@ -36202,7 +36816,7 @@ function ClassicSpinners({ stop , speed  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 37,
+                lineNumber: 40,
                 columnNumber: 25
             },
             __self: this
@@ -36210,28 +36824,31 @@ function ClassicSpinners({ stop , speed  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 41,
                 columnNumber: 29
             },
             __self: this
         }, m), /*#__PURE__*/ _react.createElement("div", {
-            className: "code",
+            className: "demo",
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 41,
+                lineNumber: 45,
                 columnNumber: 29
             },
             __self: this
         }, /*#__PURE__*/ _react.createElement("button", {
             type: "button",
             className: "showcode-button",
+            onClick: ()=>{
+                showDemo(m);
+            },
             __source: {
                 fileName: "components/Spinners/ClassicSpinners.tsx",
-                lineNumber: 42,
+                lineNumber: 46,
                 columnNumber: 33
             },
             __self: this
-        }, "Show Code"))))));
+        }, "Demo"))))));
 }
 exports.default = ClassicSpinners;
 
@@ -36240,7 +36857,7 @@ exports.default = ClassicSpinners;
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"bkf0B":[function(require,module,exports) {
+},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","../context/DemoContext":"dHgQL"}],"bkf0B":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$7025 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -36251,8 +36868,10 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
+var _demoContext = require("../context/DemoContext");
 const continuousSpinnerColor = "#514b82";
 function ContinuousSpinners({ stop , speed  }) {
+    const { showDemo  } = _react.useContext((0, _demoContext.DemoContext));
     const continuousSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.ContinuousSpinner1), {
             color: continuousSpinnerColor,
@@ -36260,7 +36879,7 @@ function ContinuousSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 12,
+                lineNumber: 15,
                 columnNumber: 9
             },
             __self: this
@@ -36272,7 +36891,7 @@ function ContinuousSpinners({ stop , speed  }) {
             bgColor: "lightgrey",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 13,
+                lineNumber: 16,
                 columnNumber: 9
             },
             __self: this
@@ -36283,7 +36902,7 @@ function ContinuousSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 14,
+                lineNumber: 17,
                 columnNumber: 9
             },
             __self: this
@@ -36294,7 +36913,7 @@ function ContinuousSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 15,
+                lineNumber: 18,
                 columnNumber: 9
             },
             __self: this
@@ -36306,7 +36925,7 @@ function ContinuousSpinners({ stop , speed  }) {
             secondaryColor: "lightgrey",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 16,
+                lineNumber: 19,
                 columnNumber: 9
             },
             __self: this
@@ -36317,7 +36936,7 @@ function ContinuousSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 17,
+                lineNumber: 20,
                 columnNumber: 9
             },
             __self: this
@@ -36328,7 +36947,7 @@ function ContinuousSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 18,
+                lineNumber: 21,
                 columnNumber: 9
             },
             __self: this
@@ -36339,7 +36958,7 @@ function ContinuousSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 19,
+                lineNumber: 22,
                 columnNumber: 9
             },
             __self: this
@@ -36351,7 +36970,7 @@ function ContinuousSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 20,
+                lineNumber: 23,
                 columnNumber: 9
             },
             __self: this
@@ -36363,7 +36982,7 @@ function ContinuousSpinners({ stop , speed  }) {
             bgColor: "lightgrey",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 21,
+                lineNumber: 24,
                 columnNumber: 9
             },
             __self: this
@@ -36377,14 +36996,14 @@ function ContinuousSpinners({ stop , speed  }) {
         },
         __source: {
             fileName: "components/Spinners/ContinuousSpinners.tsx",
-            lineNumber: 26,
+            lineNumber: 29,
             columnNumber: 13
         },
         __self: this
     }, /*#__PURE__*/ _react.createElement("span", {
         __source: {
             fileName: "components/Spinners/ContinuousSpinners.tsx",
-            lineNumber: 27,
+            lineNumber: 30,
             columnNumber: 17
         },
         __self: this
@@ -36394,7 +37013,7 @@ function ContinuousSpinners({ stop , speed  }) {
         className: "spinner_header_link",
         __source: {
             fileName: "components/Spinners/ContinuousSpinners.tsx",
-            lineNumber: 28,
+            lineNumber: 31,
             columnNumber: 17
         },
         __self: this
@@ -36402,7 +37021,7 @@ function ContinuousSpinners({ stop , speed  }) {
         className: "example",
         __source: {
             fileName: "components/Spinners/ContinuousSpinners.tsx",
-            lineNumber: 33,
+            lineNumber: 36,
             columnNumber: 13
         },
         __self: this
@@ -36411,7 +37030,7 @@ function ContinuousSpinners({ stop , speed  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 36,
+                lineNumber: 39,
                 columnNumber: 25
             },
             __self: this
@@ -36419,28 +37038,31 @@ function ContinuousSpinners({ stop , speed  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 37,
+                lineNumber: 40,
                 columnNumber: 29
             },
             __self: this
         }, m), /*#__PURE__*/ _react.createElement("div", {
-            className: "code",
+            className: "demo",
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 40,
+                lineNumber: 44,
                 columnNumber: 29
             },
             __self: this
         }, /*#__PURE__*/ _react.createElement("button", {
             type: "button",
             className: "showcode-button",
+            onClick: ()=>{
+                showDemo(m);
+            },
             __source: {
                 fileName: "components/Spinners/ContinuousSpinners.tsx",
-                lineNumber: 41,
+                lineNumber: 45,
                 columnNumber: 33
             },
             __self: this
-        }, "Show Code"))))));
+        }, "Demo"))))));
 }
 exports.default = ContinuousSpinners;
 
@@ -36449,7 +37071,7 @@ exports.default = ContinuousSpinners;
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"iE2H4":[function(require,module,exports) {
+},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","../context/DemoContext":"dHgQL"}],"iE2H4":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$ad3d = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -36460,32 +37082,12 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
+var _demoContext = require("../context/DemoContext");
 const dotSpinnerColor = "#ea580c";
 function DotSpinners({ stop , speed  }) {
+    const { showDemo  } = _react.useContext((0, _demoContext.DemoContext));
     const dotSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner1), {
-            color: dotSpinnerColor,
-            stop: stop,
-            speed: speed,
-            __source: {
-                fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 12,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner2), {
-            color: dotSpinnerColor,
-            stop: stop,
-            speed: speed,
-            __source: {
-                fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 13,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner3), {
             color: dotSpinnerColor,
             stop: stop,
             speed: speed,
@@ -36496,7 +37098,7 @@ function DotSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner4), {
+        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner2), {
             color: dotSpinnerColor,
             stop: stop,
             speed: speed,
@@ -36507,7 +37109,7 @@ function DotSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner5), {
+        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner3), {
             color: dotSpinnerColor,
             stop: stop,
             speed: speed,
@@ -36518,7 +37120,7 @@ function DotSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner6), {
+        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner4), {
             color: dotSpinnerColor,
             stop: stop,
             speed: speed,
@@ -36529,7 +37131,7 @@ function DotSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner7), {
+        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner5), {
             color: dotSpinnerColor,
             stop: stop,
             speed: speed,
@@ -36540,7 +37142,7 @@ function DotSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner8), {
+        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner6), {
             color: dotSpinnerColor,
             stop: stop,
             speed: speed,
@@ -36551,7 +37153,7 @@ function DotSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner9), {
+        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner7), {
             color: dotSpinnerColor,
             stop: stop,
             speed: speed,
@@ -36562,13 +37164,35 @@ function DotSpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner10), {
+        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner8), {
             color: dotSpinnerColor,
             stop: stop,
             speed: speed,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
                 lineNumber: 21,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner9), {
+            color: dotSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/DotSpinners.tsx",
+                lineNumber: 22,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.DotSpinner10), {
+            color: dotSpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/DotSpinners.tsx",
+                lineNumber: 23,
                 columnNumber: 9
             },
             __self: this
@@ -36582,14 +37206,14 @@ function DotSpinners({ stop , speed  }) {
         },
         __source: {
             fileName: "components/Spinners/DotSpinners.tsx",
-            lineNumber: 26,
+            lineNumber: 28,
             columnNumber: 13
         },
         __self: this
     }, /*#__PURE__*/ _react.createElement("span", {
         __source: {
             fileName: "components/Spinners/DotSpinners.tsx",
-            lineNumber: 27,
+            lineNumber: 29,
             columnNumber: 17
         },
         __self: this
@@ -36599,7 +37223,7 @@ function DotSpinners({ stop , speed  }) {
         className: "spinner_header_link",
         __source: {
             fileName: "components/Spinners/DotSpinners.tsx",
-            lineNumber: 28,
+            lineNumber: 30,
             columnNumber: 17
         },
         __self: this
@@ -36607,7 +37231,7 @@ function DotSpinners({ stop , speed  }) {
         className: "example",
         __source: {
             fileName: "components/Spinners/DotSpinners.tsx",
-            lineNumber: 33,
+            lineNumber: 35,
             columnNumber: 13
         },
         __self: this
@@ -36616,7 +37240,7 @@ function DotSpinners({ stop , speed  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 36,
+                lineNumber: 38,
                 columnNumber: 25
             },
             __self: this
@@ -36624,28 +37248,31 @@ function DotSpinners({ stop , speed  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 37,
+                lineNumber: 39,
                 columnNumber: 29
             },
             __self: this
         }, m), /*#__PURE__*/ _react.createElement("div", {
-            className: "code",
+            className: "demo",
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 40,
+                lineNumber: 43,
                 columnNumber: 29
             },
             __self: this
         }, /*#__PURE__*/ _react.createElement("button", {
             type: "button",
             className: "showcode-button",
+            onClick: ()=>{
+                showDemo(m);
+            },
             __source: {
                 fileName: "components/Spinners/DotSpinners.tsx",
-                lineNumber: 41,
+                lineNumber: 44,
                 columnNumber: 33
             },
             __self: this
-        }, "Show Code"))))));
+        }, "Demo"))))));
 }
 exports.default = DotSpinners;
 
@@ -36654,7 +37281,7 @@ exports.default = DotSpinners;
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"btwOU":[function(require,module,exports) {
+},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","../context/DemoContext":"dHgQL"}],"btwOU":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$6022 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -36665,43 +37292,12 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
+var _demoContext = require("../context/DemoContext");
 const infinitySpinnerColor = "#0369a1";
 function InfinitySpinners({ stop , speed  }) {
+    const { showDemo  } = _react.useContext((0, _demoContext.DemoContext));
     const infinitySpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner1), {
-            color: infinitySpinnerColor,
-            stop: stop,
-            speed: speed,
-            __source: {
-                fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 12,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner2), {
-            color: infinitySpinnerColor,
-            stop: stop,
-            speed: speed,
-            __source: {
-                fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 13,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner3), {
-            color: infinitySpinnerColor,
-            stop: stop,
-            speed: speed,
-            __source: {
-                fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 14,
-                columnNumber: 9
-            },
-            __self: this
-        }),
-        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner4), {
             color: infinitySpinnerColor,
             stop: stop,
             speed: speed,
@@ -36712,7 +37308,7 @@ function InfinitySpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner5), {
+        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner2), {
             color: infinitySpinnerColor,
             stop: stop,
             speed: speed,
@@ -36723,7 +37319,7 @@ function InfinitySpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner6), {
+        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner3), {
             color: infinitySpinnerColor,
             stop: stop,
             speed: speed,
@@ -36734,7 +37330,7 @@ function InfinitySpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner7), {
+        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner4), {
             color: infinitySpinnerColor,
             stop: stop,
             speed: speed,
@@ -36745,7 +37341,7 @@ function InfinitySpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner8), {
+        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner5), {
             color: infinitySpinnerColor,
             stop: stop,
             speed: speed,
@@ -36756,7 +37352,7 @@ function InfinitySpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner9), {
+        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner6), {
             color: infinitySpinnerColor,
             stop: stop,
             speed: speed,
@@ -36767,13 +37363,46 @@ function InfinitySpinners({ stop , speed  }) {
             },
             __self: this
         }),
-        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner10), {
+        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner7), {
             color: infinitySpinnerColor,
             stop: stop,
             speed: speed,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
                 lineNumber: 21,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner8), {
+            color: infinitySpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/InfinitySpinners.tsx",
+                lineNumber: 22,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner9), {
+            color: infinitySpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/InfinitySpinners.tsx",
+                lineNumber: 23,
+                columnNumber: 9
+            },
+            __self: this
+        }),
+        /*#__PURE__*/ _react.createElement((0, _dist.InfinitySpinner10), {
+            color: infinitySpinnerColor,
+            stop: stop,
+            speed: speed,
+            __source: {
+                fileName: "components/Spinners/InfinitySpinners.tsx",
+                lineNumber: 24,
                 columnNumber: 9
             },
             __self: this
@@ -36787,14 +37416,14 @@ function InfinitySpinners({ stop , speed  }) {
         },
         __source: {
             fileName: "components/Spinners/InfinitySpinners.tsx",
-            lineNumber: 27,
+            lineNumber: 29,
             columnNumber: 13
         },
         __self: this
     }, /*#__PURE__*/ _react.createElement("span", {
         __source: {
             fileName: "components/Spinners/InfinitySpinners.tsx",
-            lineNumber: 28,
+            lineNumber: 30,
             columnNumber: 17
         },
         __self: this
@@ -36804,7 +37433,7 @@ function InfinitySpinners({ stop , speed  }) {
         className: "spinner_header_link",
         __source: {
             fileName: "components/Spinners/InfinitySpinners.tsx",
-            lineNumber: 29,
+            lineNumber: 31,
             columnNumber: 17
         },
         __self: this
@@ -36812,7 +37441,7 @@ function InfinitySpinners({ stop , speed  }) {
         className: "example",
         __source: {
             fileName: "components/Spinners/InfinitySpinners.tsx",
-            lineNumber: 34,
+            lineNumber: 36,
             columnNumber: 13
         },
         __self: this
@@ -36821,7 +37450,7 @@ function InfinitySpinners({ stop , speed  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 37,
+                lineNumber: 39,
                 columnNumber: 25
             },
             __self: this
@@ -36829,28 +37458,31 @@ function InfinitySpinners({ stop , speed  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 40,
                 columnNumber: 29
             },
             __self: this
         }, m), /*#__PURE__*/ _react.createElement("div", {
-            className: "code",
+            className: "demo",
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 41,
+                lineNumber: 44,
                 columnNumber: 29
             },
             __self: this
         }, /*#__PURE__*/ _react.createElement("button", {
             type: "button",
             className: "showcode-button",
+            onClick: ()=>{
+                showDemo(m);
+            },
             __source: {
                 fileName: "components/Spinners/InfinitySpinners.tsx",
-                lineNumber: 42,
+                lineNumber: 45,
                 columnNumber: 33
             },
             __self: this
-        }, "Show Code"))))));
+        }, "Demo"))))));
 }
 exports.default = InfinitySpinners;
 
@@ -36859,7 +37491,7 @@ exports.default = InfinitySpinners;
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"egIBH":[function(require,module,exports) {
+},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","../context/DemoContext":"dHgQL"}],"egIBH":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$6ec7 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -36870,9 +37502,11 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
+var _demoContext = require("../context/DemoContext");
 const progressSpinnerColor = "#dc2626";
 const color2 = "#0369a1";
 function ProgressSpinners({ stop , speed  }) {
+    const { showDemo  } = _react.useContext((0, _demoContext.DemoContext));
     const progressSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.ProgressSpinner1), {
             color: progressSpinnerColor,
@@ -36880,7 +37514,7 @@ function ProgressSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 13,
+                lineNumber: 15,
                 columnNumber: 9
             },
             __self: this
@@ -36892,7 +37526,7 @@ function ProgressSpinners({ stop , speed  }) {
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 14,
+                lineNumber: 16,
                 columnNumber: 9
             },
             __self: this
@@ -36904,7 +37538,7 @@ function ProgressSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 15,
+                lineNumber: 17,
                 columnNumber: 9
             },
             __self: this
@@ -36915,7 +37549,7 @@ function ProgressSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 16,
+                lineNumber: 18,
                 columnNumber: 9
             },
             __self: this
@@ -36926,7 +37560,7 @@ function ProgressSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 17,
+                lineNumber: 19,
                 columnNumber: 9
             },
             __self: this
@@ -36937,7 +37571,7 @@ function ProgressSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 18,
+                lineNumber: 20,
                 columnNumber: 9
             },
             __self: this
@@ -36949,7 +37583,7 @@ function ProgressSpinners({ stop , speed  }) {
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 19,
+                lineNumber: 21,
                 columnNumber: 9
             },
             __self: this
@@ -36961,7 +37595,7 @@ function ProgressSpinners({ stop , speed  }) {
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 20,
+                lineNumber: 22,
                 columnNumber: 9
             },
             __self: this
@@ -36972,7 +37606,7 @@ function ProgressSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 21,
+                lineNumber: 23,
                 columnNumber: 9
             },
             __self: this
@@ -36984,7 +37618,7 @@ function ProgressSpinners({ stop , speed  }) {
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 22,
+                lineNumber: 24,
                 columnNumber: 9
             },
             __self: this
@@ -36998,14 +37632,14 @@ function ProgressSpinners({ stop , speed  }) {
         },
         __source: {
             fileName: "components/Spinners/ProgressSpinners.tsx",
-            lineNumber: 27,
+            lineNumber: 29,
             columnNumber: 13
         },
         __self: this
     }, /*#__PURE__*/ _react.createElement("span", {
         __source: {
             fileName: "components/Spinners/ProgressSpinners.tsx",
-            lineNumber: 28,
+            lineNumber: 30,
             columnNumber: 17
         },
         __self: this
@@ -37015,7 +37649,7 @@ function ProgressSpinners({ stop , speed  }) {
         className: "spinner_header_link",
         __source: {
             fileName: "components/Spinners/ProgressSpinners.tsx",
-            lineNumber: 29,
+            lineNumber: 31,
             columnNumber: 17
         },
         __self: this
@@ -37023,7 +37657,7 @@ function ProgressSpinners({ stop , speed  }) {
         className: "example",
         __source: {
             fileName: "components/Spinners/ProgressSpinners.tsx",
-            lineNumber: 34,
+            lineNumber: 36,
             columnNumber: 13
         },
         __self: this
@@ -37032,7 +37666,7 @@ function ProgressSpinners({ stop , speed  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 37,
+                lineNumber: 39,
                 columnNumber: 25
             },
             __self: this
@@ -37040,28 +37674,31 @@ function ProgressSpinners({ stop , speed  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 40,
                 columnNumber: 29
             },
             __self: this
         }, m), /*#__PURE__*/ _react.createElement("div", {
-            className: "code",
+            className: "demo",
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 41,
+                lineNumber: 44,
                 columnNumber: 29
             },
             __self: this
         }, /*#__PURE__*/ _react.createElement("button", {
             type: "button",
             className: "showcode-button",
+            onClick: ()=>{
+                showDemo(m);
+            },
             __source: {
                 fileName: "components/Spinners/ProgressSpinners.tsx",
-                lineNumber: 42,
+                lineNumber: 45,
                 columnNumber: 33
             },
             __self: this
-        }, "Show Code"))))));
+        }, "Demo"))))));
 }
 exports.default = ProgressSpinners;
 
@@ -37070,7 +37707,7 @@ exports.default = ProgressSpinners;
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"hU59A":[function(require,module,exports) {
+},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","../context/DemoContext":"dHgQL"}],"hU59A":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$9e22 = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -37081,8 +37718,10 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
+var _demoContext = require("../context/DemoContext");
 const roundedSpinnerColor = "#86198f";
 function RoundedSpinners({ stop , speed  }) {
+    const { showDemo  } = _react.useContext((0, _demoContext.DemoContext));
     const roundedSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.RoundedSpinner1), {
             color: roundedSpinnerColor,
@@ -37090,7 +37729,7 @@ function RoundedSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 12,
+                lineNumber: 14,
                 columnNumber: 9
             },
             __self: this
@@ -37103,7 +37742,7 @@ function RoundedSpinners({ stop , speed  }) {
             secondaryColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 13,
+                lineNumber: 15,
                 columnNumber: 9
             },
             __self: this
@@ -37114,7 +37753,7 @@ function RoundedSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 14,
+                lineNumber: 16,
                 columnNumber: 9
             },
             __self: this
@@ -37125,7 +37764,7 @@ function RoundedSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 15,
+                lineNumber: 17,
                 columnNumber: 9
             },
             __self: this
@@ -37137,7 +37776,7 @@ function RoundedSpinners({ stop , speed  }) {
             thickness: 8,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 16,
+                lineNumber: 18,
                 columnNumber: 9
             },
             __self: this
@@ -37149,7 +37788,7 @@ function RoundedSpinners({ stop , speed  }) {
             dotColor: roundedSpinnerColor,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 17,
+                lineNumber: 19,
                 columnNumber: 9
             },
             __self: this
@@ -37160,7 +37799,7 @@ function RoundedSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 18,
+                lineNumber: 20,
                 columnNumber: 9
             },
             __self: this
@@ -37171,7 +37810,7 @@ function RoundedSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 19,
+                lineNumber: 21,
                 columnNumber: 9
             },
             __self: this
@@ -37183,7 +37822,7 @@ function RoundedSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 20,
+                lineNumber: 22,
                 columnNumber: 9
             },
             __self: this
@@ -37194,7 +37833,7 @@ function RoundedSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 21,
+                lineNumber: 23,
                 columnNumber: 9
             },
             __self: this
@@ -37208,14 +37847,14 @@ function RoundedSpinners({ stop , speed  }) {
         },
         __source: {
             fileName: "components/Spinners/RoundedSpinners.tsx",
-            lineNumber: 27,
+            lineNumber: 29,
             columnNumber: 13
         },
         __self: this
     }, /*#__PURE__*/ _react.createElement("span", {
         __source: {
             fileName: "components/Spinners/RoundedSpinners.tsx",
-            lineNumber: 28,
+            lineNumber: 30,
             columnNumber: 17
         },
         __self: this
@@ -37225,7 +37864,7 @@ function RoundedSpinners({ stop , speed  }) {
         className: "spinner_header_link",
         __source: {
             fileName: "components/Spinners/RoundedSpinners.tsx",
-            lineNumber: 29,
+            lineNumber: 31,
             columnNumber: 17
         },
         __self: this
@@ -37233,7 +37872,7 @@ function RoundedSpinners({ stop , speed  }) {
         className: "example",
         __source: {
             fileName: "components/Spinners/RoundedSpinners.tsx",
-            lineNumber: 34,
+            lineNumber: 36,
             columnNumber: 13
         },
         __self: this
@@ -37242,7 +37881,7 @@ function RoundedSpinners({ stop , speed  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 38,
+                lineNumber: 40,
                 columnNumber: 25
             },
             __self: this
@@ -37250,28 +37889,31 @@ function RoundedSpinners({ stop , speed  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 39,
+                lineNumber: 41,
                 columnNumber: 29
             },
             __self: this
         }, m), /*#__PURE__*/ _react.createElement("div", {
-            className: "code",
+            className: "demo",
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 42,
+                lineNumber: 45,
                 columnNumber: 29
             },
             __self: this
         }, /*#__PURE__*/ _react.createElement("button", {
             type: "button",
             className: "showcode-button",
+            onClick: ()=>{
+                showDemo(m);
+            },
             __source: {
                 fileName: "components/Spinners/RoundedSpinners.tsx",
-                lineNumber: 43,
+                lineNumber: 46,
                 columnNumber: 33
             },
             __self: this
-        }, "Show Code"))))));
+        }, "Demo"))))));
 }
 exports.default = RoundedSpinners;
 
@@ -37280,7 +37922,7 @@ exports.default = RoundedSpinners;
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}],"TUWv2":[function(require,module,exports) {
+},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","../context/DemoContext":"dHgQL"}],"TUWv2":[function(require,module,exports) {
 var $parcel$ReactRefreshHelpers$c7ee = require("@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js");
 var prevRefreshReg = window.$RefreshReg$;
 var prevRefreshSig = window.$RefreshSig$;
@@ -37291,8 +37933,10 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 var _react = require("react");
 var _dist = require("../../../dist");
+var _demoContext = require("../context/DemoContext");
 const wobblingSpinnerColor = "#dc2626";
 function WobblingSpinners({ stop , speed  }) {
+    const { showDemo  } = _react.useContext((0, _demoContext.DemoContext));
     const wobblingSpinners = [
         /*#__PURE__*/ _react.createElement((0, _dist.WobblingSpinner1), {
             color: wobblingSpinnerColor,
@@ -37301,7 +37945,7 @@ function WobblingSpinners({ stop , speed  }) {
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 12,
+                lineNumber: 14,
                 columnNumber: 9
             },
             __self: this
@@ -37313,7 +37957,7 @@ function WobblingSpinners({ stop , speed  }) {
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 13,
+                lineNumber: 15,
                 columnNumber: 9
             },
             __self: this
@@ -37324,7 +37968,7 @@ function WobblingSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 14,
+                lineNumber: 16,
                 columnNumber: 9
             },
             __self: this
@@ -37335,7 +37979,7 @@ function WobblingSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 15,
+                lineNumber: 17,
                 columnNumber: 9
             },
             __self: this
@@ -37347,7 +37991,7 @@ function WobblingSpinners({ stop , speed  }) {
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 16,
+                lineNumber: 18,
                 columnNumber: 9
             },
             __self: this
@@ -37359,7 +38003,7 @@ function WobblingSpinners({ stop , speed  }) {
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 17,
+                lineNumber: 19,
                 columnNumber: 9
             },
             __self: this
@@ -37370,7 +38014,7 @@ function WobblingSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 18,
+                lineNumber: 20,
                 columnNumber: 9
             },
             __self: this
@@ -37382,7 +38026,7 @@ function WobblingSpinners({ stop , speed  }) {
             stickColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 19,
+                lineNumber: 21,
                 columnNumber: 9
             },
             __self: this
@@ -37393,7 +38037,7 @@ function WobblingSpinners({ stop , speed  }) {
             speed: speed,
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 20,
+                lineNumber: 22,
                 columnNumber: 9
             },
             __self: this
@@ -37405,7 +38049,7 @@ function WobblingSpinners({ stop , speed  }) {
             bgColor: "#cbd5e1",
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 21,
+                lineNumber: 23,
                 columnNumber: 9
             },
             __self: this
@@ -37419,14 +38063,14 @@ function WobblingSpinners({ stop , speed  }) {
         },
         __source: {
             fileName: "components/Spinners/WobblingSpinners.tsx",
-            lineNumber: 26,
+            lineNumber: 28,
             columnNumber: 13
         },
         __self: this
     }, /*#__PURE__*/ _react.createElement("span", {
         __source: {
             fileName: "components/Spinners/WobblingSpinners.tsx",
-            lineNumber: 27,
+            lineNumber: 29,
             columnNumber: 17
         },
         __self: this
@@ -37436,7 +38080,7 @@ function WobblingSpinners({ stop , speed  }) {
         className: "spinner_header_link",
         __source: {
             fileName: "components/Spinners/WobblingSpinners.tsx",
-            lineNumber: 28,
+            lineNumber: 30,
             columnNumber: 17
         },
         __self: this
@@ -37444,7 +38088,7 @@ function WobblingSpinners({ stop , speed  }) {
         className: "example",
         __source: {
             fileName: "components/Spinners/WobblingSpinners.tsx",
-            lineNumber: 33,
+            lineNumber: 35,
             columnNumber: 13
         },
         __self: this
@@ -37453,7 +38097,7 @@ function WobblingSpinners({ stop , speed  }) {
             key: index,
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 36,
+                lineNumber: 38,
                 columnNumber: 25
             },
             __self: this
@@ -37461,28 +38105,31 @@ function WobblingSpinners({ stop , speed  }) {
             className: "loader",
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 37,
+                lineNumber: 39,
                 columnNumber: 29
             },
             __self: this
         }, m), /*#__PURE__*/ _react.createElement("div", {
-            className: "code",
+            className: "demo",
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 40,
+                lineNumber: 43,
                 columnNumber: 29
             },
             __self: this
         }, /*#__PURE__*/ _react.createElement("button", {
             type: "button",
             className: "showcode-button",
+            onClick: ()=>{
+                showDemo(m);
+            },
             __source: {
                 fileName: "components/Spinners/WobblingSpinners.tsx",
-                lineNumber: 41,
+                lineNumber: 44,
                 columnNumber: 33
             },
             __self: this
-        }, "Show Code"))))));
+        }, "Demo"))))));
 }
 exports.default = WobblingSpinners;
 
@@ -37491,6 +38138,6 @@ exports.default = WobblingSpinners;
   window.$RefreshReg$ = prevRefreshReg;
   window.$RefreshSig$ = prevRefreshSig;
 }
-},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru"}]},["hi2Fo","kjLP2"], "kjLP2", "parcelRequired98c")
+},{"react":"3IZzP","../../../dist":"2jjMk","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","@parcel/transformer-react-refresh-wrap/lib/helpers/helpers.js":"km3Ru","../context/DemoContext":"dHgQL"}],"7N9bM":[function() {},{}]},["4QFFA","kjLP2"], "kjLP2", "parcelRequired98c")
 
 //# sourceMappingURL=index.6fa4ea68.js.map
