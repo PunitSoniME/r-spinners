@@ -31,6 +31,16 @@ With npm:
 npm install --save r-spinners
 ```
 
+## Version >= 2.0.0
+### Follow this documentation - https://punitsonime.github.io/r-spinners
+
+
+
+<br /><br /><br />
+
+
+## Version < 2.0.0 - Follow Below documentation
+
 ## Usage
 
 ### Each loader has their own default properties. You can overwrite the defaults by passing props into the loaders.

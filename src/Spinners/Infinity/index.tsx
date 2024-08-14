@@ -1,23 +1,81 @@
-import InfinitySpinner1 from './InfinitySpinner1';
-import InfinitySpinner2 from './InfinitySpinner2';
-import InfinitySpinner3 from './InfinitySpinner3';
-import InfinitySpinner4 from './InfinitySpinner4';
-import InfinitySpinner5 from './InfinitySpinner5';
-import InfinitySpinner6 from './InfinitySpinner6';
-import InfinitySpinner7 from './InfinitySpinner7';
-import InfinitySpinner8 from './InfinitySpinner8';
-import InfinitySpinner9 from './InfinitySpinner9';
-import InfinitySpinner10 from './InfinitySpinner10';
+import React from 'react';
+import styled from 'styled-components';
+import CommonProps from '../../Model/Common';
+import {
+  variant1,
+  variant2,
+  variant3,
+  variant4,
+  variant5,
+  variant6,
+  variant7,
+  variant8,
+  variant9,
+  variant10,
+} from './variants';
+import { updateProps } from '../../utils';
 
-export {
-	InfinitySpinner1,
-	InfinitySpinner2,
-	InfinitySpinner3,
-	InfinitySpinner4,
-	InfinitySpinner5,
-	InfinitySpinner6,
-	InfinitySpinner7,
-	InfinitySpinner8,
-	InfinitySpinner9,
-	InfinitySpinner10,
+const GeneratedCSS = {
+  variant1: variant1,
+  variant2: variant2,
+  variant3: variant3,
+  variant4: variant4,
+  variant5: variant5,
+  variant6: variant6,
+  variant7: variant7,
+  variant8: variant8,
+  variant9: variant9,
+  variant10: variant10,
 };
+
+type WrapperProps = Props;
+
+const InfinitySpinnerWrapper = styled.div.attrs<WrapperProps>(
+  (props: WrapperProps) => ({
+    color: props['color'],
+    height: props['height'],
+    width: props['width'],
+    animationDuration: Boolean(props?.animationDuration)
+      ? props?.animationDuration
+      : 2,
+    animationPlayState: props?.stop ? 'paused' : 'running',
+    style: props?.style,
+  })
+)`
+  animation-duration: ${(props) => props.animationDuration}s;
+  animation-play-state: ${(props) => props.animationPlayState};
+
+  ${(props) => {
+    return GeneratedCSS[props.variant] || GeneratedCSS.variant1;
+  }}
+  ${(props) => props?.style}
+`;
+
+type ConditionalProps = {
+  variant:
+    | 'variant1'
+    | 'variant2'
+    | 'variant3'
+    | 'variant4'
+    | 'variant5'
+    | 'variant6'
+    | 'variant7'
+    | 'variant8'
+    | 'variant9'
+    | 'variant10';
+};
+
+export type Props = CommonProps &
+  ConditionalProps & {
+    height: string;
+    width: string;
+  };
+
+export default function BarSpinner(props: Props) {
+  const { style, rest } = updateProps('Infinity', props, {
+    height: '14px',
+    width: '90px',
+  });
+
+  return <InfinitySpinnerWrapper {...rest} style={style} />;
+}

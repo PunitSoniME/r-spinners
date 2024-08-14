@@ -1,23 +1,80 @@
-import BarSpinner1 from './BarSpinner1';
-import BarSpinner2 from './BarSpinner2';
-import BarSpinner3 from './BarSpinner3';
-import BarSpinner4 from './BarSpinner4';
-import BarSpinner5 from './BarSpinner5';
-import BarSpinner6 from './BarSpinner6';
-import BarSpinner7 from './BarSpinner7';
-import BarSpinner8 from './BarSpinner8';
-import BarSpinner9 from './BarSpinner9';
-import BarSpinner10 from './BarSpinner10';
+import React from 'react';
+import styled from 'styled-components';
+import CommonProps from '../../Model/Common';
+import {
+  variant1,
+  variant2,
+  variant3,
+  variant4,
+  variant5,
+  variant6,
+  variant7,
+  variant8,
+  variant9,
+  variant10,
+} from './variants';
+import { updateProps } from '../../utils';
 
-export {
-	BarSpinner1,
-	BarSpinner2,
-	BarSpinner3,
-	BarSpinner4,
-	BarSpinner5,
-	BarSpinner6,
-	BarSpinner7,
-	BarSpinner8,
-	BarSpinner9,
-	BarSpinner10,
+const GeneratedCSS = {
+  variant1: variant1,
+  variant2: variant2,
+  variant3: variant3,
+  variant4: variant4,
+  variant5: variant5,
+  variant6: variant6,
+  variant7: variant7,
+  variant8: variant8,
+  variant9: variant9,
+  variant10: variant10,
 };
+
+type WrapperProps = Props;
+
+const BarSpinnerWrapper = styled.div.attrs<WrapperProps>(
+  (props: WrapperProps) => ({
+    color: props['color'],
+    size: props['size'],
+    animationDuration: Boolean(props?.animationDuration)
+      ? props?.animationDuration
+      : 2,
+    animationPlayState: props?.stop ? 'paused' : 'running',
+    animationColor: props['animationColor'] || '',
+    style: props?.style,
+  })
+)`
+  display: inline-block;
+
+  font-size: ${(props) => props.fontSize};
+  animation-duration: ${(props) => props.animationDuration}s;
+  animation-play-state: ${(props) => props.animationPlayState};
+
+  ${(props) => {
+    return GeneratedCSS[props.variant] || GeneratedCSS.variant1;
+  }}
+  ${(props) => props?.style}
+`;
+
+type ConditionalProps = {
+  variant:
+    | 'variant1'
+    | 'variant2'
+    | 'variant3'
+    | 'variant4'
+    | 'variant5'
+    | 'variant6'
+    | 'variant7'
+    | 'variant8'
+    | 'variant9'
+    | 'variant10';
+};
+
+export type Props = CommonProps &
+  ConditionalProps & {
+    size: number | string;
+  };
+
+export default function BarSpinner(props: Props) {
+  const { style, rest } = updateProps('Bar', props);
+
+  return <BarSpinnerWrapper {...rest} style={style} />;
+}

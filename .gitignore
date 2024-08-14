@@ -3,6 +3,5 @@
 node_modules
 .cache
 dist
-example/*
-!example/dist
-yarn.lock
+
+storybook-static

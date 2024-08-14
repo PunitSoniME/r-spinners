@@ -1,0 +1,27 @@
+{
+  "name": "example",
+  "private": true,
+  "version": "0.0.0",
+  "main": ".storybook/main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  },
+  "alias": {
+    "@tsconfig/vite-react": "../node_modules/@tsconfig/vite-react",
+    "react": "../node_modules/react",
+    "react-dom": "../node_modules/react-dom/profiling",
+    "scheduler/tracing": "../node_modules/scheduler/tracing-profiling"
+  },
+  "devDependencies": {
+    "@storybook/addon-essentials": "^8.2.8",
+    "@storybook/addon-info": "^5.3.21",
+    "@storybook/addon-links": "^8.2.8",
+    "@storybook/addons": "^7.6.17",
+    "@storybook/react": "^8.2.8",
+    "@storybook/react-vite": "^8.2.8",
+    "storybook": "^8.2.8",
+    "vite": "^5.4.0"
+  }
+}
