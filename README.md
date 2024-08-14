@@ -31,7 +31,7 @@ With npm:
 npm install --save r-spinners
 ```
 
-## Version >= 2.0.0
+## Version >= 2.0.0 ( Recommended )
 ### Follow this documentation - https://punitsonime.github.io/r-spinners
 
 
@@ -43,26 +43,24 @@ npm install --save r-spinners
 
 ## Usage
 
-### Each loader has their own default properties. You can overwrite the defaults by passing props into the loaders.
+### Each loader have their own default properties. You can override those defaults by passing props into the loaders.
 
 <br />
 
 ## Demo of all spinners - https://r-spinners.netlify.app/
 
-<br />
+### Rounded Spinners - [`Demo`](https://codesandbox.io/s/rounded-spinners-ctkq3w)
 
-### Rounded Spinners - [`Demo`](https://codesandbox.io/s/rounded-spinners-ctkq3w) - [`Usage`](./src/Spinners/Rounded/README.md)
+### Classic Spinners - [`Demo`](https://codesandbox.io/s/classic-spinners-jg8qb0)
 
-### Classic Spinners - [`Demo`](https://codesandbox.io/s/classic-spinners-jg8qb0) - [`Usage`](./src/Spinners/Classic/README.md) 
+### Infinity Spinners - [`Demo`](https://codesandbox.io/s/infinity-spinners-qq6ij6)
 
-### Infinity Spinners - [`Demo`](https://codesandbox.io/s/infinity-spinners-qq6ij6) - [`Usage`](./src/Spinners/Infinity/README.md) 
+### Dot Spinners - [`Demo`](https://codesandbox.io/s/dot-spinners-ronmuc)
 
-### Dot Spinners - [`Demo`](https://codesandbox.io/s/dot-spinners-ronmuc) - [`Usage`](./src/Spinners/Dot/README.md) 
+### Bar Spinners - [`Demo`](https://codesandbox.io/s/bar-spinners-z3b8u9)
 
-### Bar Spinners - [`Demo`](https://codesandbox.io/s/bar-spinners-z3b8u9) - [`Usage`](./src/Spinners/Bar/README.md) 
+### Continuous Spinners - [`Demo`](https://codesandbox.io/s/continuous-spinners-cvziqr)
 
-### Continuous Spinners - [`Demo`](https://codesandbox.io/s/continuous-spinners-cvziqr) - [`Usage`](./src/Spinners/Continuous/README.md) 
+### Progress Spinners - [`Demo`](https://codesandbox.io/s/progress-spinners-btq55g)
 
-### Progress Spinners - [`Demo`](https://codesandbox.io/s/progress-spinners-btq55g) - [`Usage`](./src/Spinners/Progress/README.md) 
-
-### Wobbling Spinners - [`Demo`](https://codesandbox.io/s/wobbling-spinners-yfqkp2) - [`Usage`](./src/Spinners/Wobbling/README.md) 
+### Wobbling Spinners - [`Demo`](https://codesandbox.io/s/wobbling-spinners-yfqkp2)
