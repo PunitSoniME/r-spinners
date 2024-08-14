@@ -71,7 +71,7 @@ export type Props = CommonProps &
     width: string;
   };
 
-export default function BarSpinner(props: Props) {
+export default function InfinitySpinner(props: Props) {
   const { style, rest } = updateProps('Infinity', props, {
     height: '14px',
     width: '90px',
