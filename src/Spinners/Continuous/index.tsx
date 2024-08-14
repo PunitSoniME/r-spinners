@@ -1,23 +1,84 @@
-import ContinuousSpinner1 from './ContinuousSpinner1';
-import ContinuousSpinner2 from './ContinuousSpinner2';
-import ContinuousSpinner3 from './ContinuousSpinner3';
-import ContinuousSpinner4 from './ContinuousSpinner4';
-import ContinuousSpinner5 from './ContinuousSpinner5';
-import ContinuousSpinner6 from './ContinuousSpinner6';
-import ContinuousSpinner7 from './ContinuousSpinner7';
-import ContinuousSpinner8 from './ContinuousSpinner8';
-import ContinuousSpinner9 from './ContinuousSpinner9';
-import ContinuousSpinner10 from './ContinuousSpinner10';
+import React from 'react';
+import styled from 'styled-components';
+import CommonProps from '../../Model/Common';
+import {
+  variant1,
+  variant2,
+  variant3,
+  variant4,
+  variant5,
+  variant6,
+  variant7,
+  variant8,
+  variant9,
+  variant10,
+} from './variants';
+import { updateProps } from '../../utils';
 
-export {
-	ContinuousSpinner1,
-	ContinuousSpinner2,
-	ContinuousSpinner3,
-	ContinuousSpinner4,
-	ContinuousSpinner5,
-	ContinuousSpinner6,
-	ContinuousSpinner7,
-	ContinuousSpinner8,
-	ContinuousSpinner9,
-	ContinuousSpinner10,
+const GeneratedCSS = {
+  variant1: variant1,
+  variant2: variant2,
+  variant3: variant3,
+  variant4: variant4,
+  variant5: variant5,
+  variant6: variant6,
+  variant7: variant7,
+  variant8: variant8,
+  variant9: variant9,
+  variant10: variant10,
 };
+
+type WrapperProps = Props;
+
+const ContinuousSpinnerWrapper = styled.div.attrs<WrapperProps>(
+  (props: WrapperProps) => ({
+    color: props['color'],
+    bgColor: props['bgColor'],
+    secondaryColor: props['secondaryColor'],
+    dotColor: props['dotColor'],
+    height: props['height'],
+    width: props['width'],
+    animationDuration: Boolean(props?.animationDuration)
+      ? props?.animationDuration
+      : 2,
+    animationPlayState: props?.stop ? 'paused' : 'running',
+    style: props?.style,
+  })
+)`
+  animation-duration: ${(props) => props.animationDuration}s;
+  animation-play-state: ${(props) => props.animationPlayState};
+
+  ${(props) => {
+    return GeneratedCSS[props.variant] || GeneratedCSS.variant1;
+  }}
+  ${(props) => props?.style}
+`;
+
+type ConditionalProps =
+  | {
+      variant: 'variant1' | 'variant4' | 'variant6' | 'variant8';
+    }
+  | {
+      variant: 'variant2' | 'variant3' | 'variant7' | 'variant10';
+      bgColor: string;
+    }
+  | {
+      variant: 'variant5';
+      secondaryColor: string;
+    }
+  | {
+      variant: 'variant9';
+      dotColor: string;
+    };
+
+export type Props = CommonProps &
+  ConditionalProps & {
+    height: string;
+    width: string;
+  };
+
+export default function ContinuousSpinner(props: Props) {
+  const { style, rest } = updateProps('Continuous', props);
+
+  return <ContinuousSpinnerWrapper {...rest} style={style} />;
+}

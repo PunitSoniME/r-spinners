@@ -1,0 +1,39 @@
+name: Deploy on Github Pages
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  publish:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        # You may use a newer version of https://github.com/actions/checkout
+        uses: actions/checkout@v4
+
+      - name: Install Packages
+        run: yarn install && cd example && yarn install && yarn run build-storybook && cd ..
+
+      - name: Publish current workdir (which contains generated content) to GitHub Pages
+        uses: rayluo/github-pages-overwriter@8091e3fd1a0f0aa398a46770565e0452a7cf4425
+
+        with:
+
+          # Optional.
+          #
+          # Default value "." means the root directory of your project will be published.
+          #
+          # You can use whatever directory your project uses,
+          # for example "wwwroot" (without leading "./").
+          # Such a directory does *not* have to already exist in your repo,
+          # it could be an output directory created dynamically
+          # by your static website builder.
+          source-directory: example/storybook-static
+
+          # Optional. Default value "gh-pages".
+          # It specifies the temporary branch which hosts the static website.
+          # Each build will OVERWRITE this branch.
+          target-branch: gh-pages
