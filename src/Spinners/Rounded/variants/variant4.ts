@@ -4,13 +4,25 @@ const animation = () => keyframes`
 	to { transform: rotate(1turn) }
 `;
 
+export const defaultValues = {
+  size: '45px',
+  color: '#86198f',
+  animationDuration: 1,
+  thickness: 8,
+};
+
 const CSS = css`
-  width: ${(props) => props.size};
-  --b: ${(props) => props.thickness}px; /* the border thickness */
+  width: ${(props) => props.size || defaultValues.size};
+  --b: ${(props) =>
+    props.thickness || defaultValues.thickness}px; /* the border thickness */
   aspect-ratio: 1;
   border-radius: 50%;
   padding: 1px;
-  background: conic-gradient(#0000 10%, ${(props) => props.color}) content-box;
+  background: conic-gradient(
+      #0000 10%,
+      ${(props) => props.color || defaultValues.color}
+    )
+    content-box;
   -webkit-mask: repeating-conic-gradient(
       #0000 0deg,
       #000 1deg 20deg,
@@ -24,8 +36,9 @@ const CSS = css`
   -webkit-mask-composite: destination-in;
   mask-composite: intersect;
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: steps(10);
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

@@ -8,17 +8,20 @@ export const defaultValues = {
   color: '#514b82',
   height: '20px',
   width: '120px',
+  animationDuration: 2,
 };
 
 const CSS = css`
   height: ${(props) => props.height || defaultValues.height};
   width: ${(props) => props.width || defaultValues.width};
 
-  color: ${(props) => props.color};
+  color: ${(props) => props.color || defaultValues.color};
   border-radius: 40px;
   border: 2px solid;
   position: relative;
   overflow: hidden;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 
   &:before {
     content: '';
@@ -34,9 +37,9 @@ const CSS = css`
     clip-path: polygon(0 5%, 100% 0, 100% 100%, 0 95%, -30px 50%);
 
     animation-name: ${animation};
-    animation-iteration-count: infinite;
     animation-timing-function: linear;
-    animation-duration: ${(props) => props.animationDuration}s;
+    animation-duration: ${(props) =>
+      props.animationDuration || defaultValues.animationDuration}s;
     animation-play-state: ${(props) => props.animationPlayState};
   }
 `;

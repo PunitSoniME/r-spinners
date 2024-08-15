@@ -10,6 +10,7 @@ const animation = keyframes`
 export const defaultValues = {
   color: '#991b1b',
   size: '45px',
+  animationDuration: 1,
 };
 
 const CSS = css`
@@ -17,15 +18,16 @@ const CSS = css`
   aspect-ratio: 1;
   --c: no-repeat
     linear-gradient(
-      ${(props) => props.color} calc(50% - 10px),
+      ${(props) => props.color || defaultValues.color} calc(50% - 10px),
       #0000 0 calc(50% + 10px),
-      ${(props) => props.color} 0
+      ${(props) => props.color || defaultValues.color} 0
     );
   background: var(--c) 0% 100%, var(--c) 50% 100%, var(--c) 100% 100%;
   background-size: 20% calc(200% + 20px);
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: linear;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

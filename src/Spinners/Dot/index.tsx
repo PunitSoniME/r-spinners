@@ -42,7 +42,7 @@ const DotSpinnerWrapper = styled.div.attrs<WrapperProps>(
     style: props?.style,
   })
 )`
-  animation-duration: ${(props) => props.animationDuration}s;
+  animation-iteration-count: infinite;
   animation-play-state: ${(props) => props.animationPlayState};
 
   ${(props) => {

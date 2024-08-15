@@ -9,17 +9,23 @@ export const defaultValues = {
   bgColor: '#eee',
   height: '20px',
   width: '120px',
+  animationDuration: 1,
 };
 
 const CSS = css`
-  height: ${(props) => props.height};
-  width: ${(props) => props.width};
-  background: linear-gradient(${(props) => props.color} 0 0) left/10px 100%
-    no-repeat ${(props) => props.bgColor};
+  height: ${(props) => props.height || defaultValues.height};
+  width: ${(props) => props.width || defaultValues.width};
+  background: linear-gradient(
+      ${(props) => props.color || defaultValues.color} 0 0
+    )
+    left/10px 100% no-repeat
+    ${(props) => props.bgColor || defaultValues.bgColor};
   position: relative;
   animation-name: ${animation};
   animation-iteration-count: infinite;
   animation-timing-function: cubic-bezier(0, 0.2, 1, 1);
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 
   &:before,
   &:after {
@@ -28,8 +34,11 @@ const CSS = css`
     left: 0;
     right: 0;
     height: 7px;
-    background: linear-gradient(${(props) => props.color} 0 0) left/10px 100%
-      no-repeat ${(props) => props.bgColor};
+    background: linear-gradient(
+        ${(props) => props.color || defaultValues.color} 0 0
+      )
+      left/10px 100% no-repeat
+      ${(props) => props.bgColor || defaultValues.bgColor};
     animation: inherit;
   }
   &:before {

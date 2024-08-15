@@ -9,6 +9,7 @@ export const defaultValues = {
   height: '20px',
   width: '120px',
   bgColor: 'lightgrey',
+  animationDuration: 2,
 };
 
 const CSS = css`
@@ -16,11 +17,14 @@ const CSS = css`
   width: ${(props) => props.width || defaultValues.width};
 
   transform: skewX(-45deg);
-  background: linear-gradient(${(props) => props.color} 0 0) left -30px top 0/30px
-    20px no-repeat ${(props) => props.bgColor};
+  background: linear-gradient(
+      ${(props) => props.color || defaultValues.color} 0 0
+    )
+    left -30px top 0/30px 20px no-repeat ${(props) => props.bgColor || defaultValues.bgColor};
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: linear;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

@@ -7,18 +7,21 @@ const animation = (color: string) => keyframes`
 	100% { box-shadow: 20px 0 #0002,-20px 0 ${color}; background: ${color} }
 `;
 
-const defaultValues = {
-  size: '60px',
+export const defaultValues = {
+  size: '15px',
+  color: '#ea580c',
+  animationDuration: 2,
 };
 
 const CSS = css`
   width: ${(props) => props.size || defaultValues.size};
   aspect-ratio: 1;
   border-radius: 50%;
-  animation-name: ${(props) => animation(props.color)};
-  animation-iteration-count: infinite;
+  animation-name: ${(props) => animation(props.color || defaultValues.color)};
   animation-timing-function: linear;
   animation-direction: alternate;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

@@ -35,14 +35,12 @@ const InfinitySpinnerWrapper = styled.div.attrs<WrapperProps>(
     color: props['color'],
     height: props['height'],
     width: props['width'],
-    animationDuration: Boolean(props?.animationDuration)
-      ? props?.animationDuration
-      : 2,
+    animationDuration: props?.animationDuration,
     animationPlayState: props?.stop ? 'paused' : 'running',
     style: props?.style,
   })
 )`
-  animation-duration: ${(props) => props.animationDuration}s;
+  animation-iteration-count: infinite;
   animation-play-state: ${(props) => props.animationPlayState};
 
   ${(props) => {
@@ -72,10 +70,7 @@ export type Props = CommonProps &
   };
 
 export default function InfinitySpinner(props: Props) {
-  const { style, rest } = updateProps('Infinity', props, {
-    height: '14px',
-    width: '90px',
-  });
+  const { style, rest } = updateProps('Infinity', props);
 
   return <InfinitySpinnerWrapper {...rest} style={style} />;
 }

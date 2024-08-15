@@ -32,22 +32,19 @@ type WrapperProps = Props;
 
 const RoundedSpinnerWrapper = styled.div.attrs<WrapperProps>(
   (props: WrapperProps) => ({
-    color: props?.color || props?.style?.color || '#000',
-    size: props['size'],
-    animationDuration: Boolean(props?.animationDuration)
-      ? props?.animationDuration
-      : 2,
+    color: props?.color,
+    size: props?.size,
+    animationDuration: props.animationDuration,
     animationPlayState: props?.stop ? 'paused' : 'running',
-    secondaryColor: props['secondaryColor'] || '',
-    thickness: props['thickness'] || '',
-    dotColor: props['dotColor'] || '',
+    secondaryColor: props['secondaryColor'],
+    thickness: props['thickness'],
+    dotColor: props['dotColor'],
     style: props?.style,
   })
 )`
   display: inline-block;
 
-  font-size: ${(props) => props.fontSize};
-  animation-duration: ${(props) => props.animationDuration}s;
+  animation-iteration-count: infinite;
   animation-play-state: ${(props) => props.animationPlayState};
 
   ${(props) => {
@@ -80,9 +77,7 @@ export type Props = CommonProps &
   };
 
 export default function RoundedSpinner(props: Props) {
-  const { style, rest } = updateProps('Rounded', props, {
-    size: '45px',
-  });
+  const { style, rest } = updateProps('Rounded', props);
 
   return <RoundedSpinnerWrapper {...rest} style={style} />;
 }

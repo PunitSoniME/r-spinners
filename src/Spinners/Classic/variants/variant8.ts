@@ -32,7 +32,6 @@ const CSS = css`
   -webkit-background-clip: text;
   background-clip: text;
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: steps(${(props) => props.text.length + 1});
   animation-duration: ${(props) =>
     props.animationDuration || defaultValues.animationDuration}s;

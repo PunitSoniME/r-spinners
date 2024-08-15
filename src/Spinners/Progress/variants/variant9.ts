@@ -9,14 +9,14 @@ const animation = () => keyframes`
 export const defaultValues = {
   color: '#dc2626',
   bgColor: '#eee',
-
   height: '20px',
   width: '120px',
+  animationDuration: 1,
 };
 
 const CSS = css`
-  height: ${(props) => props.height};
-  width: ${(props) => props.width};
+  height: ${(props) => props.height || defaultValues.height};
+  width: ${(props) => props.width || defaultValues.width};
   --r1: 154%;
   --r2: 68.5%;
   width: 60px;
@@ -25,25 +25,26 @@ const CSS = css`
   background: radial-gradient(
       var(--r1) var(--r2) at top,
       #0000 79.5%,
-      ${(props) => props.color} 80%
+      ${(props) => props.color || defaultValues.color} 80%
     ),
     radial-gradient(
       var(--r1) var(--r2) at bottom,
-      ${(props) => props.color} 79.5%,
+      ${(props) => props.color || defaultValues.color} 79.5%,
       #0000 80%
     ),
     radial-gradient(
       var(--r1) var(--r2) at top,
       #0000 79.5%,
-      ${(props) => props.color} 80%
+      ${(props) => props.color || defaultValues.color} 80%
     ),
-    ${(props) => props.bgColor};
+    ${(props) => props.bgColor || defaultValues.bgColor};
   background-size: 50.5% 220%;
   background-position: -100% 0%, 0% 0%, 100% 0%;
   background-repeat: no-repeat;
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: linear;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

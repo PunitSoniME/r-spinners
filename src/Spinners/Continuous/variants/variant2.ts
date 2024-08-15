@@ -9,17 +9,23 @@ export const defaultValues = {
   height: '20px',
   width: '120px',
   bgColor: 'lightgrey',
+  animationDuration: 2,
 };
 
 const CSS = css`
   height: ${(props) => props.height || defaultValues.height};
   width: ${(props) => props.width || defaultValues.width};
 
-  background: linear-gradient(90deg, #0000, ${(props) => props.color}) left -50px
-    top 0/50px 20px no-repeat ${(props) => props.bgColor};
+  background: linear-gradient(
+      90deg,
+      #0000,
+      ${(props) => props.color || defaultValues.color}
+    )
+    left -50px top 0/50px 20px no-repeat ${(props) => props.bgColor || defaultValues.bgColor};
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: linear;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

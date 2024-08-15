@@ -44,8 +44,7 @@ const BarSpinnerWrapper = styled.div.attrs<WrapperProps>(
 )`
   display: inline-block;
 
-  font-size: ${(props) => props.fontSize};
-  animation-duration: ${(props) => props.animationDuration}s;
+  animation-iteration-count: infinite;
   animation-play-state: ${(props) => props.animationPlayState};
 
   ${(props) => {

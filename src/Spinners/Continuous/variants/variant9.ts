@@ -10,6 +10,7 @@ export const defaultValues = {
 
   height: '20px',
   width: '120px',
+  animationDuration: 2,
 };
 
 const CSS = css`
@@ -18,13 +19,15 @@ const CSS = css`
 
   background: radial-gradient(
       circle closest-side,
-      ${(props) => props.dotColor} 94%,
+      ${(props) => props.dotColor || defaultValues.dotColor} 94%,
       #0000
     )
-    50% 50% / calc(50% + 10px) 70% repeat-x ${(props) => props.color};
+    50% 50% / calc(50% + 10px) 70% repeat-x
+    ${(props) => props.color || defaultValues.color};
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: cubic-bezier(0.3, 1, 0, 1);
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

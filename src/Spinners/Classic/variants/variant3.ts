@@ -23,7 +23,6 @@ const CSS = css`
     200% 100%/200% 3px no-repeat;
   padding: 0 5px 8px 0;
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: steps(6);
   animation-duration: ${(props) =>
     props.animationDuration || defaultValues.animationDuration}s;

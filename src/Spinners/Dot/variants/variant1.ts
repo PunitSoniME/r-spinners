@@ -6,8 +6,10 @@ const animation = keyframes`
     }
 `;
 
-const defaultValues = {
+export const defaultValues = {
   size: '60px',
+  color: '#ea580c',
+  animationDuration: 2,
 };
 
 const CSS = css`
@@ -15,14 +17,15 @@ const CSS = css`
   aspect-ratio: 4;
   background: radial-gradient(
       circle closest-side,
-      ${(props) => props.color} 90%,
+      ${(props) => props.color || defaultValues.color} 90%,
       #0000
     )
     0 / calc(100% / 3) 100% space;
   clip-path: inset(0 100% 0 0);
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: steps(4);
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

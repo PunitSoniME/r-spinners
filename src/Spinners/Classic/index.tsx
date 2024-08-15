@@ -28,8 +28,6 @@ const GeneratedCSS = {
   variant10: variant10,
 };
 
-const defaultColors = ['#000', '#b91c1c', '#0369a1', '#15803d'];
-
 type WrapperProps = Props;
 
 const ClassicSpinnerWrapper = styled.div.attrs<WrapperProps>(
@@ -39,12 +37,9 @@ const ClassicSpinnerWrapper = styled.div.attrs<WrapperProps>(
     fontSize: props?.size,
     animationDuration: props?.animationDuration,
     animationPlayState: props?.stop ? 'paused' : 'running',
-    animationColor: props['animationColor'] || '',
+    animationColor: props['animationColor'],
     noOfCharactersToBlinkAtLast: props['noOfCharactersToBlinkAtLast'],
-    colors:
-      (props['colors'] && props['colors'].length === 4
-        ? props['colors']
-        : defaultColors) || defaultColors,
+    colors: props['colors'],
     style: props?.style,
   })
 )`
@@ -52,6 +47,7 @@ const ClassicSpinnerWrapper = styled.div.attrs<WrapperProps>(
   font-family: monospace;
   display: inline-block;
 
+  animation-iteration-count: infinite;
   animation-play-state: ${(props) => props.animationPlayState};
 
   ${(props) => {

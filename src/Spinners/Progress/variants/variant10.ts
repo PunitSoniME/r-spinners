@@ -9,11 +9,12 @@ export const defaultValues = {
   bgColor: '#eee',
   height: '60px',
   width: '120px',
+  animationDuration: 1,
 };
 
 const CSS = css`
-  height: ${(props) => props.height};
-  width: ${(props) => props.width};
+  height: ${(props) => props.height || defaultValues.height};
+  width: ${(props) => props.width || defaultValues.width};
   border-radius: 200px 200px 0 0;
   -webkit-mask: repeating-radial-gradient(
     farthest-side at bottom,
@@ -23,13 +24,14 @@ const CSS = css`
   );
   background: radial-gradient(
       farthest-side at bottom,
-      ${(props) => props.color} 0 95%,
+      ${(props) => props.color || defaultValues.color} 0 95%,
       #0000 0
     )
-    bottom/0% 0% no-repeat ${(props) => props.bgColor};
+    bottom/0% 0% no-repeat ${(props) => props.bgColor || defaultValues.bgColor};
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: steps(6);
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

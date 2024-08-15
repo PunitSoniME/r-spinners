@@ -8,6 +8,7 @@ export const defaultValues = {
   color: '#514b82',
   height: '20px',
   width: '120px',
+  animationDuration: 2,
 };
 
 const CSS = css`
@@ -15,11 +16,12 @@ const CSS = css`
   width: ${(props) => props.width || defaultValues.width};
 
   background: linear-gradient(90deg, #0001 33%, #0005 50%, #0001 66%)
-    ${(props) => props.color};
+    ${(props) => props.color || defaultValues.color};
   background-size: 300% 100%;
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: linear;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

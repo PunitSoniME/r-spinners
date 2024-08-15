@@ -51,7 +51,6 @@ const CSS = css`
     ${(props) => props.text.length + 4}ch 0
       ${(props) => props.colors[0] || defaultValues.colors[0]};
   animation-name: ${(props) => animation(props.colors, props.text)};
-  animation-iteration-count: infinite;
   animation-timing-function: cubic-bezier(0.3, 1, 0, 1);
   animation-duration: ${(props) =>
     props.animationDuration || defaultValues.animationDuration}s;

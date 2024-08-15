@@ -38,14 +38,12 @@ const ContinuousSpinnerWrapper = styled.div.attrs<WrapperProps>(
     dotColor: props['dotColor'],
     height: props['height'],
     width: props['width'],
-    animationDuration: Boolean(props?.animationDuration)
-      ? props?.animationDuration
-      : 2,
+    animationDuration: props?.animationDuration,
     animationPlayState: props?.stop ? 'paused' : 'running',
     style: props?.style,
   })
 )`
-  animation-duration: ${(props) => props.animationDuration}s;
+  animation-iteration-count: infinite;
   animation-play-state: ${(props) => props.animationPlayState};
 
   ${(props) => {
