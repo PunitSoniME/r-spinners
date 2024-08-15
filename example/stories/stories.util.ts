@@ -1,8 +1,10 @@
 import { Args, ArgTypes } from "@storybook/react"
 
-const getVariantInfo = (value: string): ArgTypes<Args> => {
+type ReturnTypeOfGeneratedInfo = ArgTypes<Args>;
+
+const getVariantInfo = (key: string, value: any): ReturnTypeOfGeneratedInfo => {
     return {
-        variant: {
+        [key]: {
             type: {
                 name: 'string',
                 required: true,
@@ -19,9 +21,9 @@ const getVariantInfo = (value: string): ArgTypes<Args> => {
     }
 }
 
-const getSizeInfo = (value): ArgTypes<Args> => {
+const getSizeInfo = (key: string, value: any): ReturnTypeOfGeneratedInfo => {
     return {
-        size: {
+        [key]: {
             type: 'string',
             table: {
                 defaultValue: {
@@ -31,14 +33,14 @@ const getSizeInfo = (value): ArgTypes<Args> => {
                     summary: "string",
                 },
             },
-            description: 'Use same size which are available for `font-size` like `px`, `rem`, `em`, `%` etc...'
+            description: `Use same size which are available for \`font-size\` like \`px\`, \`rem\`, \`em\`, \`%\` etc...`
         },
     }
 }
 
-const getHeightInfo = (value): ArgTypes<Args> => {
+const getHeightInfo = (key: string, value: any): ReturnTypeOfGeneratedInfo => {
     return {
-        height: {
+        [key]: {
             type: 'string',
             table: {
                 defaultValue: {
@@ -48,14 +50,14 @@ const getHeightInfo = (value): ArgTypes<Args> => {
                     summary: "string",
                 },
             },
-            description: 'Use same size which are available for `height` like `px`, `rem`, `em`, `%` etc...'
+            description: `Use same size which are available for \`${key}\` like \`px\`, \`rem\`, \`em\`, \`%\` etc...`
         },
     }
 }
 
-const getWidthInfo = (value): ArgTypes<Args> => {
+const getWidthInfo = (key: string, value: any): ReturnTypeOfGeneratedInfo => {
     return {
-        width: {
+        [key]: {
             type: 'string',
             table: {
                 defaultValue: {
@@ -65,14 +67,14 @@ const getWidthInfo = (value): ArgTypes<Args> => {
                     summary: "string",
                 },
             },
-            description: 'Use same size which are available for `width` like `px`, `rem`, `em`, `%` etc...'
+            description: `Use same size which are available for ${key} like \`px\`, \`rem\`, \`em\`, \`%\` etc...`
         },
     }
 }
 
-const getAnimationDurationInfo = (value): ArgTypes<Args> => {
+const getAnimationDurationInfo = (key: string, value: any): ReturnTypeOfGeneratedInfo => {
     return {
-        animationDuration: {
+        [key]: {
             table: {
                 defaultValue: {
                     summary: `${value} second`,
@@ -83,7 +85,8 @@ const getAnimationDurationInfo = (value): ArgTypes<Args> => {
     }
 }
 
-const getGeneralInfo = (key: string, value: any): ArgTypes<Args> => {
+//  Don't add this method in mapping object as this method is used to generate general information
+const getGeneralInfo = (key: string, value: any): ReturnTypeOfGeneratedInfo => {
     return {
         [key]: {
             table: {
@@ -95,28 +98,21 @@ const getGeneralInfo = (key: string, value: any): ArgTypes<Args> => {
     }
 }
 
-export const generateArgTypes = (values: Map<'string', unknown>): Partial<ArgTypes<Args>> => {
+const mappings = {
+    'variant': getVariantInfo,
+    'height': getHeightInfo,
+    'width': getWidthInfo,
+    'animationDuration': getAnimationDurationInfo,
+    'size': getSizeInfo,
+}
+
+export const generateArgTypes = (values: Map<'string', unknown>): Partial<ReturnTypeOfGeneratedInfo> => {
 
     return Object.entries(values).reduce((acc: any, curr: any) => {
-        switch (curr[0]) {
-            case 'variant':
-                return { ...acc, ...getVariantInfo(curr[1]) };
-
-            case 'height':
-                return { ...acc, ...getHeightInfo(curr[1]) };
-
-            case 'width':
-                return { ...acc, ...getWidthInfo(curr[1]) };
-
-            case 'animationDuration':
-                return { ...acc, ...getAnimationDurationInfo(curr[1]) };
-
-            case 'size':
-                return { ...acc, ...getSizeInfo(curr[1]) };
-
-            default:
-                return { ...acc, ...getGeneralInfo(curr[0], curr[1]) };
-
+        if (mappings[curr[0]]) {
+            return { ...acc, ...mappings[curr[0]](curr[0], curr[1]) }
+        } else {
+            return { ...acc, ...getGeneralInfo(curr[0], curr[1]) }
         }
     }, {});
 }
