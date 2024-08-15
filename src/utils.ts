@@ -2,7 +2,7 @@ export function isNumber(value: string) {
   return /^-?[\d.]+(?:e-?\d+)?$/.test(value);
 }
 
-export function updateProps(category, props, defaultValues = {}) {
+export function updateProps(category, props) {
   let { style, ...rest } = props;
 
   //  This is to fix the conflict when user set both properties, color and style.color
@@ -22,13 +22,6 @@ export function updateProps(category, props, defaultValues = {}) {
   if (!rest.color) {
     rest['color'] = 'currentColor';
   }
-
-  //  Override the values with default values
-  Object.entries(defaultValues).forEach((d) => {
-    if (!Boolean(rest[d[0]])) {
-      rest[d[0]] = d[1];
-    }
-  });
 
   return { style, rest };
 }

@@ -8,9 +8,11 @@ const animation2 = (gap: string) => keyframes`
   100% { transform: rotate(-360deg) translateX(${gap}) }
 `;
 
-const defaultValues = {
+export const defaultValues = {
   size: '15px',
   gap: '26px',
+  color: '#ea580c',
+  animationDuration: 2,
 };
 
 const CSS = css`
@@ -24,9 +26,10 @@ const CSS = css`
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: ${(props) => props.color};
+    background: ${(props) => props.color || defaultValues.color};
 
-    animation-duration: ${(props) => props.animationDuration}s;
+    animation-duration: ${(props) =>
+      props.animationDuration || defaultValues.animationDuration}s;
     animation-iteration-count: infinite;
     animation-timing-function: linear;
     animation-play-state: ${(props) => props.animationPlayState};

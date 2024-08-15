@@ -33,7 +33,6 @@ const CSS = css`
   -webkit-background-clip: text;
   background-clip: text;
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: cubic-bezier(0.3, 1, 0, 1);
   animation-duration: ${(props) =>
     props.animationDuration || defaultValues.animationDuration}s;

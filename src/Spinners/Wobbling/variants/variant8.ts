@@ -9,11 +9,12 @@ export const defaultValues = {
   stickColor: '#eee',
   height: '20px',
   width: '20px',
+  animationDuration: 1,
 };
 
 const CSS = css`
-  height: ${(props) => props.height};
-  width: ${(props) => props.width};
+  height: ${(props) => props.height || defaultValues.height};
+  width: ${(props) => props.width || defaultValues.width};
   border-radius: 50%;
   position: relative;
   transform-origin: 50% -200%;
@@ -22,6 +23,8 @@ const CSS = css`
   animation-name: ${animation};
   animation-iteration-count: infinite;
   animation-timing-function: cubic-bezier(0.5, -200, 0.5, 200);
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 
   &:before {
     content: '';

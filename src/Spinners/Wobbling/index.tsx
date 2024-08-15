@@ -32,19 +32,16 @@ type WrapperProps = Props;
 
 const WobblingSpinnerWrapper = styled.div.attrs<WrapperProps>(
   (props: WrapperProps) => ({
-    color: props['color'],
+    color: props.color,
     bgColor: props['bgColor'],
     stickColor: props['stickColor'],
-    height: props['height'],
-    width: props['width'],
-    animationDuration: Boolean(props?.animationDuration)
-      ? props?.animationDuration
-      : 2,
+    height: props.height,
+    width: props.width,
+    animationDuration: props.animationDuration,
     animationPlayState: props?.stop ? 'paused' : 'running',
     style: props?.style,
   })
 )`
-  animation-duration: ${(props) => props.animationDuration}s;
   animation-play-state: ${(props) => props.animationPlayState};
 
   ${(props) => {

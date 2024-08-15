@@ -32,20 +32,18 @@ type WrapperProps = Props;
 
 const ProgressSpinnerWrapper = styled.div.attrs<WrapperProps>(
   (props: WrapperProps) => ({
-    color: props['color'],
+    color: props.color,
     color1: props['color1'],
     color2: props['color2'],
     bgColor: props['bgColor'],
-    height: props['height'],
-    width: props['width'],
-    animationDuration: Boolean(props?.animationDuration)
-      ? props?.animationDuration
-      : 2,
+    height: props.height,
+    width: props.width,
+    animationDuration: props.animationDuration,
     animationPlayState: props?.stop ? 'paused' : 'running',
     style: props?.style,
   })
 )`
-  animation-duration: ${(props) => props.animationDuration}s;
+  animation-iteration-count: infinite;
   animation-play-state: ${(props) => props.animationPlayState};
 
   ${(props) => {

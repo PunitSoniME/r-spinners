@@ -1,7 +1,6 @@
 import React from 'react';
 import { Meta, StoryFn } from '@storybook/react';
 import { ClassicSpinner, ClassicSpinnerProps } from '../..';
-import Center from './Center';
 import { generateArgTypes } from './stories.util';
 import {
   variant10DefaultValues, variant1DefaultValues, variant2DefaultValues, variant3DefaultValues,
@@ -18,13 +17,10 @@ const defaultProps = {
 const meta: Meta = {
   title: 'Classic Spinner',
   decorators: [
-    (Story) => (
-      <Center>
-        <Story />
-      </Center>
-    ),
+    (Story) => <Story />,
   ],
   parameters: {
+    layout: 'centered',
     controls: { expanded: true },
   },
 };

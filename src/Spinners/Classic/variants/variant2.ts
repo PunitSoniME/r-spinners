@@ -21,7 +21,6 @@ const CSS = css`
   }
   animation-name: ${animation};
   animation-timing-function: linear;
-  animation-iteration-count: infinite;
   animation-direction: alternate;
   animation-duration: ${(props) =>
     props.animationDuration || defaultValues.animationDuration}s;

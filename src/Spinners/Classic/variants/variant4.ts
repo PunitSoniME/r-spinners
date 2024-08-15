@@ -21,7 +21,6 @@ const CSS = css`
   }
   animation-name: ${animation};
   clip-path: inset(0 100% 0 0);
-  animation-iteration-count: infinite;
   animation-timing-function: steps(${(props) => props.text.length + 1});
   animation-duration: ${(props) =>
     props.animationDuration || defaultValues.animationDuration}s;

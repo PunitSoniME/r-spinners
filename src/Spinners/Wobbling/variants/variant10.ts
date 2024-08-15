@@ -14,25 +14,28 @@ export const defaultValues = {
   bgColor: '#eee',
   height: '20px',
   width: '120px',
+  animationDuration: 1,
 };
 
 const CSS = css`
-  height: ${(props) => props.height};
-  width: ${(props) => props.width};
+  height: ${(props) => props.height || defaultValues.height};
+  width: ${(props) => props.width || defaultValues.width};
   width: calc(100px - 14px);
   height: 50px;
   border-radius: 50px;
   background: radial-gradient(
         farthest-side,
         #0000 calc(100% - 15px),
-        ${(props) => props.bgColor} calc(100% - 14px) 99%,
+        ${(props) => props.bgColor || defaultValues.bgColor} calc(100% - 14px)
+          99%,
         #0000
       )
       left,
     radial-gradient(
         farthest-side,
         #0000 calc(100% - 15px),
-        ${(props) => props.bgColor} calc(100% - 14px) 99%,
+        ${(props) => props.bgColor || defaultValues.bgColor} calc(100% - 14px)
+          99%,
         #0000
       )
       right;
@@ -43,7 +46,8 @@ const CSS = css`
   animation-iteration-count: infinite;
   animation-timing-function: linear;
 
-  animation-duration: ${(props) => props.animationDuration}s;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 
   &:before {
     content: '';
@@ -53,14 +57,16 @@ const CSS = css`
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: ${(props) => props.color};
+    background: ${(props) => props.color || defaultValues.color};
     transform-origin: -14px 50%;
 
     animation-name: ${animation2};
     animation-iteration-count: infinite;
     animation-timing-function: linear;
     animation-duration: ${(props) =>
-      props.animationDuration === 0 ? 0.5 : props.animationDuration / 2}s;
+      props.animationDuration === 0
+        ? 0.5
+        : (props.animationDuration || defaultValues.animationDuration) / 2}s;
     animation-play-state: ${(props) => props.animationPlayState};
   }
 `;

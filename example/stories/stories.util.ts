@@ -1,17 +1,25 @@
 import { Args, ArgTypes } from "@storybook/react"
 
-const getVariantInfo = () => {
+const getVariantInfo = (value: string): ArgTypes<Args> => {
     return {
         variant: {
             type: {
                 name: 'string',
                 required: true,
             },
+            table: {
+                defaultValue: {
+                    summary: value,
+                }
+            },
+            control: {
+                disable: true,
+            }
         },
     }
 }
 
-const getSizeInfo = (value) => {
+const getSizeInfo = (value): ArgTypes<Args> => {
     return {
         size: {
             type: 'string',
@@ -28,7 +36,7 @@ const getSizeInfo = (value) => {
     }
 }
 
-const getHeightInfo = (value) => {
+const getHeightInfo = (value): ArgTypes<Args> => {
     return {
         height: {
             type: 'string',
@@ -45,9 +53,9 @@ const getHeightInfo = (value) => {
     }
 }
 
-const getWidthInfo = (value) => {
+const getWidthInfo = (value): ArgTypes<Args> => {
     return {
-        height: {
+        width: {
             type: 'string',
             table: {
                 defaultValue: {
@@ -62,7 +70,7 @@ const getWidthInfo = (value) => {
     }
 }
 
-const getAnimationDurationInfo = (value) => {
+const getAnimationDurationInfo = (value): ArgTypes<Args> => {
     return {
         animationDuration: {
             table: {
@@ -75,12 +83,24 @@ const getAnimationDurationInfo = (value) => {
     }
 }
 
+const getGeneralInfo = (key: string, value: any): ArgTypes<Args> => {
+    return {
+        [key]: {
+            table: {
+                defaultValue: {
+                    summary: value,
+                }
+            },
+        }
+    }
+}
+
 export const generateArgTypes = (values: Map<'string', unknown>): Partial<ArgTypes<Args>> => {
 
     return Object.entries(values).reduce((acc: any, curr: any) => {
         switch (curr[0]) {
             case 'variant':
-                return { ...acc, ...getVariantInfo() };
+                return { ...acc, ...getVariantInfo(curr[1]) };
 
             case 'height':
                 return { ...acc, ...getHeightInfo(curr[1]) };
@@ -95,7 +115,8 @@ export const generateArgTypes = (values: Map<'string', unknown>): Partial<ArgTyp
                 return { ...acc, ...getSizeInfo(curr[1]) };
 
             default:
-                return { ...acc };
+                return { ...acc, ...getGeneralInfo(curr[0], curr[1]) };
+
         }
     }, {});
 }

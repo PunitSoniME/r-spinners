@@ -1,51 +1,12 @@
 import React from 'react';
-import { Args, ArgTypes, Meta, StoryFn } from '@storybook/react';
+import { Meta, StoryFn } from '@storybook/react';
 import { ContinuousSpinner, ContinuousSpinnerProps } from '../..';
-import Center from './Center';
-import { variant10DefaultValues, variant1DefaultValues, variant2DefaultValues, variant3DefaultValues, variant4DefaultValues, variant5DefaultValues, variant6DefaultValues, variant7DefaultValues, variant8DefaultValues, variant9DefaultValues } from '../../src/Spinners/Continuous/variants';
-
-const generateArgTypes = (values: Map<'string', unknown>): Partial<ArgTypes<Args>> => {
-  return {
-    variant: {
-      type: {
-        name: 'string',
-        required: true,
-      },
-    },
-    height: {
-      type: 'string',
-      table: {
-        defaultValue: {
-          summary: values['height'],
-        },
-        type: {
-          summary: "string",
-        },
-      },
-      description: 'Use same size which are available for `height` like `px`, `rem`, `em`, `%` etc...'
-    },
-    width: {
-      type: 'string',
-      table: {
-        defaultValue: {
-          summary: values['width'],
-        },
-        type: {
-          summary: "string",
-        },
-      },
-      description: 'Use same size which are available for `width` like `px`, `rem`, `em`, `%` etc...'
-    },
-    animationDuration: {
-      table: {
-        defaultValue: {
-          summary: `${values['animationDuration']} second`,
-        }
-      },
-      description: 'Enter the duration to complete 1 animation cycle',
-    }
-  }
-}
+import {
+  variant10DefaultValues, variant1DefaultValues, variant2DefaultValues, variant3DefaultValues,
+  variant4DefaultValues, variant5DefaultValues, variant6DefaultValues, variant7DefaultValues,
+  variant8DefaultValues, variant9DefaultValues
+} from '../../src/Spinners/Continuous/variants';
+import { generateArgTypes } from './stories.util';
 
 const defaultProps = {
   animationDuration: 1,
@@ -56,13 +17,10 @@ const defaultProps = {
 const meta: Meta = {
   title: 'Continuous Spinner',
   decorators: [
-    (Story) => (
-      <Center>
-        <Story />
-      </Center>
-    ),
+    (Story) => <Story />,
   ],
   parameters: {
+    layout: 'centered',
     controls: { expanded: true },
   },
 };

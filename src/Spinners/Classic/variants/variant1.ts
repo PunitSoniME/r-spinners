@@ -23,7 +23,6 @@ const CSS = css`
   padding-bottom: 8px;
   animation-name: ${animation};
   animation-timing-function: linear;
-  animation-iteration-count: infinite;
   animation-duration: ${(props) =>
     props.animationDuration || defaultValues.animationDuration}s;
 `;

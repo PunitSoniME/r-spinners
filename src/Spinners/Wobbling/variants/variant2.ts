@@ -9,21 +9,25 @@ export const defaultValues = {
   bgColor: '#eee',
   height: '20px',
   width: '120px',
+  animationDuration: 1,
 };
 
 const CSS = css`
-  height: ${(props) => props.height};
-  width: ${(props) => props.width};
+  height: ${(props) => props.height || defaultValues.height};
+  width: ${(props) => props.width || defaultValues.width};
   border-radius: 20px;
   background: radial-gradient(
       farthest-side,
-      ${(props) => props.color} 94%,
+      ${(props) => props.color || defaultValues.color} 94%,
       #0000
     )
-    left/20px 20px no-repeat ${(props) => props.bgColor};
+    left/20px 20px no-repeat
+    ${(props) => props.bgColor || defaultValues.bgColor};
   animation-name: ${animation};
   animation-iteration-count: infinite;
   animation-timing-function: linear;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

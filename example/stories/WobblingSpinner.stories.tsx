@@ -1,10 +1,10 @@
 import React from 'react';
-import { Args, ArgTypes, Meta, StoryFn } from '@storybook/react';
+import { Meta, StoryFn } from '@storybook/react';
 import { WobblingSpinner, WobblingSpinnerProps } from '../../';
-import Center from './Center';
 import {
   variant10DefaultValues, variant1DefaultValues, variant2DefaultValues, variant3DefaultValues,
-  variant4DefaultValues, variant5DefaultValues, variant6DefaultValues, variant7DefaultValues, variant8DefaultValues, variant9DefaultValues
+  variant4DefaultValues, variant5DefaultValues, variant6DefaultValues, variant7DefaultValues,
+  variant8DefaultValues, variant9DefaultValues
 } from '../../src/Spinners/Wobbling/variants';
 import { generateArgTypes } from './stories.util';
 
@@ -17,13 +17,10 @@ const defaultProps = {
 const meta: Meta = {
   title: 'Wobbling Spinner',
   decorators: [
-    (Story) => (
-      <Center>
-        <Story />
-      </Center>
-    ),
+    (Story) => <Story />,
   ],
   parameters: {
+    layout: 'centered',
     controls: { expanded: true },
   },
 };

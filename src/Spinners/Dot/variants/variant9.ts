@@ -13,8 +13,10 @@ const animation3 = keyframes`
   100% { transform: translateX(13px) rotate(-180deg) translateX(13px) }
 `;
 
-const defaultValues = {
+export const defaultValues = {
   size: '15px',
+  color: '#ea580c',
+  animationDuration: 2,
 };
 
 const CSS = css`
@@ -22,8 +24,9 @@ const CSS = css`
   aspect-ratio: 1;
   position: relative;
   animation-name: ${animation1};
-  animation-iteration-count: infinite;
   animation-play-state: ${(props) => props.animationPlayState};
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
   animation-timing-function: steps(3);
 
   &:before,
@@ -32,17 +35,19 @@ const CSS = css`
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: ${(props) => props.color};
+    background: ${(props) => props.color || defaultValues.color};
     animation-iteration-count: infinite;
     animation-timing-function: linear;
     animation-direction: alternate;
-    animation-duration: ${(props) => props.animationDuration / 2}s;
+    animation-duration: ${(props) =>
+      (props.animationDuration || defaultValues.animationDuration) / 2}s;
     animation-play-state: ${(props) => props.animationPlayState};
   }
   &:before {
-    box-shadow: 26px 0 ${(props) => props.color};
+    box-shadow: 26px 0 ${(props) => props.color || defaultValues.color};
     transform: translateX(-26px);
-    animation-name: ${(props) => animation2(props.color)};
+    animation-name: ${(props) =>
+      animation2(props.color || defaultValues.color)};
   }
   &:after {
     animation-name: ${animation3};

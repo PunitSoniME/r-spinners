@@ -1,7 +1,6 @@
 import React from 'react';
 import { Meta, StoryFn } from '@storybook/react';
-import { BarSpinner, BarSpinnerProps } from '../../';
-import Center from './Center';
+import { BarSpinner, BarSpinnerProps } from '../..';
 import { generateArgTypes } from './stories.util';
 import {
   variant10DefaultValues, variant1DefaultValues, variant2DefaultValues, variant3DefaultValues,
@@ -18,13 +17,10 @@ const defaultProps = {
 const meta: Meta = {
   title: 'Bar Spinner',
   decorators: [
-    (Story) => (
-      <Center>
-        <Story />
-      </Center>
-    ),
+    (Story) => <Story />,
   ],
   parameters: {
+    layout: 'centered',
     controls: { expanded: true },
   },
 };

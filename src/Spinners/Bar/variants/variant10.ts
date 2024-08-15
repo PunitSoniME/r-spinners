@@ -9,6 +9,7 @@ const animation = keyframes`
 export const defaultValues = {
   color: '#991b1b',
   size: '45px',
+  animationDuration: 1,
 };
 
 const CSS = css`
@@ -17,14 +18,15 @@ const CSS = css`
   --c: no-repeat
     repeating-linear-gradient(
       90deg,
-      ${(props) => props.color} 0 20%,
+      ${(props) => props.color || defaultValues.color} 0 20%,
       #0000 0 40%
     );
   background: var(--c) 50% 0, var(--c) 50% 100%;
   background-size: calc(500% / 6) 50%;
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: linear;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

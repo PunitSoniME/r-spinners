@@ -23,7 +23,6 @@ const CSS = css`
   color: #0000;
   overflow: hidden;
   animation-name: ${(props) => animation(props.text.length)};
-  animation-iteration-count: infinite;
   animation-timing-function: linear;
   text-shadow: 0 0 var(--c), ${(props) => props.text.length + 1}ch 0 var(--c);
   animation-duration: ${(props) =>

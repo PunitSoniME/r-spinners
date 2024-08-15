@@ -11,15 +11,18 @@ export const defaultValues = {
   color: '#dc2626',
   height: '20px',
   width: '120px',
+  animationDuration: 1,
 };
 
 const CSS = css`
-  height: ${(props) => props.height};
-  width: ${(props) => props.width};
+  height: ${(props) => props.height || defaultValues.height};
+  width: ${(props) => props.width || defaultValues.width};
   border-radius: 40px;
-  color: ${(props) => props.color};
+  color: ${(props) => props.color || defaultValues.color};
   border: 2px solid;
   position: relative;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 
   &:before {
     content: '';
@@ -32,7 +35,8 @@ const CSS = css`
     border-radius: inherit;
     background: currentColor;
     animation-name: ${animation};
-    animation-duration: ${(props) => props.animationDuration}s;
+    animation-duration: ${(props) =>
+      props.animationDuration || defaultValues.animationDuration}s;
     animation-iteration-count: infinite;
     animation-timing-function: linear;
     animation-play-state: ${(props) => props.animationPlayState};

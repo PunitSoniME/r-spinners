@@ -11,17 +11,20 @@ const animation = keyframes`
 export const defaultValues = {
   color: '#991b1b',
   size: '45px',
+  animationDuration: 1,
 };
 
 const CSS = css`
   width: ${(props) => props.size || defaultValues.size};
   aspect-ratio: 1;
-  --c: no-repeat linear-gradient(${(props) => props.color} 0 0);
+  --c: no-repeat
+    linear-gradient(${(props) => props.color || defaultValues.color} 0 0);
   background: var(--c) 0% 50%, var(--c) 50% 50%, var(--c) 100% 50%;
   background-size: 20% 100%;
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   animation-timing-function: linear;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

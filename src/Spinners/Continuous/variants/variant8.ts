@@ -8,6 +8,7 @@ export const defaultValues = {
   color: '#514b82',
   height: '40px',
   width: '40px',
+  animationDuration: 2,
 };
 
 const CSS = css`
@@ -20,9 +21,11 @@ const CSS = css`
       #fff 50%,
       #0000 calc(50% + 40px)
     )
-    bottom right/calc(200% + 80px) calc(200% + 80px) ${(props) => props.color};
+    bottom right/calc(200% + 80px) calc(200% + 80px)
+    ${(props) => props.color || defaultValues.color};
   animation-name: ${animation};
-  animation-iteration-count: infinite;
+  animation-duration: ${(props) =>
+    props.animationDuration || defaultValues.animationDuration}s;
 `;
 
 export default CSS;

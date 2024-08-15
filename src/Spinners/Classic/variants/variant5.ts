@@ -21,7 +21,6 @@ const CSS = css`
     content: '${(props) => props.text}';
   }
   animation-name: ${animation};
-  animation-iteration-count: infinite;
   clip-path: inset(0 ${(props) => props.noOfCharactersToBlinkAtLast}ch 0 0);
   animation-timing-function: steps(
     ${(props) => props.noOfCharactersToBlinkAtLast + 1}
