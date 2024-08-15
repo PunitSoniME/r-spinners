@@ -1,6 +1,6 @@
 import React from 'react';
 import { Meta, StoryFn } from '@storybook/react';
-import { WobblingSpinner, WobblingSpinnerProps } from '../../';
+import { WobblingSpinner, WobblingSpinnerProps } from '../..';
 import {
   variant10DefaultValues, variant1DefaultValues, variant2DefaultValues, variant3DefaultValues,
   variant4DefaultValues, variant5DefaultValues, variant6DefaultValues, variant7DefaultValues,
